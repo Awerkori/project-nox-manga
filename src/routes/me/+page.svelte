@@ -47,7 +47,6 @@
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
   import WorkCard from '$lib/components/WorkCard.svelte';
-  import { getSupabaseBrowserClient } from '$lib/supabase';
   import { relativeTime, date } from '$lib/types';
   import { normalizeAvatarCrop } from '$lib/avatar';
   import {
@@ -193,40 +192,12 @@
     loadOfflineList();
   });
 
-  // Notifications State & Realtime
-  let notifsList = $derived<any[]>(data.notifications || []);
-  let notifFilter = $state<'ALL' | 'UNREAD'>('ALL');
-
+  // Notifications State
+  let notifsList = $state<any[]>(data.notifications || []);
   $effect(() => {
-    if (!data.member?.id) return;
-    const client = getSupabaseBrowserClient();
-    if (!client) return;
-
-    const channel = client
-      .channel(`me_notifs_${data.member.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${data.member.id}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT' && payload.new) {
-            notifsList = [payload.new, ...notifsList];
-          } else if (payload.eventType === 'UPDATE' && payload.new) {
-            const updated = payload.new as any;
-            notifsList = notifsList.map((n) => (n.id === updated.id ? { ...n, ...updated } : n));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      client.removeChannel(channel);
-    };
+    notifsList = data.notifications || [];
   });
+  let notifFilter = $state<'ALL' | 'UNREAD'>('ALL');
 
   let displayedNotifs = $derived(
     notifFilter === 'UNREAD'

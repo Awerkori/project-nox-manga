@@ -27,20 +27,6 @@ async function canAccessScan(platform: any, scanId: string, userId: string, isGl
     logYsqlFailure('membership_lookup', err);
   }
 
-  // Fallback to Supabase
-  try {
-    const supa = getScanArtifactStorage(platform?.env);
-    const { data: supaMember } = await supa
-      .from('scan_members')
-      .select('role')
-      .eq('scan_id', scanId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (supaMember) return { allowed: true, role: supaMember.role || null };
-  } catch (supaErr) {
-    console.warn('fallback_member_lookup_failed', supaErr);
-  }
-
   return { allowed: false, role: null };
 }
 
@@ -60,27 +46,6 @@ export const GET = async ({ locals, params, url, platform }) => {
     file = lookup.rows[0];
   } catch (error) {
     logYsqlFailure('lookup', error);
-  }
-
-  // Resilient fallback to Supabase
-  if (!file) {
-    try {
-      const supa = getScanArtifactStorage(platform?.env);
-      const { data: supaFile } = await supa
-        .from('scan_production_files')
-        .select('*, stage:stage_id(id, name, slug)')
-        .eq('id', params.id)
-        .maybeSingle();
-      if (supaFile) {
-        file = {
-          ...supaFile,
-          stage_name: supaFile.stage?.name,
-          workflow_stage_slug: supaFile.stage?.slug
-        };
-      }
-    } catch (supaErr) {
-      console.warn('fallback_file_lookup_failed', supaErr);
-    }
   }
 
   if (!file) return json({ error: 'Arquivo não encontrado' }, { status: 404 });

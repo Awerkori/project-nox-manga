@@ -46,32 +46,10 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
     totalCount = Number(countsSql.rows[0]?.total) || rawNotifications.length;
     unreadCount = Number(countsSql.rows[0]?.unread) || 0;
   } catch (ybErr) {
-    // Resilient fallback to Supabase with tight timeout if Yugabyte was degraded
-    const [notifsRes, totalCountRes, unreadCountRes] = await withTimeout(
-      Promise.all([
-        locals.db
-          .from('notifications')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(100),
-        locals.db
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId),
-        locals.db
-          .from('notifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .is('read_at', null)
-      ]),
-      400,
-      [{ data: [] }, { count: 0 }, { count: 0 }] as any,
-      'notificacoes_load'
-    );
-    rawNotifications = notifsRes?.data || [];
-    totalCount = totalCountRes?.count ?? rawNotifications.length;
-    unreadCount = unreadCountRes?.count ?? rawNotifications.filter((n: any) => !n.read_at).length;
+    console.warn('[NOTIFICACOES_SQL_ERROR]', ybErr);
+    rawNotifications = [];
+    totalCount = 0;
+    unreadCount = 0;
   }
 
   const readCount = Math.max(0, totalCount - unreadCount);
@@ -135,18 +113,8 @@ export const actions: Actions = {
         platform?.env
       );
       updatedCount = res.rowCount;
-    } catch {
-      // Prefer atomic SECURITY DEFINER RPC fallback mark_notification_read
-      if (locals.db?.rpc) {
-        try {
-          const { data: rpcRes, error: rpcErr } = await locals.db.rpc('mark_notification_read', {
-            p_notification_id: id
-          });
-          if (!rpcErr && rpcRes && (rpcRes as any).success) {
-            updatedCount = 1;
-          }
-        } catch {}
-      }
+    } catch (err: any) {
+      return fail(500, { message: err?.message || 'Falha ao marcar notificação como lida' });
     }
 
     if (updatedCount === 0) {
@@ -166,13 +134,8 @@ export const actions: Actions = {
         [locals.user.id],
         platform?.env
       );
-    } catch {
-      // mark_all_notifications_read RPC fallback
-      if (locals.db?.rpc) {
-        try {
-          await locals.db.rpc('mark_all_notifications_read');
-        } catch {}
-      }
+    } catch (err: any) {
+      return fail(500, { message: err?.message || 'Falha ao marcar todas as notificações' });
     }
 
     invalidateUserSession(locals.user.id);
@@ -193,18 +156,8 @@ export const actions: Actions = {
         platform?.env
       );
       deletedCount = res.rowCount;
-    } catch {
-      if (locals.db?.from) {
-        try {
-          const { data: deletedRows } = await locals.db
-            .from('notifications')
-            .delete()
-            .eq('id', id)
-            .eq('user_id', locals.user.id)
-            .select('id');
-          deletedCount = deletedRows?.length || 0;
-        } catch {}
-      }
+    } catch (err: any) {
+      return fail(500, { message: err?.message || 'Falha ao excluir notificação' });
     }
 
     if (deletedCount === 0) {

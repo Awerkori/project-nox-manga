@@ -1,5 +1,4 @@
 import { executeYugabyteSql } from '$lib/server/yugabyte';
-import { privileged } from '$lib/server/db';
 import { generateEmailHtml } from '$lib/server/email-templates';
 import { processPendingEmailOutbox } from '$lib/server/notifications';
 
@@ -46,11 +45,14 @@ async function resolveContact(userId: string, platformEnv?: any): Promise<Contac
     platformEnv
   );
   const name = member.rows[0]?.display_name || member.rows[0]?.username || 'Membro';
-  let email: string | null;
-  // Auth remains the identity provider; it is not used for Scan CRUD.
+  let email: string | null = null;
   try {
-    const auth = await privileged().auth.admin.getUserById(userId);
-    email = auth.data.user?.email || null;
+    const authUser = await executeYugabyteSql<{ email: string }>(
+      'SELECT email FROM auth.users WHERE id = $1 LIMIT 1',
+      [userId],
+      platformEnv
+    );
+    email = authUser.rows[0]?.email || null;
   } catch {
     email = null;
   }

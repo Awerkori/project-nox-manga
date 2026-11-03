@@ -63,7 +63,7 @@ function patchGeneratedWorker() {
   }
 
   // 2. Shared Edge Cache Segmentation & Private Session Bypass
-  const sharedCacheLogic = `const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+  const sharedCacheLogic = `const AUTHENTICATED_SESSION_COOKIE = /(?:nox-auth-token|sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
 const PERSONALIZED_HOME_COOKIE = /(?:^|;\\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
 
 function shouldBypassSharedCache(req) {

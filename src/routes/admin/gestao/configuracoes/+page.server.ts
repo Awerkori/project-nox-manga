@@ -1,14 +1,17 @@
 import { env } from '$env/dynamic/private';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const load = async ({ locals }) => {
+export const load = async ({ platform }: any) => {
+  const platformEnv = platform?.env;
+
   const [settingsRes, poolsRes, shardsRes] = await Promise.all([
-    locals.db.from('settings').select('*'),
-    locals.db.from('storage_pools').select('*').order('display_name'),
-    locals.db.from('storage_shards').select('*').order('weight', { ascending: false }).order('display_name')
+    executeYugabyteSql(`SELECT * FROM public.settings;`, [], platformEnv),
+    executeYugabyteSql(`SELECT * FROM public.storage_pools ORDER BY display_name ASC;`, [], platformEnv),
+    executeYugabyteSql(`SELECT * FROM public.storage_shards ORDER BY weight DESC, display_name ASC;`, [], platformEnv)
   ]);
 
-  const rawShards = shardsRes.data || [];
-  const pools = poolsRes.data || [];
+  const rawShards = shardsRes.rows || [];
+  const pools = poolsRes.rows || [];
 
   // Calculate recent volume and share % per pool
   const poolTotals = new Map<string, number>();
@@ -18,7 +21,7 @@ export const load = async ({ locals }) => {
     poolTotals.set(shard.pool_id, curr + vol);
   }
 
-  const enhancedShards = rawShards.map((shard) => {
+  const enhancedShards = rawShards.map((shard: any) => {
     const vol = Number((shard as any).assigned_pages_count || 0) + Number(shard.recent_successes || 0);
     const poolTotal = poolTotals.get(shard.pool_id) || 0;
     const sharePercent = poolTotal > 0 ? ((vol / poolTotal) * 100).toFixed(1) : '0.0';
@@ -42,7 +45,7 @@ export const load = async ({ locals }) => {
   });
 
   return {
-    settings: settingsRes.data || [],
+    settings: settingsRes.rows || [],
     storagePools: pools,
     storageShards: enhancedShards,
     telegram: !!env.TELEGRAM_BOT_TOKEN || !!(env as any).TELEGRAM_BOT_MANGA_STORAGE_01,

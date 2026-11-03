@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { member, privileged } from '$lib/server/db';
+import { member } from '$lib/server/db';
 import { storeImage, RateLimitError } from '$lib/server/media';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
@@ -33,32 +33,15 @@ export const POST = async ({ request, locals, platform }: { request: Request; lo
     throw err;
   }
 
-  let ybSuccess = false;
   try {
-    const ybRes = await executeYugabyteSql(
+    await executeYugabyteSql(
       `UPDATE public.members SET banner_id = $1, banner_crop = $2 WHERE id = $3`,
       [image.id, JSON.stringify(crop), userId],
       platform?.env
     );
-    if (ybRes && ybRes.rowCount > 0) {
-      ybSuccess = true;
-    }
   } catch (ybProblem) {
-    console.warn('api_banner_yugabyte_update_warning', ybProblem);
-  }
-
-  // Best-effort sync to legacy Supabase
-  try {
-    await privileged()
-      .from('members')
-      .update({ banner_id: image.id, banner_crop: crop })
-      .eq('id', userId);
-  } catch (supaProblem) {
-    // Non-fatal if Supabase is over quota (402)
-  }
-
-  if (!ybSuccess) {
-    console.error('API_BANNER_MEMBER_UPDATE_ERROR: Both Yugabyte and Supabase updates failed');
+    console.error('API_BANNER_YUGABYTE_UPDATE_ERROR:', ybProblem);
+    error(500, 'Falha ao salvar banner no banco de dados.');
   }
 
   invalidateUserSession(userId);

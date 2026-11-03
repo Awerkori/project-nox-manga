@@ -83,7 +83,7 @@ var initialized = server.init({
     return response.body;
   }
 });
-const AUTHENTICATED_SESSION_COOKIE = /(?:sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
+const AUTHENTICATED_SESSION_COOKIE = /(?:nox-auth-token|sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
 const PERSONALIZED_HOME_COOKIE = /(?:^|;\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
 
 function shouldBypassSharedCache(req) {

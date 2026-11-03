@@ -1,5 +1,3 @@
-import { createServerClient } from '@supabase/ssr';
-import { env } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
 import type { Database } from '$lib/database.types';
@@ -81,6 +79,9 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
     authState = 'ANONYMOUS';
     user = null;
     role = null;
+    if (allCookies.some((c: any) => /^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === 'sb-izregkwaqdygwioqzwwo-auth-token')) {
+      clearAllAuthCookies(event.cookies);
+    }
   } else {
     const { jwt, accessToken } = decodeSessionJwt(rawAuthCookie);
     const nowSec = Math.floor(Date.now() / 1000);
@@ -294,8 +295,6 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
 
 export const handle: Handle = async ({ event, resolve }) => {
   const reqStart = performance.now();
-  if (!env.PUBLIC_SUPABASE_URL || !env.PUBLIC_SUPABASE_ANON_KEY)
-    error(503, 'A plataforma está em manutenção. Volte em instantes.');
 
   const isPrerenderableStatic = building || event.url.pathname === '/sobre' || event.url.pathname === '/privacidade';
   if (isPrerenderableStatic) {

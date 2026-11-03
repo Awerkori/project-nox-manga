@@ -1,4 +1,3 @@
-import { privileged } from './db';
 import { sendBrevoEmail, queryBrevoEvents } from './brevo';
 import { generateEmailHtml } from './email-templates';
 import { executeYugabyteSql } from './yugabyte';
@@ -322,194 +321,7 @@ export async function processPendingEmailOutbox(
   failed: number;
   details: any[];
 }> {
-  if (platformEnv) {
-    return processYsqlScanEmailOutbox(limit, specificId, platformEnv);
-  }
-  if (isDispatching) {
-    hasQueuedRun = true;
-    return { processed: 0, sent: 0, failed: 0, details: [] };
-  }
-
-  isDispatching = true;
-  const db = privileged();
-  const details: any[] = [];
-  let sent = 0;
-  let failed = 0;
-  const workerId = `worker_${Math.random().toString(36).substring(2, 8)}_${Date.now()}`;
-
-  try {
-    // 1. Claim atômico persistente via RPC com FOR UPDATE SKIP LOCKED
-    // Automaticamente recupera crashes/leases expirados, protege contra duplo envio entre workers
-    // e aplica prioridade (HIGH > NORMAL > LOW) com FIFO estrito por prioridade (sem starvation).
-    const { data: items, error: claimErr } = await db.rpc('claim_scan_email_outbox_batch', {
-      p_limit: limit,
-      p_specific_id: specificId || null,
-      p_lease_seconds: 300,
-      p_worker_id: workerId
-    });
-
-    if (claimErr) {
-      console.error('[OUTBOX] Erro ao reivindicar lote de e-mails atômico:', claimErr);
-      return { processed: 0, sent: 0, failed: 0, details: [] };
-    }
-
-    if (!items || items.length === 0) {
-      return { processed: 0, sent: 0, failed: 0, details: [] };
-    }
-
-    // 2. Processar cada e-mail via Brevo REST API com pre-flight durável
-    for (const item of items) {
-      const sendStartedAt = new Date().toISOString();
-      const providerRequestKey = `${item.id}:${item.attempts || 1}`;
-
-      // 2.1. PRE-FLIGHT DURÁVEL:
-      // Persiste no banco que a requisição externa está iniciando.
-      // Caso ocorra crash durante ou após o POST da Brevo, o lease recovery detecta
-      // send_started_at != null e move o item para DELIVERY_UNCERTAIN (bloqueando reenvio cego).
-      await db
-        .from('scan_email_outbox')
-        .update({
-          send_started_at: sendStartedAt,
-          provider_request_key: providerRequestKey,
-          delivery_status: 'SENDING'
-        })
-        .eq('id', item.id);
-
-      const result = await sendBrevoEmail({
-        toEmail: item.recipient_email,
-        subject: item.subject,
-        htmlContent: item.html_body,
-        customHeaders: {
-          'X-Nox-Outbox-Id': item.id,
-          'X-Nox-Request-Key': providerRequestKey
-        },
-        tags: ['nox', item.priority ? item.priority.toLowerCase() : 'normal']
-      });
-
-      if (result.success && result.messageId) {
-        // SUCESSO: accepted pelo Brevo
-        await db
-          .from('scan_email_outbox')
-          .update({
-            status: 'SENT',
-            delivery_status: 'ACCEPTED',
-            provider_message_id: result.messageId,
-            sent_at: new Date().toISOString(),
-            last_error: null,
-            lease_expires_at: null
-          })
-          .eq('id', item.id);
-
-        sent++;
-        details.push({
-          id: item.id,
-          recipient: item.recipient_email,
-          status: 'SENT',
-          providerMessageId: result.messageId
-        });
-      } else if (result.isRateLimit) {
-        // TRATAMENTO BREVO 429: Respeitar Retry-After sem descartar o e-mail
-        const retryAfterSec = result.retryAfterSeconds || 60;
-        const nextSchedule = new Date(Date.now() + retryAfterSec * 1000).toISOString();
-
-        await db
-          .from('scan_email_outbox')
-          .update({
-            status: 'PENDING',
-            delivery_status: 'RATE_LIMITED',
-            last_error: `Brevo Rate Limit 429 - retrying after ${retryAfterSec}s: ${result.error}`,
-            scheduled_at: nextSchedule,
-            send_started_at: null,
-            lease_expires_at: null
-          })
-          .eq('id', item.id);
-
-        failed++;
-        details.push({
-          id: item.id,
-          recipient: item.recipient_email,
-          status: 'RATE_LIMITED',
-          error: result.error,
-          retryAfterSeconds: retryAfterSec
-        });
-      } else if (result.isPermanentFailure) {
-        // ERRO PERMANENTE: (ex: email inválido, unverified domain) -> não fazer retry infinito
-        await db
-          .from('scan_email_outbox')
-          .update({
-            status: 'FAILED',
-            delivery_status: 'FAILED',
-            last_error: `Permanent error from Brevo: ${result.error}`,
-            send_started_at: null,
-            lease_expires_at: null
-          })
-          .eq('id', item.id);
-
-        failed++;
-        details.push({
-          id: item.id,
-          recipient: item.recipient_email,
-          status: 'FAILED',
-          error: result.error,
-          permanent: true
-        });
-      } else {
-        // FALHA TEMPORÁRIA: backoff exponencial controlado (2min, 4min, 8min, 16min)
-        const nextAttempts = item.attempts || 1;
-        const isPermanentFail = nextAttempts >= 5;
-        const backoffMinutes = Math.min(30, Math.pow(2, Math.min(nextAttempts, 4)));
-        const nextSchedule = new Date(Date.now() + backoffMinutes * 60 * 1000).toISOString();
-
-        await db
-          .from('scan_email_outbox')
-          .update({
-            status: isPermanentFail ? 'FAILED' : 'PENDING',
-            delivery_status: isPermanentFail ? 'FAILED' : 'RETRYING',
-            last_error: result.error || 'Erro desconhecido ao chamar Brevo',
-            scheduled_at: nextSchedule,
-            send_started_at: null,
-            lease_expires_at: null
-          })
-          .eq('id', item.id);
-
-        failed++;
-        details.push({
-          id: item.id,
-          recipient: item.recipient_email,
-          status: isPermanentFail ? 'FAILED' : 'RETRYING',
-          error: result.error
-        });
-      }
-    }
-
-    // 3. Monitoramento e alerta de fila travada
-    let metrics: any = null;
-    try {
-      const res = await (db.rpc('get_scan_email_outbox_metrics') as any);
-      metrics = res?.data;
-    } catch {
-      // Metrics are advisory; delivery status remains authoritative.
-    }
-    if (metrics?.queue_stalled) {
-      console.warn(
-        `[OUTBOX_STALLED_ALERT] Fila de e-mails com atraso superior a 10 minutos! Mais antigo aguardando há ${metrics.oldest_pending_age_seconds}s (${metrics.pending_count} pendentes).`
-      );
-    }
-  } catch (err: any) {
-    console.error('[OUTBOX] Erro no processador de e-mails:', err);
-  } finally {
-    isDispatching = false;
-    if (hasQueuedRun) {
-      hasQueuedRun = false;
-      setTimeout(() => {
-        processPendingEmailOutbox(limit).catch(err => {
-          console.error('[OUTBOX] Erro no re-disparo agendado:', err);
-        });
-      }, 50);
-    }
-  }
-
-  return { processed: sent + failed, sent, failed, details };
+  return processYsqlScanEmailOutbox(limit, specificId, platformEnv);
 }
 
 /**
@@ -579,8 +391,8 @@ async function processYsqlScanEmailOutbox(limit: number, specificId: string | un
  * antes de decidir entre marcar RECONCILED_SENT ou liberar para novo envio seguro.
  */
 export async function reconcileUncertainEmailOutbox(limit = 10, platformEnv?: any) {
-  if (platformEnv) {
-    const workerId = `scan-reconciler_${Math.random().toString(36).slice(2, 8)}_${Date.now()}`;
+  const workerId = `scan-reconciler_${Math.random().toString(36).slice(2, 8)}_${Date.now()}`;
+  try {
     const rows = await executeYugabyteSql<any>(
       `SELECT * FROM public.claim_uncertain_scan_email_outbox_ysql($1,$2,$3)`,
       [limit, workerId, 300],
@@ -588,8 +400,6 @@ export async function reconcileUncertainEmailOutbox(limit = 10, platformEnv?: an
     );
     let retried = 0;
     for (const item of rows.rows) {
-      // Brevo event reconciliation is intentionally conservative.  Without a
-      // matching event we release the lease for the next bounded retry.
       await executeYugabyteSql(
         `UPDATE public.scan_email_outbox_ysql
          SET status='PENDING', delivery_status='RECONCILED_RETRY',
@@ -602,111 +412,21 @@ export async function reconcileUncertainEmailOutbox(limit = 10, platformEnv?: an
       retried++;
     }
     return { reconciled: 0, retried, waiting: 0 };
-  }
-  const db = privileged();
-  const workerId = `reconciler_${Math.random().toString(36).substring(2, 8)}_${Date.now()}`;
-
-  const { data: items, error: claimErr } = await db.rpc('claim_uncertain_email_outbox_batch', {
-    p_limit: limit,
-    p_worker_id: workerId,
-    p_lease_seconds: 300
-  });
-
-  if (claimErr || !items || items.length === 0) {
+  } catch {
     return { reconciled: 0, retried: 0, waiting: 0 };
   }
-
-  let reconciled = 0;
-  let retried = 0;
-  let waiting = 0;
-
-  for (const item of items) {
-    const sendStartedTime = item.send_started_at ? new Date(item.send_started_at).getTime() : 0;
-    const ageSeconds = sendStartedTime ? (Date.now() - sendStartedTime) / 1000 : 9999;
-
-    // Janela de busca: 10 minutos antes até 15 minutos depois do send_started_at
-    const startDate = sendStartedTime 
-      ? new Date(Math.max(0, sendStartedTime - 10 * 60 * 1000)).toISOString()
-      : undefined;
-    const endDate = sendStartedTime 
-      ? new Date(sendStartedTime + 15 * 60 * 1000).toISOString()
-      : undefined;
-
-    const events = await queryBrevoEvents({
-      email: item.recipient_email,
-      startDate,
-      endDate,
-      limit: 50
-    });
-
-    // Procura por evento correspondente ao mesmo destinatário e assunto
-    const matchingEvent = events.find(e => {
-      if (e.email.toLowerCase() !== item.recipient_email.toLowerCase()) return false;
-      const subjA = (e.subject || '').trim().toLowerCase();
-      const subjB = (item.subject || '').trim().toLowerCase();
-      return subjA === subjB || subjA.includes(subjB) || subjB.includes(subjA);
-    });
-
-    if (matchingEvent && matchingEvent.messageId) {
-      // PROVADO: Brevo recebeu e aceitou o e-mail!
-      // NÃO reenviar. Marcar como SENT com delivery_status = 'RECONCILED_SENT'
-      await db
-        .from('scan_email_outbox')
-        .update({
-          status: 'SENT',
-          delivery_status: 'RECONCILED_SENT',
-          provider_message_id: matchingEvent.messageId,
-          sent_at: matchingEvent.date || new Date().toISOString(),
-          reconciled_at: new Date().toISOString(),
-          reconciliation_notes: `Reconciliado via evento Brevo "${matchingEvent.event}" em ${matchingEvent.date}`,
-          lease_expires_at: null
-        })
-        .eq('id', item.id);
-      reconciled++;
-    } else if (ageSeconds < 300) {
-      // Menos de 5 minutos desde o envio: o evento Brevo pode ainda estar sendo propagado
-      // Manter em reconciliação aguardando próximo ciclo (limpando lease para novo ciclo)
-      const evSample = events.slice(0, 3).map(e => `[${e.subject}]`).join(', ');
-      await db
-        .from('scan_email_outbox')
-        .update({
-          delivery_status: 'RECONCILIATION_WAITING',
-          reconciliation_notes: `Aguardando Brevo (idade: ${Math.round(ageSeconds)}s, evs=${events.length}): ${evSample || 'nenhum'} vs buscado: [${item.subject}]`,
-          lease_expires_at: null
-        })
-        .eq('id', item.id);
-      waiting++;
-    } else {
-      // Passaram mais de 5 minutos e nenhum evento foi registrado no Brevo:
-      // Comprovado que o Brevo NÃO recebeu a mensagem (falha na conexão antes de chegar ao Brevo)
-      // Liberado para retry seguro!
-      await db
-        .from('scan_email_outbox')
-        .update({
-          status: 'PENDING',
-          delivery_status: 'RECONCILED_RETRY',
-          send_started_at: null,
-          last_error: `Reconciliação confirmou ausência de recebimento no Brevo após ${Math.round(ageSeconds)}s. Liberado para re-tentativa segura.`,
-          reconciled_at: new Date().toISOString(),
-          scheduled_at: new Date().toISOString(),
-          lease_expires_at: null
-        })
-        .eq('id', item.id);
-      retried++;
-    }
-  }
-
-  return { reconciled, retried, waiting };
 }
 
 /**
  * Consulta métricas e status de saúde da outbox.
  */
-export async function getOutboxMetrics() {
-  const db = privileged();
-  const { data, error } = await db.rpc('get_scan_email_outbox_metrics');
-  if (error) throw error;
-  return data;
+export async function getOutboxMetrics(platformEnv?: any) {
+  try {
+    const res = await executeYugabyteSql(`SELECT * FROM public.get_scan_email_outbox_metrics();`, [], platformEnv);
+    return res.rows[0] || {};
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -724,15 +444,14 @@ export function triggerImmediateOutboxDispatch() {
  * Busca todos os administradores globais (role = 'ADMIN' não suspensos)
  * Garante lista única de IDs sem repetição
  */
-export async function getGlobalAdminUserIds(): Promise<string[]> {
-  const db = privileged();
+export async function getGlobalAdminUserIds(platformEnv?: any): Promise<string[]> {
   try {
-    const { data } = await db
-      .from('access_roles')
-      .select('user_id')
-      .eq('role', 'ADMIN')
-      .eq('suspended', false);
-    return Array.from(new Set((data || []).map((r: any) => r.user_id)));
+    const res = await executeYugabyteSql(
+      `SELECT DISTINCT user_id FROM public.access_roles WHERE role = 'ADMIN' AND suspended = false;`,
+      [],
+      platformEnv
+    );
+    return Array.from(new Set((res.rows || []).map((r: any) => r.user_id)));
   } catch (e) {
     console.warn('[NOTIF] Erro ao buscar admins:', e);
     return [];
@@ -743,15 +462,14 @@ export async function getGlobalAdminUserIds(): Promise<string[]> {
  * Busca todos os membros com acesso editorial/staff (ADMIN e STAFF_SITE não suspensos)
  * Garante lista única de IDs sem repetição, mesmo se um usuário possuir múltiplos papéis
  */
-export async function getStaffAndAdminUserIds(): Promise<string[]> {
-  const db = privileged();
+export async function getStaffAndAdminUserIds(platformEnv?: any): Promise<string[]> {
   try {
-    const { data } = await db
-      .from('access_roles')
-      .select('user_id')
-      .in('role', ['ADMIN', 'STAFF_SITE'])
-      .eq('suspended', false);
-    return Array.from(new Set((data || []).map((r: any) => r.user_id)));
+    const res = await executeYugabyteSql(
+      `SELECT DISTINCT user_id FROM public.access_roles WHERE role IN ('ADMIN', 'STAFF_SITE') AND suspended = false;`,
+      [],
+      platformEnv
+    );
+    return Array.from(new Set((res.rows || []).map((r: any) => r.user_id)));
   } catch (e) {
     console.warn('[NOTIF] Erro ao buscar staff e admins:', e);
     return [];

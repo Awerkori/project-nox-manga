@@ -1,6 +1,6 @@
 <script lang="ts">
   import '../app.css';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import {
     Search,
     UserRound,
@@ -21,7 +21,6 @@
   import XpProgressionToast from '$lib/components/XpProgressionToast.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
   import { registerDynamicFrame } from '$lib/cosmetics-catalog';
-  import { getSupabaseBrowserClient } from '$lib/supabase';
   import { page } from '$app/state';
 
   let { data, children } = $props();
@@ -75,63 +74,7 @@
     }
   });
 
-  let subscribedProfileId: string | null = null;
-  let activeRealtimeChannel: any = null;
 
-  $effect(() => {
-    const profileId = profile?.id || null;
-    if (profileId === subscribedProfileId) {
-      // Profile ID has not changed; do NOT re-create the websocket channel on page navigation!
-      return;
-    }
-
-    if (activeRealtimeChannel) {
-      const client = getSupabaseBrowserClient();
-      if (client) {
-        client.removeChannel(activeRealtimeChannel);
-      }
-      activeRealtimeChannel = null;
-    }
-
-    subscribedProfileId = profileId;
-    if (!profileId) return;
-
-    const client = getSupabaseBrowserClient();
-    if (!client) return;
-
-    activeRealtimeChannel = client
-      .channel(`rt_notifs_${profileId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${profileId}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            unreadDelta += 1;
-          } else if (payload.eventType === 'UPDATE') {
-            if ((payload.new as any)?.read_at && !(payload.old as any)?.read_at) {
-              unreadDelta -= 1;
-            }
-          }
-        }
-      )
-      .subscribe();
-  });
-
-  onDestroy(() => {
-    if (activeRealtimeChannel) {
-      const client = getSupabaseBrowserClient();
-      if (client) {
-        client.removeChannel(activeRealtimeChannel);
-      }
-      activeRealtimeChannel = null;
-      subscribedProfileId = null;
-    }
-  });
 
   onMount(() => {
     function handleScroll() {
@@ -907,19 +850,7 @@
     transform: translateY(-1px);
   }
 
-  .user-avatar-skeleton {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    animation: userAvatarPulse 1.5s ease-in-out infinite;
-  }
 
-  @keyframes userAvatarPulse {
-    0%, 100% { opacity: 0.35; transform: scale(0.96); }
-    50% { opacity: 0.8; transform: scale(1); }
-  }
 
   .user-menu-container {
     position: relative;

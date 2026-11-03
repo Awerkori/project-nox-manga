@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { verifyMihonAuth } from '$lib/server/mihon';
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 const progressSchema = z.object({
   chapter_id: z.string().uuid(),
@@ -9,8 +9,8 @@ const progressSchema = z.object({
   completed: z.boolean().default(false)
 });
 
-export const POST = async ({ request }) => {
-  const auth = await verifyMihonAuth(request);
+export const POST = async ({ request, platform }) => {
+  const auth = await verifyMihonAuth(request, platform?.env);
   if (!auth.authenticated || !auth.user) {
     return json(
       { error: 'Autenticação necessária para sincronizar progresso.' },
@@ -26,82 +26,78 @@ export const POST = async ({ request }) => {
     return json({ error: 'Dados de progresso inválidos.' }, { status: 400 });
   }
 
-  const db = privileged();
   const userId = auth.user.id;
 
   // 1. Verify chapter exists
-  const { data: chapter, error: chErr } = await db
-    .from('chapters')
-    .select('id, work_id, number')
-    .eq('id', body.chapter_id)
-    .maybeSingle();
+  const chRes = await executeYugabyteSql(
+    `SELECT id, work_id, number FROM public.chapters WHERE id = $1 LIMIT 1;`,
+    [body.chapter_id],
+    platform?.env
+  );
+  const chapter = chRes.rows[0];
 
-  if (chErr || !chapter) {
+  if (!chapter) {
     return json({ error: 'Capítulo não encontrado' }, { status: 404 });
   }
 
-  const now = new Date().toISOString();
-
   // 2. Upsert reading_sessions for anti-cheat tracking
-  await db.from('reading_sessions').upsert(
-    {
-      user_id: userId,
-      chapter_id: body.chapter_id,
-      next_page: body.page + 1,
-      accepted_at: now
-    },
-    { onConflict: 'user_id,chapter_id' }
-  );
+  await executeYugabyteSql(
+    `INSERT INTO public.reading_sessions (user_id, chapter_id, next_page, accepted_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, chapter_id) DO UPDATE
+     SET next_page = EXCLUDED.next_page, accepted_at = now();`,
+    [userId, body.chapter_id, body.page + 1],
+    platform?.env
+  ).catch(() => {});
 
   // 3. Upsert reading entry
-  const { data: existingRead } = await db
-    .from('reading')
-    .select('page, max_page, completed_at')
-    .eq('user_id', userId)
-    .eq('chapter_id', body.chapter_id)
-    .maybeSingle();
+  const readRes = await executeYugabyteSql(
+    `SELECT page, max_page, completed_at FROM public.reading WHERE user_id = $1 AND chapter_id = $2 LIMIT 1;`,
+    [userId, body.chapter_id],
+    platform?.env
+  );
+  const existingRead = readRes.rows[0];
 
-  const completedAt =
-    existingRead?.completed_at || (body.completed ? now : null);
+  const maxPage = Math.max(existingRead?.max_page || 1, body.page);
 
-  await db.from('reading').upsert(
-    {
-      user_id: userId,
-      chapter_id: body.chapter_id,
-      page: body.page,
-      max_page: Math.max(existingRead?.max_page || 1, body.page),
-      completed_at: completedAt,
-      updated_at: now
-    },
-    { onConflict: 'user_id,chapter_id' }
+  await executeYugabyteSql(
+    `INSERT INTO public.reading (user_id, chapter_id, page, max_page, completed_at, updated_at)
+     VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN now() ELSE NULL END, now())
+     ON CONFLICT (user_id, chapter_id) DO UPDATE
+     SET page = EXCLUDED.page,
+         max_page = GREATEST(reading.max_page, EXCLUDED.max_page),
+         completed_at = COALESCE(reading.completed_at, EXCLUDED.completed_at),
+         updated_at = now();`,
+    [userId, body.chapter_id, body.page, maxPage, body.completed],
+    platform?.env
   );
 
   // 4. If completed, claim XP
-  let xpResult = null;
+  let xpResult: any = null;
   if (body.completed) {
-    const { data: claimData, error: claimErr } = await db.rpc('claim_chapter_xp', {
-      p_chapter_id: body.chapter_id,
-      p_user_id: userId,
-      p_source: 'mihon'
-    });
-    if (!claimErr) {
-      xpResult = claimData;
-    }
+    try {
+      const claimRes = await executeYugabyteSql(
+        `SELECT public.claim_chapter_xp($1, $2, $3) AS result;`,
+        [body.chapter_id, userId, 'mihon'],
+        platform?.env
+      );
+      xpResult = claimRes.rows[0]?.result;
+    } catch {}
   }
 
   // 5. Get current member XP
-  const { data: memberData } = await db
-    .from('members')
-    .select('xp')
-    .eq('id', userId)
-    .single();
+  const memRes = await executeYugabyteSql(
+    `SELECT xp FROM public.members WHERE id = $1 LIMIT 1;`,
+    [userId],
+    platform?.env
+  );
 
   return json({
     ok: true,
     chapter_id: body.chapter_id,
     page: body.page,
     completed: body.completed,
-    xp: memberData?.xp ?? auth.user.xp,
-    xp_claim: xpResult
+    xp_gained: xpResult?.xp_gained || 0,
+    current_xp: memRes.rows[0]?.xp || 0
   });
 };

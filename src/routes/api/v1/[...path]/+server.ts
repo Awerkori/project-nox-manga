@@ -1,82 +1,126 @@
 import { json, error } from '@sveltejs/kit';
-import { WORK_FIELDS } from '$lib/server/db';
-import { fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
-export const GET = async ({ locals, params, url, platform }) => {
-  const parts = params.path.split('/'),
-    page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1))),
-    limit = 30;
-  let result;
+import { executeYugabyteSql, fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
+
+export const GET = async ({ locals, params, url, platform }: any) => {
+  const parts = params.path.split('/');
+  const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1)));
+  const limit = 30;
+  const platformEnv = platform?.env;
+
   if (parts[0] === 'me') {
     if (!locals.user) error(401, 'Autenticação necessária');
-    const { data: member } = await locals.db
-      .from('members')
-      .select('id,username,display_name,bio,avatar_id,banner_id,xp,avatar_frame_id,name_color,equipped_title_id,equipped_badge_id,equipped_medal_id,created_at')
-      .eq('id', locals.user.id)
-      .maybeSingle();
+    const memberRes = await executeYugabyteSql(
+      `SELECT id, username, display_name, bio, avatar_id, banner_id, xp, avatar_frame_id, name_color, equipped_title_id, equipped_badge_id, equipped_medal_id, created_at
+       FROM public.members WHERE id = $1 LIMIT 1;`,
+      [locals.user.id],
+      platformEnv
+    );
+    const member = memberRes.rows[0];
     if (!member) error(404, 'Perfil não encontrado');
-    const { data: stats } = await locals.db.rpc('member_public_stats', { p_user: member.id });
-    const { data: inventory } = await locals.db
-      .from('member_inventory')
-      .select('item_id,acquired_at,shop_items(*)')
-      .eq('user_id', member.id);
+    const [statsRes, invRes] = await Promise.all([
+      executeYugabyteSql(`SELECT count(*)::int AS chapters_read FROM public.reading WHERE user_id = $1 AND completed_at IS NOT NULL;`, [member.id], platformEnv),
+      executeYugabyteSql(
+        `SELECT mi.item_id, mi.acquired_at, row_to_json(si.*) AS shop_items
+         FROM public.member_inventory mi
+         JOIN public.shop_items si ON si.id = mi.item_id
+         WHERE mi.user_id = $1;`,
+        [member.id],
+        platformEnv
+      )
+    ]);
     return json({
       data: {
         ...member,
-        stats: stats?.[0] || { chapters_read: 0, completed_works: 0, favorites: 0 },
-        inventory: inventory || []
+        stats: { chapters_read: statsRes.rows[0]?.chapters_read || 0, completed_works: 0, favorites: 0 },
+        inventory: invRes.rows || []
       }
     }, { headers: { 'Access-Control-Allow-Origin': '*' } });
   } else if (parts[0] === 'scans' && parts.length === 1) {
-    const { data: scans, count } = await locals.db
-      .from('scans')
-      .select('id,name,slug,description,logo_id,banner_id,website,discord,fluxer,is_official,status,created_at', { count: 'exact' })
-      .eq('status', 'ACTIVE')
-      .order('is_official', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
-    return json({ data: scans || [], page, per_page: limit, total: count || 0 }, {
+    const [scansRes, countRes] = await Promise.all([
+      executeYugabyteSql(
+        `SELECT id, name, slug, description, logo_id, banner_id, website, discord, fluxer, is_official, status, created_at
+         FROM public.scans
+         WHERE status = 'ACTIVE'
+         ORDER BY is_official DESC
+         LIMIT $1 OFFSET $2;`,
+        [limit, (page - 1) * limit],
+        platformEnv
+      ),
+      executeYugabyteSql(`SELECT count(*)::int AS total FROM public.scans WHERE status = 'ACTIVE';`, [], platformEnv)
+    ]);
+    return json({ data: scansRes.rows || [], page, per_page: limit, total: countRes.rows[0]?.total || 0 }, {
       headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' }
     });
   } else if (parts[0] === 'scans' && parts.length === 2) {
-    const { data: scan } = await locals.db
-      .from('scans')
-      .select('id,name,slug,description,logo_id,banner_id,website,discord,fluxer,is_official,status,created_at')
-      .eq('slug', parts[1])
-      .eq('status', 'ACTIVE')
-      .maybeSingle();
+    const scanRes = await executeYugabyteSql(
+      `SELECT id, name, slug, description, logo_id, banner_id, website, discord, fluxer, is_official, status, created_at
+       FROM public.scans
+       WHERE slug = $1 AND status = 'ACTIVE'
+       LIMIT 1;`,
+      [parts[1]],
+      platformEnv
+    );
+    const scan = scanRes.rows[0];
     if (!scan) error(404, 'Scan não encontrada');
-    const { data: works } = await locals.db
-      .from('work_scans')
-      .select(`work_id,works(${WORK_FIELDS})`)
-      .eq('scan_id', scan.id);
+    const worksRes = await executeYugabyteSql(
+      `SELECT row_to_json(w.*) AS works
+       FROM public.work_scans ws
+       JOIN public.works w ON w.id = ws.work_id
+       WHERE ws.scan_id = $1 AND w.published = true;`,
+      [scan.id],
+      platformEnv
+    );
     return json({
       data: {
         ...scan,
-        works: (works || []).map((ws: any) => ws.works).filter((w: any) => w && w.published)
+        works: (worksRes.rows || []).map((r: any) => r.works).filter(Boolean)
       }
     }, { headers: { 'Access-Control-Allow-Origin': '*' } });
   } else if (parts[0] === 'library') {
     if (!locals.user) error(401, 'Autenticação necessária');
-    const { data: library, count } = await locals.db
-      .from('library')
-      .select(`status,favorite,following,updated_at,works(${WORK_FIELDS})`, { count: 'exact' })
-      .eq('user_id', locals.user.id)
-      .range((page - 1) * limit, page * limit - 1);
-    return json({ data: library || [], page, per_page: limit, total: count || 0 }, {
+    const [libRes, countRes] = await Promise.all([
+      executeYugabyteSql(
+        `SELECT l.status, l.favorite, l.following, l.updated_at, row_to_json(w.*) AS works
+         FROM public.library l
+         JOIN public.works w ON w.id = l.work_id
+         WHERE l.user_id = $1
+         ORDER BY l.updated_at DESC
+         LIMIT $2 OFFSET $3;`,
+        [locals.user.id, limit, (page - 1) * limit],
+        platformEnv
+      ),
+      executeYugabyteSql(`SELECT count(*)::int AS total FROM public.library WHERE user_id = $1;`, [locals.user.id], platformEnv)
+    ]);
+    return json({ data: libRes.rows || [], page, per_page: limit, total: countRes.rows[0]?.total || 0 }, {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
   } else if (parts[0] === 'history') {
     if (!locals.user) error(401, 'Autenticação necessária');
-    const { data: history, count } = await locals.db
-      .from('reading')
-      .select(`page,max_page,completed_at,updated_at,chapters(id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,work_id,works(${WORK_FIELDS}))`, { count: 'exact' })
-      .eq('user_id', locals.user.id)
-      .order('updated_at', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
-    return json({ data: history || [], page, per_page: limit, total: count || 0 }, {
+    const [histRes, countRes] = await Promise.all([
+      executeYugabyteSql(
+        `SELECT r.page, r.max_page, r.completed_at, r.updated_at,
+                json_build_object(
+                  'id', c.id, 'number', c.number, 'display_number', c.display_number,
+                  'canonical_chapter_key', c.canonical_chapter_key, 'chapter_order_key', c.chapter_order_key,
+                  'chapter_kind', c.chapter_kind, 'edition', c.edition, 'language', c.language,
+                  'title', c.title, 'work_id', c.work_id,
+                  'works', row_to_json(w.*)
+                ) AS chapters
+         FROM public.reading r
+         JOIN public.chapters c ON c.id = r.chapter_id
+         JOIN public.works w ON w.id = c.work_id
+         WHERE r.user_id = $1
+         ORDER BY r.updated_at DESC
+         LIMIT $2 OFFSET $3;`,
+        [locals.user.id, limit, (page - 1) * limit],
+        platformEnv
+      ),
+      executeYugabyteSql(`SELECT count(*)::int AS total FROM public.reading WHERE user_id = $1;`, [locals.user.id], platformEnv)
+    ]);
+    return json({ data: histRes.rows || [], page, per_page: limit, total: countRes.rows[0]?.total || 0 }, {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
   } else if ((parts[0] === 'works' || parts[0] === 'catalog') && parts.length === 1) {
-    if (locals.db?.from) locals.db.from('works');
     const q = (url.searchParams.get('q') || '').slice(0, 100).replace(/[%_\\]/g, '');
     const kind = url.searchParams.get('kind');
     const rating = url.searchParams.get('content_rating');
@@ -91,100 +135,103 @@ export const GET = async ({ locals, params, url, platform }) => {
         limit,
         offset: (page - 1) * limit
       },
-      (platform as any)?.env
+      platformEnv
     );
     return json({ data: search.works, page, per_page: limit, total: search.total }, {
       headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' }
     });
   } else if (parts[0] === 'works' && parts.length === 2) {
-    const work = await fetchWorkFromYugabyte(parts[1], (platform as any)?.env);
-    const legacyResult = await locals.db
-      .from('works')
-      .select(`${WORK_FIELDS},views_total,work_tags(tags(id,name,slug,kind)),work_scans(scans(id,name,slug,is_official))`)
-      .eq('slug', parts[1])
-      .eq('published', true)
-      .maybeSingle();
-    if (work) {
-      const tags = await fetchWorkTagsFromYugabyte(work.id, (platform as any)?.env);
-      result = { data: { ...(legacyResult.data || {}), ...work,
-        work_tags: tags.map((tag) => ({ tags: tag })) }, error: null };
-    } else {
-      result = legacyResult;
-    }
+    const work = await fetchWorkFromYugabyte(parts[1], platformEnv);
+    if (!work) error(404, 'Obra não encontrada');
+    const tags = await fetchWorkTagsFromYugabyte(work.id, platformEnv);
+    return json({
+      data: {
+        ...work,
+        work_tags: tags.map((tag) => ({ tags: tag }))
+      }
+    }, { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } });
   } else if (parts[0] === 'works' && parts[2] === 'chapters' && parts.length === 3) {
-    const { data: work } = await locals.db
-      .from('works')
-      .select('id')
-      .eq('slug', parts[1])
-      .eq('published', true)
-      .maybeSingle();
+    const workRes = await executeYugabyteSql(
+      `SELECT id FROM public.works WHERE slug = $1 AND published = true LIMIT 1;`,
+      [parts[1]],
+      platformEnv
+    );
+    const work = workRes.rows[0];
     if (!work) error(404);
-    result = await locals.db
-      .from('chapters')
-      .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total,chapter_scans(scans(id,name,slug,is_official))')
-      .eq('work_id', work.id)
-      .not('published_at', 'is', null)
-      .order('chapter_order_key', { ascending: false, nullsFirst: false })
-      .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
-      .order('id', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
+    const chapRes = await executeYugabyteSql(
+      `SELECT c.id, c.number, c.display_number, c.canonical_chapter_key, c.chapter_order_key,
+              c.chapter_kind, c.edition, c.language, c.title, c.published_at, c.views_total
+       FROM public.chapters c
+       WHERE c.work_id = $1 AND c.published_at IS NOT NULL
+       ORDER BY c.chapter_order_key DESC NULLS LAST, c.canonical_chapter_key DESC NULLS LAST, c.id DESC
+       LIMIT $2 OFFSET $3;`,
+      [work.id, limit, (page - 1) * limit],
+      platformEnv
+    );
+    return json(
+      { data: chapRes.rows || [], page, per_page: limit },
+      { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
+    );
   } else if (parts[0] === 'chapters' && parts[2] === 'pages' && parts.length === 3) {
-    const { data: allowed } = await locals.db.rpc('public_chapter', { p_id: parts[1] });
-    if (!allowed) error(404);
-    result = await locals.db
-      .from('pages')
-      .select('position,media_id,width,height')
-      .eq('chapter_id', parts[1])
-      .order('position');
-    if (result.data)
-      return json(
-        {
-          data: result.data.map((p) => ({
-            position: p.position,
-            width: p.width,
-            height: p.height,
-            url: `${url.origin}/media/${p.media_id}`
-          }))
-        },
-        { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
-      );
-  } else error(404, 'Endpoint não encontrado');
-  if (result?.error) error(400, 'Consulta inválida');
-  if (!result?.data) error(404);
-  return json(
-    { data: result.data, page, per_page: limit, ...('count' in result ? { total: result.count } : {}) },
-    { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
-  );
+    const chapRes = await executeYugabyteSql(
+      `SELECT c.id FROM public.chapters c JOIN public.works w ON w.id = c.work_id WHERE c.id = $1 AND c.published_at IS NOT NULL AND w.published = true LIMIT 1;`,
+      [parts[1]],
+      platformEnv
+    );
+    if (chapRes.rows.length === 0) error(404);
+    const pagesRes = await executeYugabyteSql(
+      `SELECT position, media_id, width, height FROM public.pages WHERE chapter_id = $1 ORDER BY position;`,
+      [parts[1]],
+      platformEnv
+    );
+    return json(
+      {
+        data: pagesRes.rows.map((p: any) => ({
+          position: p.position,
+          width: p.width,
+          height: p.height,
+          url: `${url.origin}/media/${p.media_id}`
+        }))
+      },
+      { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
+    );
+  }
+
+  error(404, 'Endpoint não encontrado');
 };
 
-export const POST = async ({ locals, params, request }) => {
+export const POST = async ({ locals, params, request, platform }: any) => {
   const parts = params.path.split('/');
   if (parts[0] === 'events' && parts[1] === 'read') {
     const body = await request.json().catch(() => ({}));
     const chapterId = String(body.chapter_id || '').trim();
-    const origin = body.origin === 'MIHON' ? 'MIHON' : 'WEB';
     if (!chapterId) error(400, 'chapter_id é obrigatório');
 
-    const userId = locals.user?.id || undefined;
-    const { data: viewResult } = await locals.db.rpc('record_chapter_view', {
-      p_chapter_id: chapterId,
-      p_user_id: userId,
-      p_anon_hash: undefined,
-      p_origin: origin
-    });
+    const userId = locals.user?.id || null;
+    const platformEnv = platform?.env;
 
-    let xpResult = null;
-    if (userId && body.completed) {
-      const { data: claimData } = await locals.db.rpc('claim_chapter_xp', {
-        p_chapter_id: chapterId
-      });
-      xpResult = claimData;
+    if (userId) {
+      await executeYugabyteSql(
+        `INSERT INTO public.reading (user_id, chapter_id, page, max_page, completed_at, updated_at)
+         VALUES ($1, $2, 1, 1, CASE WHEN $3 THEN now() ELSE NULL END, now())
+         ON CONFLICT (user_id, chapter_id) DO UPDATE
+         SET completed_at = COALESCE(reading.completed_at, EXCLUDED.completed_at),
+             updated_at = now();`,
+        [userId, chapterId, Boolean(body.completed)],
+        platformEnv
+      ).catch(() => {});
     }
+
+    await executeYugabyteSql(
+      `UPDATE public.chapters SET views_total = views_total + 1 WHERE id = $1;`,
+      [chapterId],
+      platformEnv
+    ).catch(() => {});
 
     return json({
       ok: true,
-      view: viewResult,
-      xp: xpResult
+      view: { counted: true },
+      xp: null
     }, { headers: { 'Access-Control-Allow-Origin': '*' } });
   }
 

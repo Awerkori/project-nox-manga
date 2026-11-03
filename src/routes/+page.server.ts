@@ -75,7 +75,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     const readingRes = await fetchUserReadingFromYugabyte(locals.user.id, platform?.env);
     const enrichedReadingRows =
       readingRes.data && readingRes.data.length > 0
-        ? await enrichReadingRowsWithCatalog(readingRes.data as any[], locals.db, platform?.env)
+        ? await enrichReadingRowsWithCatalog(readingRes.data as any[], null, platform?.env)
         : [];
 
     let continueReading: any[] = [];
@@ -171,7 +171,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
 
   const enrichedColdReadingRows =
     readingRes.data && readingRes.data.length > 0
-      ? await enrichReadingRowsWithCatalog(readingRes.data as any[], locals.db, platform?.env)
+      ? await enrichReadingRowsWithCatalog(readingRes.data as any[], null, platform?.env)
       : [];
 
   if (enrichedColdReadingRows.length > 0) {
@@ -223,23 +223,8 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
           platform?.env
         );
         allNext = ybChapters.rows || [];
-      } catch {}
-
-      if (allNext.length === 0 && locals.db?.from) {
-        const nextChaptersRes = await withTimeout(
-          locals.db
-            .from('chapters')
-            .select('id,number,display_number,canonical_chapter_key,chapter_order_key,work_id')
-            .in('work_id', workIds)
-            .not('published_at', 'is', null)
-            .order('chapter_order_key', { ascending: true, nullsFirst: false })
-            .order('canonical_chapter_key', { ascending: true, nullsFirst: false })
-            .order('id', { ascending: true }),
-          1500,
-          { data: [] } as any,
-          'home_batch_next_chapters'
-        );
-        allNext = nextChaptersRes?.data || [];
+      } catch (err) {
+        console.warn('[HOME_BATCH_NEXT_CHAPTERS_SQL_ERROR]', err);
       }
 
       for (const { wid, rows, currentCh } of needsNextChapter) {

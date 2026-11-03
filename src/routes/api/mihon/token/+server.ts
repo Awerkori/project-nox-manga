@@ -1,26 +1,27 @@
 import { json } from '@sveltejs/kit';
-import { member, privileged } from '$lib/server/db';
+import { member } from '$lib/server/db';
 import { generateMihonToken } from '$lib/server/mihon';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET = async ({ locals }) => {
+export const GET = async ({ locals, platform }) => {
   const userId = member(locals);
-  const db = privileged();
 
-  const { data, error } = await db
-    .from('mihon_tokens')
-    .select('id, device_name, created_at, expires_at')
-    .eq('user_id', userId)
-    .eq('revoked', false)
-    .order('created_at', { ascending: false });
-
-  if (error) {
+  try {
+    const res = await executeYugabyteSql(
+      `SELECT id, device_name, created_at, expires_at 
+       FROM public.mihon_tokens 
+       WHERE user_id = $1 AND revoked = false 
+       ORDER BY created_at DESC;`,
+      [userId],
+      platform?.env
+    );
+    return json({ tokens: res.rows || [] });
+  } catch (err: any) {
     return json({ error: 'Erro ao carregar tokens' }, { status: 500 });
   }
-
-  return json({ tokens: data || [] });
 };
 
-export const POST = async ({ request, locals }) => {
+export const POST = async ({ request, locals, platform }) => {
   const userId = member(locals);
 
   let deviceName = 'Mihon App';
@@ -34,14 +35,14 @@ export const POST = async ({ request, locals }) => {
   }
 
   try {
-    const { token, expiresAt } = await generateMihonToken(userId, deviceName);
+    const { token, expiresAt } = await generateMihonToken(userId, deviceName, platform?.env);
     return json({ token, expires_at: expiresAt });
   } catch (err) {
     return json({ error: (err as Error).message || 'Erro ao gerar token' }, { status: 500 });
   }
 };
 
-export const DELETE = async ({ request, locals }) => {
+export const DELETE = async ({ request, locals, platform }) => {
   const userId = member(locals);
 
   let tokenId = '';
@@ -56,16 +57,14 @@ export const DELETE = async ({ request, locals }) => {
     return json({ error: 'ID do token é obrigatório' }, { status: 400 });
   }
 
-  const db = privileged();
-  const { error } = await db
-    .from('mihon_tokens')
-    .update({ revoked: true })
-    .eq('id', tokenId)
-    .eq('user_id', userId);
-
-  if (error) {
+  try {
+    await executeYugabyteSql(
+      `UPDATE public.mihon_tokens SET revoked = true WHERE id = $1 AND user_id = $2;`,
+      [tokenId, userId],
+      platform?.env
+    );
+    return json({ ok: true });
+  } catch (err: any) {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });
   }
-
-  return json({ ok: true });
 };

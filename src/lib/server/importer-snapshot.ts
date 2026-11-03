@@ -271,28 +271,7 @@ function mapLiteTaskRow(
   };
 }
 
-async function safeSupabaseQuery<T = any>(
-  factory: () => PromiseLike<{ data: T | null; error?: any; count?: number | null }>,
-  fallbackData: T,
-  timeoutMs = 2_800,
-): Promise<{ data: T; count: number }> {
-  try {
-    const result = await Promise.race([
-      Promise.resolve(factory()),
-      new Promise<{ data: T; error: Error; count: number }>((resolve) =>
-        setTimeout(() => resolve({ data: fallbackData, error: new Error('timeout'), count: 0 }), timeoutMs),
-      ),
-    ]);
-    if (result?.error || result?.data == null) {
-      return { data: fallbackData, count: Number(result?.count || 0) };
-    }
-    return { data: result.data, count: Number(result.count || 0) };
-  } catch {
-    return { data: fallbackData, count: 0 };
-  }
-}
-
-async function loadAuxSupabaseMetadata(locals: any, forceRefresh = false) {
+async function loadAuxYsqlMetadata(platformEnv?: any, forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedAuxMetadataEntry && now - cachedAuxMetadataEntry.at < AUX_METADATA_TTL_MS) {
     return cachedAuxMetadataEntry.data;
@@ -302,65 +281,89 @@ async function loadAuxSupabaseMetadata(locals: any, forceRefresh = false) {
   }
 
   const promise = (async () => {
-    const [staffRequestsRes, workHealthRes, staffAuditRes, recentManifestRes, stagedRes] = await Promise.all([
-      safeSupabaseQuery(
-        () =>
-          locals.db
-            .from('importer_staff_requests')
-            .select('*, works(id, title, slug, cover_id), requester:members!importer_staff_requests_requested_by_fkey(id, username, display_name), canceller:members!importer_staff_requests_cancelled_by_fkey(id, username, display_name)')
-            .order('created_at', { ascending: false })
-            .limit(12),
-        [],
-      ),
-      safeSupabaseQuery(
-        () =>
-          locals.db
-            .from('importer_work_health')
-            .select('*, works(id, title, slug, cover_id)')
-            .order('last_reconciled_at', { ascending: false, nullsFirst: false })
-            .limit(36),
-        [],
-      ),
-      safeSupabaseQuery(
-        () =>
-          locals.db
-            .from('importer_staff_audit')
-            .select('*, actor:members!importer_staff_audit_actor_id_fkey(id, username, display_name)')
-            .order('created_at', { ascending: false })
-            .limit(10),
-        [],
-      ),
-      safeSupabaseQuery(
-        () =>
-          locals.db
-            .from('importer_chapter_manifest')
-            .select('id, work_id, chapter_number, chapter_sort_key, status, selected_source, available_sources, page_count, last_checked_at')
-            .order('chapter_sort_key', { ascending: true })
-            .limit(40),
-        [],
-      ),
-      safeSupabaseQuery(
-        () =>
-          locals.db
-            .from('importer_chapter_mappings')
-            .select('*, works(id, title, cover_id)', { count: 'exact' })
-            .eq('status', 'STAGED')
-            .order('chapter_sort_key', { ascending: true })
-            .limit(8),
-        [],
-      ),
-    ]);
+    try {
+      const [staffRequestsRes, workHealthRes, staffAuditRes, recentManifestRes, stagedRes, stagedCountRes] = await Promise.all([
+        executeYugabyteSql(
+          `SELECT r.*,
+                  json_build_object('id', w.id, 'title', w.title, 'slug', w.slug, 'cover_id', w.cover_id) AS works,
+                  json_build_object('id', req.id, 'username', req.username, 'display_name', req.display_name) AS requester,
+                  json_build_object('id', can.id, 'username', can.username, 'display_name', can.display_name) AS canceller
+           FROM public.importer_staff_requests r
+           LEFT JOIN public.works w ON w.id = r.work_id
+           LEFT JOIN public.members req ON req.id = r.requested_by
+           LEFT JOIN public.members can ON can.id = r.cancelled_by
+           ORDER BY r.created_at DESC
+           LIMIT 12;`,
+          [],
+          platformEnv
+        ),
+        executeYugabyteSql(
+          `SELECT h.*,
+                  json_build_object('id', w.id, 'title', w.title, 'slug', w.slug, 'cover_id', w.cover_id) AS works
+           FROM public.importer_work_health h
+           LEFT JOIN public.works w ON w.id = h.work_id
+           ORDER BY h.last_reconciled_at DESC NULLS LAST
+           LIMIT 36;`,
+          [],
+          platformEnv
+        ),
+        executeYugabyteSql(
+          `SELECT a.*,
+                  json_build_object('id', m.id, 'username', m.username, 'display_name', m.display_name) AS actor
+           FROM public.importer_staff_audit a
+           LEFT JOIN public.members m ON m.id = a.actor_id
+           ORDER BY a.created_at DESC
+           LIMIT 10;`,
+          [],
+          platformEnv
+        ),
+        executeYugabyteSql(
+          `SELECT id, work_id, chapter_number, chapter_sort_key, status, selected_source, available_sources, page_count, last_checked_at
+           FROM public.importer_chapter_manifest
+           ORDER BY chapter_sort_key ASC
+           LIMIT 40;`,
+          [],
+          platformEnv
+        ),
+        executeYugabyteSql(
+          `SELECT m.*,
+                  json_build_object('id', w.id, 'title', w.title, 'cover_id', w.cover_id) AS works
+           FROM public.importer_chapter_mappings m
+           LEFT JOIN public.works w ON w.id = m.work_id
+           WHERE m.status = 'STAGED'
+           ORDER BY m.chapter_sort_key ASC
+           LIMIT 8;`,
+          [],
+          platformEnv
+        ),
+        executeYugabyteSql(
+          `SELECT count(*)::int AS cnt FROM public.importer_chapter_mappings WHERE status = 'STAGED';`,
+          [],
+          platformEnv
+        )
+      ]);
 
-    const data = {
-      staffRequests: staffRequestsRes.data || [],
-      workHealthRaw: workHealthRes.data || [],
-      staffAudit: staffAuditRes.data || [],
-      chapterManifest: recentManifestRes.data || [],
-      stagedChapters: stagedRes.data || [],
-      stagedCount: stagedRes.count || (stagedRes.data || []).length,
-    };
-    cachedAuxMetadataEntry = { at: Date.now(), data };
-    return data;
+      const data = {
+        staffRequests: staffRequestsRes.rows || [],
+        workHealthRaw: workHealthRes.rows || [],
+        staffAudit: staffAuditRes.rows || [],
+        chapterManifest: recentManifestRes.rows || [],
+        stagedChapters: stagedRes.rows || [],
+        stagedCount: stagedCountRes.rows[0]?.cnt || (stagedRes.rows || []).length,
+      };
+      cachedAuxMetadataEntry = { at: Date.now(), data };
+      return data;
+    } catch (err: any) {
+      console.warn('[IMPORTER_AUX_YSQL_WARN]', err?.message || err);
+      return {
+        staffRequests: [],
+        workHealthRaw: [],
+        staffAudit: [],
+        chapterManifest: [],
+        stagedChapters: [],
+        stagedCount: 0
+      };
+    }
   })().finally(() => {
     if (inFlightAuxMetadataPromise === promise) {
       inFlightAuxMetadataPromise = null;
@@ -559,7 +562,7 @@ async function buildSnapshot(
         },
         1,
       ),
-      timed('aux_supabase_meta', () => loadAuxSupabaseMetadata(locals, forceRefresh)),
+      timed('aux_ysql_meta', () => loadAuxYsqlMetadata(platform?.env, forceRefresh)),
     ]);
 
     const {
@@ -575,29 +578,8 @@ async function buildSnapshot(
       jobWorksRows,
     } = ysqlBundle;
 
-    // Fallback to Supabase sources/works only if YugabyteDB returned empty (e.g. unit test mocks)
-    let sourcesList = sourcesRows;
-    if (sourcesList.length === 0 && locals?.db) {
-      const fallbackSources = await safeSupabaseQuery(
-        () => locals.db.from('importer_sources').select('*').order('name', { ascending: true }),
-        [],
-      );
-      sourcesList = fallbackSources.data || [];
-    }
-
-    let catalogWorks = catalogWorksRows;
-    if (catalogWorks.length === 0 && locals?.db) {
-      const fallbackWorks = await safeSupabaseQuery(
-        () =>
-          locals.db
-            .from('works')
-            .select('id, title, slug, cover_id')
-            .order('updated_at', { ascending: false })
-            .limit(32),
-        [],
-      );
-      catalogWorks = fallbackWorks.data || [];
-    }
+    const sourcesList = sourcesRows || [];
+    const catalogWorks = catalogWorksRows || [];
 
     const bucketRows = canonicalPublication.bucketRows;
     const rateTelemetry = {

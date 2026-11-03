@@ -34,10 +34,10 @@ vi.mock('$lib/server/yugabyte', () => ({
 
 import { GET as getPublicMediaRoute } from '../src/routes/media/[id]/+server';
 import { GET as getPrivateMediaRoute } from '../src/routes/api/media/[id]/+server';
-import { signSessionJwt } from '../src/lib/server/yugabyte-auth';
+import { signSessionJwt, getAuthSecret } from '../src/lib/server/yugabyte-auth';
 
 describe('Project Nox Final Security Audit — Priority 2: 1-Year Cache & Private Media Isolation', () => {
-  const secret = 'project-nox-production-auth-key-2026-secure-token';
+  const secret = getAuthSecret();
   const staffUserId = '77777777-7777-4777-8777-777777777777';
   const regularUserId = '88888888-8888-4888-8888-888888888888';
   const publicMediaId = '11111111-2222-3333-4444-555555555555';
@@ -45,7 +45,9 @@ describe('Project Nox Final Security Audit — Priority 2: 1-Year Cache & Privat
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.fetchMediaMetadataFromYugabyte.mockResolvedValue(null);
+    mocks.fetchMediaMetadataFromYugabyte.mockImplementation(async (id: string) =>
+      mocks.mediaRecord?.id === id ? mocks.mediaRecord : null
+    );
     mocks.executeYugabyteSql.mockImplementation(async (sql: string, params: any[]) => {
       if (sql.includes('access_roles')) {
         if (params?.[0] === staffUserId) {

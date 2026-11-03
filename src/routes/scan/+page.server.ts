@@ -78,7 +78,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
   platform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
 
-  // 1. Authoritative member avatar/profile synchronizer from Supabase to Yugabyte
+  // 1. Authoritative member avatar/profile synchronizer in YugabyteDB
   const currentUserProfile = locals.sessionCache?.profile || locals.profile || locals.user;
   const currentUserId = locals.user?.id;
   const userAvatarId = currentUserProfile?.avatar_id || locals.user?.avatar_id || null;

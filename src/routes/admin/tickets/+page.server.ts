@@ -1,5 +1,4 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { createClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { parsePartnerRequestMeta } from '$lib/scans';
 import { createNotification } from '$lib/server/notifications';
@@ -13,21 +12,6 @@ import {
 } from '$lib/server/admin-cache';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import type { PageServerLoad, Actions } from './$types';
-
-function getAdminDb(locals: any, platform?: any) {
-  const serviceKey = platform?.env?.SUPABASE_SERVICE_ROLE_KEY || platform?.env?.STAFF_SUPABASE_SERVICE_ROLE_KEY;
-  const url = platform?.env?.PUBLIC_SUPABASE_URL || 'https://izregkwaqdygwioqzwwo.supabase.co';
-  if (serviceKey) {
-    try {
-      return createClient(url, serviceKey, {
-        auth: { persistSession: false, autoRefreshToken: false }
-      });
-    } catch {
-      // Fallback to locals.db
-    }
-  }
-  return locals.db;
-}
 
 export const load: PageServerLoad = async ({ locals, url, platform }) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
@@ -61,412 +45,399 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     cacheKey,
     15_000,
     async () => {
-  const db = getAdminDb(locals, platform);
-
-  // 1. Content Reports Query (Work & Chapter issues — only fetched when tab === 'relatorios')
-  let contentQuery: PromiseLike<{ data: any[] | null }> = Promise.resolve({ data: [] });
-  if (activeTab === 'relatorios') {
-    let q = db
-      .from('reports')
-      .select(`
-        id,
-        target_type,
-        work_id,
-        chapter_id,
-        reason,
-        details,
-        status,
-        resolution_notes,
-        assigned_to,
-        assigned_at,
-        resolved_by,
-        resolved_at,
-        created_at,
-        updated_at,
-        reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-        assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
-        resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
-        work:works(id, title, slug, cover_id),
-        chapter:chapters(id, number, display_number, title, work_id, works(id, title, slug, cover_id))
-      `)
-      .is('deleted_at', null)
-      .not('target_type', 'in', '("COMMENT","USER")')
-      .order('created_at', { ascending: false })
-      .limit(120);
-    if (statusFilter !== 'ALL') q = q.eq('status', statusFilter);
-    if (typeFilter !== 'ALL') q = q.eq('target_type', typeFilter);
-    contentQuery = q;
-  }
-
-  // 2. Scan Partner Requests Query (ADMIN ONLY — only fetched when tab === 'scans')
-  let partnerQuery: PromiseLike<{ data: any[] | null }> = Promise.resolve({ data: [] });
-  if (isAdmin && activeTab === 'scans') {
-    let q: any = db
-      .from('scan_partner_requests')
-      .select(`
-        *,
-        applicant:members!user_id(id, username, display_name, avatar_id, avatar_crop),
-        assignee:members!scan_partner_requests_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
-        reviewer:members!scan_partner_requests_reviewed_by_fkey(id, username, display_name, avatar_id, avatar_crop)
-      `)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (statusFilter !== 'ALL') {
-      if (statusFilter === 'PENDING') {
-        q = q.eq('status', 'PENDING').is('assigned_to', null);
-      } else if (statusFilter === 'EM_ANALISE') {
-        q = q.eq('status', 'PENDING').not('assigned_to', 'is', null);
-      } else {
-        q = q.eq('status', statusFilter);
+      // 1. Content Reports Query (Work & Chapter issues — only fetched when tab === 'relatorios')
+      let rawReports: any[] = [];
+      if (activeTab === 'relatorios') {
+        let query = `
+          SELECT 
+            r.id, r.target_type, r.work_id, r.chapter_id, r.reason, r.details, r.status,
+            r.resolution_notes, r.assigned_to, r.assigned_at, r.resolved_by, r.resolved_at,
+            r.created_at, r.updated_at,
+            CASE WHEN rep.id IS NOT NULL THEN json_build_object('id', rep.id, 'username', rep.username, 'display_name', rep.display_name, 'avatar_id', rep.avatar_id, 'avatar_crop', rep.avatar_crop) ELSE NULL END AS reporter,
+            CASE WHEN ass.id IS NOT NULL THEN json_build_object('id', ass.id, 'username', ass.username, 'display_name', ass.display_name, 'avatar_id', ass.avatar_id, 'avatar_crop', ass.avatar_crop) ELSE NULL END AS assigned,
+            CASE WHEN res.id IS NOT NULL THEN json_build_object('id', res.id, 'username', res.username, 'display_name', res.display_name, 'avatar_id', res.avatar_id, 'avatar_crop', res.avatar_crop) ELSE NULL END AS resolver,
+            CASE WHEN w.id IS NOT NULL THEN json_build_object('id', w.id, 'title', w.title, 'slug', w.slug, 'cover_id', w.cover_id) ELSE NULL END AS work,
+            CASE WHEN ch.id IS NOT NULL THEN json_build_object('id', ch.id, 'number', ch.number, 'display_number', ch.display_number, 'title', ch.title, 'work_id', ch.work_id, 'works', CASE WHEN w2.id IS NOT NULL THEN json_build_object('id', w2.id, 'title', w2.title, 'slug', w2.slug, 'cover_id', w2.cover_id) ELSE NULL END) ELSE NULL END AS chapter
+          FROM public.reports r
+          LEFT JOIN public.members rep ON rep.id = r.reporter_id
+          LEFT JOIN public.members ass ON ass.id = r.assigned_to
+          LEFT JOIN public.members res ON res.id = r.resolved_by
+          LEFT JOIN public.works w ON w.id = r.work_id
+          LEFT JOIN public.chapters ch ON ch.id = r.chapter_id
+          LEFT JOIN public.works w2 ON w2.id = ch.work_id
+          WHERE r.deleted_at IS NULL AND r.target_type NOT IN ('COMMENT', 'USER')
+        `;
+        const params: any[] = [];
+        if (statusFilter !== 'ALL') {
+          params.push(statusFilter);
+          query += ` AND r.status = $${params.length}`;
+        }
+        if (typeFilter !== 'ALL') {
+          params.push(typeFilter);
+          query += ` AND r.target_type = $${params.length}`;
+        }
+        query += ` ORDER BY r.created_at DESC LIMIT 120;`;
+        const res = await executeYugabyteSql(query, params, platform?.env).catch(() => ({ rows: [] }));
+        rawReports = res.rows;
       }
-    }
-    partnerQuery = q;
-  }
 
-  // 3. Moderation Reports Query (Comment & User issues, ADMIN ONLY — only fetched when tab === 'moderacao')
-  let moderationQuery: PromiseLike<{ data: any[] | null }> = Promise.resolve({ data: [] });
-  if (isAdmin && activeTab === 'moderacao') {
-    let q: any = db
-      .from('reports')
-      .select(`
-        id,
-        target_type,
-        work_id,
-        chapter_id,
-        comment_id,
-        reason,
-        details,
-        status,
-        resolution_notes,
-        assigned_to,
-        assigned_at,
-        resolved_by,
-        resolved_at,
-        created_at,
-        updated_at,
-        reporter:members!reports_reporter_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-        assigned:members!reports_assigned_to_fkey(id, username, display_name, avatar_id, avatar_crop),
-        resolver:members!reports_resolved_by_fkey(id, username, display_name, avatar_id, avatar_crop),
-        comment:comments(
-          id,
-          body,
-          user_id,
-          parent_id,
-          removed,
-          deleted,
-          created_at,
-          author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop),
-          work:works(id, title, slug),
-          chapter:chapters(id, number, display_number, title, works(id, title, slug))
-        ),
-        target_user:members!reports_target_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
-      `)
-      .is('deleted_at', null)
-      .in('target_type', ['COMMENT', 'USER'])
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (statusFilter !== 'ALL') {
-      q = q.eq('status', statusFilter);
-    }
-    moderationQuery = q;
-  }
-
-  // 4. Overall counts for badges and stats
-  const [contentReportsRes, partnerReqsRes, moderationReportsRes, allReportsCountRes, allScansCountRes] = await Promise.all([
-    contentQuery,
-    partnerQuery,
-    moderationQuery,
-    db.from('reports').select('id, status, target_type, assigned_to').is('deleted_at', null),
-    isAdmin ? db.from('scan_partner_requests').select('id, status, assigned_to').is('deleted_at', null) : Promise.resolve({ data: [] })
-  ]);
-
-  const rawReports = (contentReportsRes.data as any[]) || [];
-  const rawScans = (partnerReqsRes.data as any[]) || [];
-  const rawModeration = (moderationReportsRes.data as any[]) || [];
-  const allReportsMeta = (allReportsCountRes.data as any[]) || [];
-  const allScansMeta = (allScansCountRes.data as any[]) || [];
-
-  // Categorize counts
-  const contentReportsList = allReportsMeta.filter(r => !['COMMENT', 'USER'].includes(r.target_type));
-  const moderationReportsList = allReportsMeta.filter(r => ['COMMENT', 'USER'].includes(r.target_type));
-
-  const contentStatusCounts = {
-    NOVO: contentReportsList.filter(r => r.status === 'NOVO').length,
-    EM_ANALISE: contentReportsList.filter(r => r.status === 'EM_ANALISE').length,
-    RESOLVIDO: contentReportsList.filter(r => r.status === 'RESOLVIDO').length,
-    REJEITADO: contentReportsList.filter(r => r.status === 'REJEITADO').length,
-    ALL: contentReportsList.length
-  };
-
-  const partnerStatusCounts = {
-    PENDING: allScansMeta.filter((s: any) => s.status === 'PENDING' && !s.assigned_to).length,
-    EM_ANALISE: allScansMeta.filter((s: any) => s.status === 'PENDING' && Boolean(s.assigned_to)).length,
-    APPROVED: allScansMeta.filter((s: any) => s.status === 'APPROVED').length,
-    REJECTED: allScansMeta.filter((s: any) => s.status === 'REJECTED').length,
-    ALL: allScansMeta.length
-  };
-
-  const moderationStatusCounts = {
-    NOVO: moderationReportsList.filter(r => r.status === 'NOVO').length,
-    EM_ANALISE: moderationReportsList.filter(r => r.status === 'EM_ANALISE').length,
-    RESOLVIDO: moderationReportsList.filter(r => r.status === 'RESOLVIDO').length,
-    REJEITADO: moderationReportsList.filter(r => r.status === 'REJEITADO').length,
-    ALL: moderationReportsList.length
-  };
-
-  // Enrich Content Reports with specific Work, Chapter, and Page context
-  const enrichedReports = rawReports.map((rep: any) => {
-    const pageMatch = rep.details?.match(/\[Página\s+(\d+)\]/i) || rep.details?.match(/\bp[áa]gina\s+(\d+)\b/i);
-    const pageNumber = pageMatch ? parseInt(pageMatch[1], 10) : null;
-    const cleanDetails = rep.details ? rep.details.replace(/^\[Página\s+\d+\]\s*/i, '').trim() : '';
-
-    const effectiveWork = rep.chapter?.works || rep.work;
-    const workTitle = effectiveWork?.title || (rep.target_type === 'CHAPTER' ? 'Obra do Capítulo' : 'Obra do Catálogo');
-    const workSlug = effectiveWork?.slug || '';
-    const coverId = effectiveWork?.cover_id || null;
-
-    let chapterDisplay: string | null = null;
-    let chapterTitle: string | null = null;
-    let problemLink = '';
-
-    if (rep.target_type === 'CHAPTER') {
-      if (rep.chapter) {
-        const num = rep.chapter.display_number ?? rep.chapter.number;
-        chapterDisplay = num !== null && num !== undefined ? `${num}` : 'Especial';
-        chapterTitle = rep.chapter.title || null;
-        const pageParam = pageNumber ? `?page=${pageNumber}#pagina-${pageNumber}` : '';
-        problemLink = `/ler/${rep.chapter.id}${pageParam}`;
-      } else if (effectiveWork?.slug) {
-        problemLink = `/obra/${effectiveWork.slug}`;
+      // 2. Scan Partner Requests Query (ADMIN ONLY — only fetched when tab === 'scans')
+      let rawScans: any[] = [];
+      if (isAdmin && activeTab === 'scans') {
+        let query = `
+          SELECT 
+            p.*,
+            CASE WHEN m.id IS NOT NULL THEN json_build_object('id', m.id, 'username', m.username, 'display_name', m.display_name, 'avatar_id', m.avatar_id, 'avatar_crop', m.avatar_crop) ELSE NULL END AS applicant,
+            CASE WHEN ass.id IS NOT NULL THEN json_build_object('id', ass.id, 'username', ass.username, 'display_name', ass.display_name, 'avatar_id', ass.avatar_id, 'avatar_crop', ass.avatar_crop) ELSE NULL END AS assignee,
+            CASE WHEN rev.id IS NOT NULL THEN json_build_object('id', rev.id, 'username', rev.username, 'display_name', rev.display_name, 'avatar_id', rev.avatar_id, 'avatar_crop', rev.avatar_crop) ELSE NULL END AS reviewer
+          FROM public.scan_partner_requests p
+          LEFT JOIN public.members m ON m.id = p.user_id
+          LEFT JOIN public.members ass ON ass.id = p.assigned_to
+          LEFT JOIN public.members rev ON rev.id = p.reviewed_by
+          WHERE p.deleted_at IS NULL
+        `;
+        const params: any[] = [];
+        if (statusFilter !== 'ALL') {
+          if (statusFilter === 'PENDING') {
+            query += ` AND p.status = 'PENDING' AND p.assigned_to IS NULL`;
+          } else if (statusFilter === 'EM_ANALISE') {
+            query += ` AND p.status = 'PENDING' AND p.assigned_to IS NOT NULL`;
+          } else {
+            params.push(statusFilter);
+            query += ` AND p.status = $${params.length}`;
+          }
+        }
+        query += ` ORDER BY p.created_at DESC LIMIT 100;`;
+        const res = await executeYugabyteSql(query, params, platform?.env).catch(() => ({ rows: [] }));
+        rawScans = res.rows;
       }
-    } else if (rep.target_type === 'WORK') {
-      if (effectiveWork?.slug) {
-        problemLink = `/obra/${effectiveWork.slug}`;
+
+      // 3. Moderation Reports Query (Comment & User issues, ADMIN ONLY — only fetched when tab === 'moderacao')
+      let rawModeration: any[] = [];
+      if (isAdmin && activeTab === 'moderacao') {
+        let query = `
+          SELECT 
+            r.id, r.target_type, r.work_id, r.chapter_id, r.comment_id, r.reason, r.details, r.status,
+            r.resolution_notes, r.assigned_to, r.assigned_at, r.resolved_by, r.resolved_at,
+            r.created_at, r.updated_at,
+            CASE WHEN rep.id IS NOT NULL THEN json_build_object('id', rep.id, 'username', rep.username, 'display_name', rep.display_name, 'avatar_id', rep.avatar_id, 'avatar_crop', rep.avatar_crop) ELSE NULL END AS reporter,
+            CASE WHEN ass.id IS NOT NULL THEN json_build_object('id', ass.id, 'username', ass.username, 'display_name', ass.display_name, 'avatar_id', ass.avatar_id, 'avatar_crop', ass.avatar_crop) ELSE NULL END AS assigned,
+            CASE WHEN res.id IS NOT NULL THEN json_build_object('id', res.id, 'username', res.username, 'display_name', res.display_name, 'avatar_id', res.avatar_id, 'avatar_crop', res.avatar_crop) ELSE NULL END AS resolver,
+            CASE WHEN tu.id IS NOT NULL THEN json_build_object('id', tu.id, 'username', tu.username, 'display_name', tu.display_name, 'avatar_id', tu.avatar_id, 'avatar_crop', tu.avatar_crop) ELSE NULL END AS target_user,
+            CASE WHEN c.id IS NOT NULL THEN json_build_object(
+              'id', c.id, 'body', c.body, 'user_id', c.user_id, 'parent_id', c.parent_id, 'removed', c.removed, 'deleted', c.deleted, 'created_at', c.created_at,
+              'author', CASE WHEN ca.id IS NOT NULL THEN json_build_object('id', ca.id, 'username', ca.username, 'display_name', ca.display_name, 'avatar_id', ca.avatar_id, 'avatar_crop', ca.avatar_crop) ELSE NULL END,
+              'work', CASE WHEN cw.id IS NOT NULL THEN json_build_object('id', cw.id, 'title', cw.title, 'slug', cw.slug) ELSE NULL END,
+              'chapter', CASE WHEN cch.id IS NOT NULL THEN json_build_object('id', cch.id, 'number', cch.number, 'display_number', cch.display_number, 'title', cch.title, 'works', CASE WHEN cchw.id IS NOT NULL THEN json_build_object('id', cchw.id, 'title', cchw.title, 'slug', cchw.slug) ELSE NULL END) ELSE NULL END
+            ) ELSE NULL END AS comment
+          FROM public.reports r
+          LEFT JOIN public.members rep ON rep.id = r.reporter_id
+          LEFT JOIN public.members ass ON ass.id = r.assigned_to
+          LEFT JOIN public.members res ON res.id = r.resolved_by
+          LEFT JOIN public.members tu ON tu.id = r.target_user_id
+          LEFT JOIN public.comments c ON c.id = r.comment_id
+          LEFT JOIN public.members ca ON ca.id = c.user_id
+          LEFT JOIN public.works cw ON cw.id = c.work_id
+          LEFT JOIN public.chapters cch ON cch.id = c.chapter_id
+          LEFT JOIN public.works cchw ON cchw.id = cch.work_id
+          WHERE r.deleted_at IS NULL AND r.target_type IN ('COMMENT', 'USER')
+        `;
+        const params: any[] = [];
+        if (statusFilter !== 'ALL') {
+          params.push(statusFilter);
+          query += ` AND r.status = $${params.length}`;
+        }
+        query += ` ORDER BY r.created_at DESC LIMIT 100;`;
+        const res = await executeYugabyteSql(query, params, platform?.env).catch(() => ({ rows: [] }));
+        rawModeration = res.rows;
       }
-    }
 
-    return {
-      ...rep,
-      workTitle,
-      workSlug,
-      coverId,
-      chapterDisplay,
-      chapterTitle,
-      pageNumber,
-      cleanDetails: cleanDetails || rep.details || '',
-      problemLink
-    };
-  });
+      // 4. Overall counts for badges and stats
+      const [allReportsRes, allScansRes] = await Promise.all([
+        executeYugabyteSql(`SELECT id, status, target_type, assigned_to FROM public.reports WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })),
+        isAdmin ? executeYugabyteSql(`SELECT id, status, assigned_to FROM public.scan_partner_requests WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
+      ]);
 
-  // Group Content Reports into clusters
-  const clustersMap = new Map<string, any>();
-  for (const rep of enrichedReports) {
-    let key = `SINGLE:${rep.id}`;
-    let clusterTitle = rep.workTitle;
-    const link = rep.problemLink;
-    const coverId = rep.coverId;
+      const allReportsMeta = allReportsRes.rows || [];
+      const allScansMeta = allScansRes.rows || [];
 
-    if (rep.target_type === 'CHAPTER' && rep.chapter) {
-      key = `CHAPTER:${rep.chapter.id}`;
-      clusterTitle = `${rep.workTitle} — Cap. ${rep.chapterDisplay}${rep.chapterTitle ? ` (${rep.chapterTitle})` : ''}`;
-    } else if (rep.target_type === 'WORK' && rep.work) {
-      key = `WORK:${rep.work.id}`;
-      clusterTitle = `Obra: ${rep.workTitle}`;
-    }
+      // Categorize counts
+      const contentReportsList = allReportsMeta.filter((r: any) => !['COMMENT', 'USER'].includes(r.target_type));
+      const moderationReportsList = allReportsMeta.filter((r: any) => ['COMMENT', 'USER'].includes(r.target_type));
 
-    let cluster = clustersMap.get(key);
-    if (!cluster) {
-      cluster = {
-        clusterKey: key,
-        targetType: rep.target_type,
-        targetTitle: clusterTitle,
-        workTitle: rep.workTitle,
-        chapterDisplay: rep.chapterDisplay,
-        targetLink: link,
-        coverId,
-        count: 0,
-        newCount: 0,
-        status: rep.status,
-        latestCreatedAt: rep.created_at,
-        assigned: rep.assigned,
-        assigned_at: rep.assigned_at,
-        resolver: rep.resolver,
-        resolved_at: rep.resolved_at,
-        reasons: [],
-        reportIds: [],
-        reports: []
+      const contentStatusCounts = {
+        NOVO: contentReportsList.filter((r: any) => r.status === 'NOVO').length,
+        EM_ANALISE: contentReportsList.filter((r: any) => r.status === 'EM_ANALISE').length,
+        RESOLVIDO: contentReportsList.filter((r: any) => r.status === 'RESOLVIDO').length,
+        REJEITADO: contentReportsList.filter((r: any) => r.status === 'REJEITADO').length,
+        ALL: contentReportsList.length
       };
-      clustersMap.set(key, cluster);
-    }
 
-    if (!cluster.assigned && rep.assigned) {
-      cluster.assigned = rep.assigned;
-      cluster.assigned_at = rep.assigned_at;
-    }
-    if (!cluster.resolver && rep.resolver) {
-      cluster.resolver = rep.resolver;
-      cluster.resolved_at = rep.resolved_at;
-    }
+      const partnerStatusCounts = {
+        PENDING: allScansMeta.filter((s: any) => s.status === 'PENDING' && !s.assigned_to).length,
+        EM_ANALISE: allScansMeta.filter((s: any) => s.status === 'PENDING' && Boolean(s.assigned_to)).length,
+        APPROVED: allScansMeta.filter((s: any) => s.status === 'APPROVED').length,
+        REJECTED: allScansMeta.filter((s: any) => s.status === 'REJECTED').length,
+        ALL: allScansMeta.length
+      };
 
-    cluster.count += 1;
-    if (rep.status === 'NOVO') cluster.newCount += 1;
-    if (!cluster.reasons.includes(rep.reason)) cluster.reasons.push(rep.reason);
-    cluster.reportIds.push(rep.id);
-    cluster.reports.push(rep);
+      const moderationStatusCounts = {
+        NOVO: moderationReportsList.filter((r: any) => r.status === 'NOVO').length,
+        EM_ANALISE: moderationReportsList.filter((r: any) => r.status === 'EM_ANALISE').length,
+        RESOLVIDO: moderationReportsList.filter((r: any) => r.status === 'RESOLVIDO').length,
+        REJEITADO: moderationReportsList.filter((r: any) => r.status === 'REJEITADO').length,
+        ALL: moderationReportsList.length
+      };
 
-    if (cluster.reports.some((r: any) => r.status === 'NOVO')) {
-      cluster.status = 'NOVO';
-    } else if (cluster.reports.some((r: any) => r.status === 'EM_ANALISE')) {
-      cluster.status = 'EM_ANALISE';
-    } else if (cluster.reports.every((r: any) => r.status === 'RESOLVIDO')) {
-      cluster.status = 'RESOLVIDO';
-    } else if (cluster.reports.every((r: any) => r.status === 'REJEITADO')) {
-      cluster.status = 'REJEITADO';
-    }
-  }
+      // Enrich Content Reports with specific Work, Chapter, and Page context
+      const enrichedReports = rawReports.map((rep: any) => {
+        const pageMatch = rep.details?.match(/\[Página\s+(\d+)\]/i) || rep.details?.match(/\bp[áa]gina\s+(\d+)\b/i);
+        const pageNumber = pageMatch ? parseInt(pageMatch[1], 10) : null;
+        const cleanDetails = rep.details ? rep.details.replace(/^\[Página\s+\d+\]\s*/i, '').trim() : '';
 
-  let clusters = Array.from(clustersMap.values());
-  if (searchQuery) {
-    clusters = clusters.filter(c =>
-      c.targetTitle.toLowerCase().includes(searchQuery) ||
-      c.workTitle.toLowerCase().includes(searchQuery) ||
-      c.reasons.some((r: string) => r.toLowerCase().includes(searchQuery))
-    );
-  }
+        const effectiveWork = rep.chapter?.works || rep.work;
+        const workTitle = effectiveWork?.title || (rep.target_type === 'CHAPTER' ? 'Obra do Capítulo' : 'Obra do Catálogo');
+        const workSlug = effectiveWork?.slug || '';
+        const coverId = effectiveWork?.cover_id || null;
 
-  // Parse partner scan metadata
-  const partnerRequests = rawScans.map((r: any) => ({
-    ...r,
-    meta: parsePartnerRequestMeta(r.sample_links)
-  }));
+        let chapterDisplay: string | null = null;
+        let chapterTitle: string | null = null;
+        let problemLink = '';
 
-  // Fetch parent comments for replies in moderation
-  const parentCommentIds = rawModeration
-    .map((r: any) => r.comment?.parent_id)
-    .filter((id: string | null | undefined): id is string => Boolean(id));
+        if (rep.target_type === 'CHAPTER') {
+          if (rep.chapter) {
+            const num = rep.chapter.display_number ?? rep.chapter.number;
+            chapterDisplay = num !== null && num !== undefined ? `${num}` : 'Especial';
+            chapterTitle = rep.chapter.title || null;
+            const pageParam = pageNumber ? `?page=${pageNumber}#pagina-${pageNumber}` : '';
+            problemLink = `/ler/${rep.chapter.id}${pageParam}`;
+          } else if (effectiveWork?.slug) {
+            problemLink = `/obra/${effectiveWork.slug}`;
+          }
+        } else if (rep.target_type === 'WORK') {
+          if (effectiveWork?.slug) {
+            problemLink = `/obra/${effectiveWork.slug}`;
+          }
+        }
 
-  const parentCommentsMap = new Map<string, any>();
-  if (parentCommentIds.length > 0) {
-    const { data: parentRows } = await db
-      .from('comments')
-      .select(`
-        id,
-        body,
-        removed,
-        created_at,
-        author:members!comments_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)
-      `)
-      .in('id', parentCommentIds);
-    if (parentRows) {
-      for (const p of parentRows) {
-        parentCommentsMap.set(p.id, p);
+        return {
+          ...rep,
+          workTitle,
+          workSlug,
+          coverId,
+          chapterDisplay,
+          chapterTitle,
+          pageNumber,
+          cleanDetails: cleanDetails || rep.details || '',
+          problemLink
+        };
+      });
+
+      // Group Content Reports into clusters
+      const clustersMap = new Map<string, any>();
+      for (const rep of enrichedReports) {
+        let key = `SINGLE:${rep.id}`;
+        let clusterTitle = rep.workTitle;
+        const link = rep.problemLink;
+        const coverId = rep.coverId;
+
+        if (rep.target_type === 'CHAPTER' && rep.chapter) {
+          key = `CHAPTER:${rep.chapter.id}`;
+          clusterTitle = `${rep.workTitle} — Cap. ${rep.chapterDisplay}${rep.chapterTitle ? ` (${rep.chapterTitle})` : ''}`;
+        } else if (rep.target_type === 'WORK' && rep.work) {
+          key = `WORK:${rep.work.id}`;
+          clusterTitle = `Obra: ${rep.workTitle}`;
+        }
+
+        let cluster = clustersMap.get(key);
+        if (!cluster) {
+          cluster = {
+            clusterKey: key,
+            targetType: rep.target_type,
+            targetTitle: clusterTitle,
+            workTitle: rep.workTitle,
+            chapterDisplay: rep.chapterDisplay,
+            targetLink: link,
+            coverId,
+            count: 0,
+            newCount: 0,
+            status: rep.status,
+            latestCreatedAt: rep.created_at,
+            assigned: rep.assigned,
+            assigned_at: rep.assigned_at,
+            resolver: rep.resolver,
+            resolved_at: rep.resolved_at,
+            reasons: [],
+            reportIds: [],
+            reports: []
+          };
+          clustersMap.set(key, cluster);
+        }
+
+        if (!cluster.assigned && rep.assigned) {
+          cluster.assigned = rep.assigned;
+          cluster.assigned_at = rep.assigned_at;
+        }
+        if (!cluster.resolver && rep.resolver) {
+          cluster.resolver = rep.resolver;
+          cluster.resolved_at = rep.resolved_at;
+        }
+
+        cluster.count += 1;
+        if (rep.status === 'NOVO') cluster.newCount += 1;
+        if (!cluster.reasons.includes(rep.reason)) cluster.reasons.push(rep.reason);
+        cluster.reportIds.push(rep.id);
+        cluster.reports.push(rep);
+
+        if (cluster.reports.some((r: any) => r.status === 'NOVO')) {
+          cluster.status = 'NOVO';
+        } else if (cluster.reports.some((r: any) => r.status === 'EM_ANALISE')) {
+          cluster.status = 'EM_ANALISE';
+        } else if (cluster.reports.every((r: any) => r.status === 'RESOLVIDO')) {
+          cluster.status = 'RESOLVIDO';
+        } else if (cluster.reports.every((r: any) => r.status === 'REJEITADO')) {
+          cluster.status = 'REJEITADO';
+        }
       }
-    }
-  }
 
-  // Fetch suspended status for users involved in moderation
-  const userIdsToCheck = rawModeration
-    .map((r: any) => r.comment?.user_id || r.target_user?.id)
-    .filter((id: string | null | undefined): id is string => Boolean(id));
-
-  const suspendedMap = new Map<string, boolean>();
-  if (userIdsToCheck.length > 0) {
-    const { data: roleRows } = await db
-      .from('access_roles')
-      .select('user_id, suspended')
-      .in('user_id', userIdsToCheck);
-    if (roleRows) {
-      for (const role of roleRows) {
-        suspendedMap.set(role.user_id, Boolean(role.suspended));
+      let clusters = Array.from(clustersMap.values());
+      if (searchQuery) {
+        clusters = clusters.filter(c =>
+          c.targetTitle.toLowerCase().includes(searchQuery) ||
+          c.workTitle.toLowerCase().includes(searchQuery) ||
+          c.reasons.some((r: string) => r.toLowerCase().includes(searchQuery))
+        );
       }
-    }
-  }
 
-  // Enrich moderation reports
-  let enrichedModeration = rawModeration.map((r: any) => {
-    const comm = r.comment;
-    const authorId = comm?.user_id || r.target_user?.id;
-    const isAuthorSuspended = authorId ? suspendedMap.get(authorId) || false : false;
+      // Parse partner scan metadata
+      const partnerRequests = rawScans.map((r: any) => ({
+        ...r,
+        meta: parsePartnerRequestMeta(r.sample_links)
+      }));
 
-    let parentComment = null;
-    if (comm?.parent_id) {
-      parentComment = parentCommentsMap.get(comm.parent_id) || null;
-    }
+      // Fetch parent comments for replies in moderation
+      const parentCommentIds = rawModeration
+        .map((r: any) => r.comment?.parent_id)
+        .filter((id: string | null | undefined): id is string => Boolean(id));
 
-    let siteLink = '';
-    let locationLabel = 'Conteúdo Geral';
-    let workTitle = '';
-    let chapterDisplay = '';
+      const parentCommentsMap = new Map<string, any>();
+      if (parentCommentIds.length > 0) {
+        const parentRes = await executeYugabyteSql(
+          `SELECT 
+             c.id, c.body, c.removed, c.created_at,
+             CASE WHEN m.id IS NOT NULL THEN json_build_object('id', m.id, 'username', m.username, 'display_name', m.display_name, 'avatar_id', m.avatar_id, 'avatar_crop', m.avatar_crop) ELSE NULL END AS author
+           FROM public.comments c
+           LEFT JOIN public.members m ON m.id = c.user_id
+           WHERE c.id = ANY($1::uuid[]);`,
+          [parentCommentIds],
+          platform?.env
+        ).catch(() => ({ rows: [] }));
+        for (const p of parentRes.rows) {
+          parentCommentsMap.set(p.id, p);
+        }
+      }
 
-    if (comm?.chapter) {
-      workTitle = comm.chapter.works?.title || 'Obra';
-      chapterDisplay = comm.chapter.display_number ?? comm.chapter.number ?? '';
-      locationLabel = `${workTitle} — Cap. ${chapterDisplay}`;
-      siteLink = `/ler/${comm.chapter.id}#comment-${comm.id}`;
-    } else if (comm?.work) {
-      workTitle = comm.work.title || 'Obra';
-      locationLabel = `Obra: ${workTitle}`;
-      siteLink = `/obra/${comm.work.slug}#comment-${comm.id}`;
-    }
+      // Fetch suspended status for users involved in moderation
+      const userIdsToCheck = rawModeration
+        .map((r: any) => r.comment?.user_id || r.target_user?.id)
+        .filter((id: string | null | undefined): id is string => Boolean(id));
 
-    let visibilityStatus: 'VISIBLE' | 'HIDDEN' | 'DELETED';
-    if (!comm || comm.deleted) {
-      visibilityStatus = 'DELETED';
-    } else if (comm.removed) {
-      visibilityStatus = 'HIDDEN';
-    } else {
-      visibilityStatus = 'VISIBLE';
-    }
+      const suspendedMap = new Map<string, boolean>();
+      if (userIdsToCheck.length > 0) {
+        const roleRes = await executeYugabyteSql(
+          `SELECT user_id, suspended FROM public.access_roles WHERE user_id = ANY($1::uuid[]);`,
+          [userIdsToCheck],
+          platform?.env
+        ).catch(() => ({ rows: [] }));
+        for (const role of roleRes.rows) {
+          suspendedMap.set(role.user_id, Boolean(role.suspended));
+        }
+      }
 
-    return {
-      ...r,
-      parentComment,
-      isAuthorSuspended,
-      siteLink,
-      locationLabel,
-      workTitle,
-      chapterDisplay,
-      visibilityStatus
-    };
-  });
+      // Enrich moderation reports
+      let enrichedModeration = rawModeration.map((r: any) => {
+        const comm = r.comment;
+        const authorId = comm?.user_id || r.target_user?.id;
+        const isAuthorSuspended = authorId ? suspendedMap.get(authorId) || false : false;
 
-  if (searchQuery) {
-    enrichedModeration = enrichedModeration.filter((m: any) =>
-      m.reason?.toLowerCase().includes(searchQuery) ||
-      m.details?.toLowerCase().includes(searchQuery) ||
-      m.comment?.body?.toLowerCase().includes(searchQuery) ||
-      m.comment?.author?.username?.toLowerCase().includes(searchQuery) ||
-      m.comment?.author?.display_name?.toLowerCase().includes(searchQuery) ||
-      m.locationLabel?.toLowerCase().includes(searchQuery)
-    );
-  }
+        let parentComment = null;
+        if (comm?.parent_id) {
+          parentComment = parentCommentsMap.get(comm.parent_id) || null;
+        }
 
-  const pendingReportsCount = contentStatusCounts.NOVO + contentStatusCounts.EM_ANALISE;
-  const pendingScansCount = partnerStatusCounts.PENDING;
-  const pendingModerationCount = moderationStatusCounts.NOVO + moderationStatusCounts.EM_ANALISE;
-  const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount) : 0);
+        let siteLink = '';
+        let locationLabel = 'Conteúdo Geral';
+        let workTitle = '';
+        let chapterDisplay = '';
 
-  return {
-    isAdmin,
-    activeTab,
-    statusFilter,
-    typeFilter,
-    searchQuery,
-    contentReports: enrichedReports,
-    clusters,
-    contentStatusCounts,
-    partnerRequests,
-    partnerStatusCounts,
-    moderationReports: enrichedModeration,
-    moderationStatusCounts,
-    ticketStats: {
-      totalTicketsCount,
-      pendingReportsCount,
-      pendingScansCount,
-      pendingModerationCount
-    }
-  };
+        if (comm?.chapter) {
+          workTitle = comm.chapter.works?.title || 'Obra';
+          chapterDisplay = comm.chapter.display_number ?? comm.chapter.number ?? '';
+          locationLabel = `${workTitle} — Cap. ${chapterDisplay}`;
+          siteLink = `/ler/${comm.chapter.id}#comment-${comm.id}`;
+        } else if (comm?.work) {
+          workTitle = comm.work.title || 'Obra';
+          locationLabel = `Obra: ${workTitle}`;
+          siteLink = `/obra/${comm.work.slug}#comment-${comm.id}`;
+        }
+
+        let visibilityStatus: 'VISIBLE' | 'HIDDEN' | 'DELETED';
+        if (!comm || comm.deleted) {
+          visibilityStatus = 'DELETED';
+        } else if (comm.removed) {
+          visibilityStatus = 'HIDDEN';
+        } else {
+          visibilityStatus = 'VISIBLE';
+        }
+
+        return {
+          ...r,
+          parentComment,
+          isAuthorSuspended,
+          siteLink,
+          locationLabel,
+          workTitle,
+          chapterDisplay,
+          visibilityStatus
+        };
+      });
+
+      if (searchQuery) {
+        enrichedModeration = enrichedModeration.filter((m: any) =>
+          m.reason?.toLowerCase().includes(searchQuery) ||
+          m.details?.toLowerCase().includes(searchQuery) ||
+          m.comment?.body?.toLowerCase().includes(searchQuery) ||
+          m.comment?.author?.username?.toLowerCase().includes(searchQuery) ||
+          m.comment?.author?.display_name?.toLowerCase().includes(searchQuery) ||
+          m.locationLabel?.toLowerCase().includes(searchQuery)
+        );
+      }
+
+      const pendingReportsCount = contentStatusCounts.NOVO + contentStatusCounts.EM_ANALISE;
+      const pendingScansCount = partnerStatusCounts.PENDING;
+      const pendingModerationCount = moderationStatusCounts.NOVO + moderationStatusCounts.EM_ANALISE;
+      const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount) : 0);
+
+      return {
+        isAdmin,
+        activeTab,
+        statusFilter,
+        typeFilter,
+        searchQuery,
+        contentReports: enrichedReports,
+        clusters,
+        contentStatusCounts,
+        partnerRequests,
+        partnerStatusCounts,
+        moderationReports: enrichedModeration,
+        moderationStatusCounts,
+        ticketStats: {
+          totalTicketsCount,
+          pendingReportsCount,
+          pendingScansCount,
+          pendingModerationCount
+        }
+      };
     }
   );
 };
@@ -486,19 +457,13 @@ export const actions: Actions = {
       return fail(400, { error: 'Status ou id inválidos.' });
     }
 
-    const updatePayload: any = {
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
+    const repRes = await executeYugabyteSql(
+      `SELECT id, reporter_id, target_type, assigned_to FROM public.reports WHERE id = $1 LIMIT 1;`,
+      [reportId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
 
-    const db = getAdminDb(locals, platform);
-
-    const { data: rep } = await db
-      .from('reports')
-      .select('id, reporter_id, target_type, assigned_to')
-      .eq('id', reportId)
-      .maybeSingle();
-
+    const rep = repRes.rows[0];
     if (!rep) {
       return fail(404, { error: 'Relatório não encontrado.' });
     }
@@ -511,39 +476,46 @@ export const actions: Actions = {
       if (rep.assigned_to !== locals.user.id && locals.role !== 'ADMIN') {
         return fail(403, { error: 'Apenas o operador responsável pode resolver ou rejeitar este ticket.' });
       }
-      updatePayload.resolved_by = locals.user.id;
-      updatePayload.resolved_at = new Date().toISOString();
     }
+
+    let resolvedBy = null;
+    let resolvedAt = null;
+    if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
+      resolvedBy = locals.user.id;
+      resolvedAt = new Date().toISOString();
+    }
+    let assignedTo = rep.assigned_to;
+    let assignedAt = null;
     if (newStatus === 'EM_ANALISE') {
-      updatePayload.assigned_to = locals.user.id;
-      updatePayload.assigned_at = new Date().toISOString();
-    }
-    if (notes) {
-      updatePayload.resolution_notes = notes;
+      assignedTo = locals.user.id;
+      assignedAt = new Date().toISOString();
     }
 
-    const { error: updErr } = await db
-      .from('reports')
-      .update(updatePayload)
-      .eq('id', reportId);
-
-    if (updErr) {
-      return fail(500, { error: 'Erro ao atualizar relatório: ' + updErr.message });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.reports
+       SET status = $1,
+           resolution_notes = COALESCE($2, resolution_notes),
+           resolved_by = COALESCE($3, resolved_by),
+           resolved_at = COALESCE($4::timestamptz, resolved_at),
+           assigned_to = COALESCE($5, assigned_to),
+           assigned_at = COALESCE($6::timestamptz, assigned_at),
+           updated_at = now()
+       WHERE id = $7;`,
+      [newStatus, notes || null, resolvedBy, resolvedAt, assignedTo, assignedAt, reportId],
+      platform?.env
+    );
 
     if (rep?.reporter_id) {
       try {
         const statusLabel = newStatus === 'RESOLVIDO' ? 'resolvido' : newStatus === 'EM_ANALISE' ? 'em análise' : newStatus === 'REJEITADO' ? 'encerrado' : 'atualizado';
-        await db.from('notifications').insert({
-          user_id: rep.reporter_id,
-          kind: 'report',
-          body: `Seu relatório sobre o item foi marcado como ${statusLabel} pela equipe editorial.`,
-          href: '/notificacoes',
-          dedupe_key: `report:${reportId}:${newStatus}`
-        });
-      } catch {
-        // Non-fatal notification failure
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.notifications (user_id, kind, body, href, dedupe_key)
+           VALUES ($1, 'report', $2, '/notificacoes', $3)
+           ON CONFLICT DO NOTHING;`,
+          [rep.reporter_id, `Seu relatório sobre o item foi marcado como ${statusLabel} pela equipe editorial.`, `report:${reportId}:${newStatus}`],
+          platform?.env
+        );
+      } catch {}
     }
 
     invalidateAdminTicketsCache();
@@ -565,30 +537,13 @@ export const actions: Actions = {
       return fail(400, { error: 'Requisição inválida.' });
     }
 
-    const updatePayload: any = {
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
+    const repsRes = await executeYugabyteSql(
+      `SELECT id, reporter_id, assigned_to FROM public.reports WHERE id = ANY($1::uuid[]);`,
+      [reportIds],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
 
-    if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
-      updatePayload.resolved_by = locals.user.id;
-      updatePayload.resolved_at = new Date().toISOString();
-    }
-    if (newStatus === 'EM_ANALISE') {
-      updatePayload.assigned_to = locals.user.id;
-      updatePayload.assigned_at = new Date().toISOString();
-    }
-    if (notes) {
-      updatePayload.resolution_notes = notes;
-    }
-
-    const db = getAdminDb(locals, platform);
-
-    const { data: reps } = await db
-      .from('reports')
-      .select('id, reporter_id, assigned_to')
-      .in('id', reportIds);
-
+    const reps = repsRes.rows;
     if (!reps || reps.length === 0) {
       return fail(404, { error: 'Relatórios não encontrados.' });
     }
@@ -604,29 +559,48 @@ export const actions: Actions = {
       }
     }
 
-    const { error: updErr } = await db
-      .from('reports')
-      .update(updatePayload)
-      .in('id', reportIds);
-
-    if (updErr) {
-      return fail(500, { error: 'Erro ao atualizar relatórios em lote: ' + updErr.message });
+    let resolvedBy = null;
+    let resolvedAt = null;
+    if (newStatus === 'RESOLVIDO' || newStatus === 'REJEITADO') {
+      resolvedBy = locals.user.id;
+      resolvedAt = new Date().toISOString();
     }
+    let assignedTo = null;
+    let assignedAt = null;
+    if (newStatus === 'EM_ANALISE') {
+      assignedTo = locals.user.id;
+      assignedAt = new Date().toISOString();
+    }
+
+    await executeYugabyteSql(
+      `UPDATE public.reports
+       SET status = $1,
+           resolution_notes = COALESCE($2, resolution_notes),
+           resolved_by = COALESCE($3, resolved_by),
+           resolved_at = COALESCE($4::timestamptz, resolved_at),
+           assigned_to = COALESCE($5, assigned_to),
+           assigned_at = COALESCE($6::timestamptz, assigned_at),
+           updated_at = now()
+       WHERE id = ANY($7::uuid[]);`,
+      [newStatus, notes || null, resolvedBy, resolvedAt, assignedTo, assignedAt, reportIds],
+      platform?.env
+    );
 
     if (reps && reps.length > 0) {
       try {
         const statusLabel = newStatus === 'RESOLVIDO' ? 'resolvido' : newStatus === 'EM_ANALISE' ? 'em análise' : newStatus === 'REJEITADO' ? 'encerrado' : 'atualizado';
-        const notifs = reps.map((r: any) => ({
-          user_id: r.reporter_id,
-          kind: 'report',
-          body: `Seu relatório foi marcado como ${statusLabel} pela equipe editorial.`,
-          href: '/notificacoes',
-          dedupe_key: `report:${r.id}:${newStatus}`
-        }));
-        await db.from('notifications').insert(notifs);
-      } catch {
-        // Non-fatal notification failure
-      }
+        for (const r of reps) {
+          if (r.reporter_id) {
+            await executeYugabyteSql(
+              `INSERT INTO public.notifications (user_id, kind, body, href, dedupe_key)
+               VALUES ($1, 'report', $2, '/notificacoes', $3)
+               ON CONFLICT DO NOTHING;`,
+              [r.reporter_id, `Seu relatório foi marcado como ${statusLabel} pela equipe editorial.`, `report:${r.id}:${newStatus}`],
+              platform?.env
+            );
+          }
+        }
+      } catch {}
     }
 
     invalidateAdminTicketsCache();
@@ -648,16 +622,15 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados de avaliação de parceria inválidos.' });
     }
 
-    const db = getAdminDb(locals, platform);
-
     // 1. Fetch current request to know candidate details & meta
-    const { data: partnerReq, error: reqErr } = await db
-      .from('scan_partner_requests')
-      .select('*')
-      .eq('id', requestId)
-      .maybeSingle();
+    const reqRes = await executeYugabyteSql(
+      `SELECT * FROM public.scan_partner_requests WHERE id = $1 LIMIT 1;`,
+      [requestId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
 
-    if (reqErr || !partnerReq) {
+    const partnerReq = reqRes.rows[0];
+    if (!partnerReq) {
       return fail(404, { message: 'Solicitação de parceria não encontrada.' });
     }
 
@@ -669,104 +642,96 @@ export const actions: Actions = {
       return fail(403, { message: 'Apenas o operador responsável pode avaliar esta candidatura.' });
     }
 
-    // 2. Call RPC to approve or reject
-    const { data, error: rpcErr } = await locals.db.rpc('review_scan_partner_request', {
-      p_request_id: requestId,
-      p_action: actionType,
-      p_reason: reason || undefined
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-
     const meta = parsePartnerRequestMeta(partnerReq.sample_links);
+    let createdScanId: string | null = null;
 
-    // Keep YSQL partner requests table in sync
     try {
       if (actionType === 'APPROVE') {
+        const slug = partnerReq.scan_name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '') || `scan-${Date.now().toString(36)}`;
+
+        const scanInsert = await executeYugabyteSql(
+          `INSERT INTO public.scans (name, slug, description, website, discord, status, logo_id, banner_id)
+           VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6, $7)
+           ON CONFLICT (slug) DO UPDATE SET status = 'ACTIVE'
+           RETURNING id;`,
+          [
+            partnerReq.scan_name,
+            slug,
+            partnerReq.description || '',
+            partnerReq.website || null,
+            partnerReq.discord || null,
+            meta.logo_id || null,
+            meta.banner_id || null
+          ],
+          platform?.env
+        );
+
+        createdScanId = scanInsert.rows[0]?.id;
+
+        if (createdScanId && partnerReq.user_id) {
+          await executeYugabyteSql(
+            `INSERT INTO public.scan_members (scan_id, user_id, role)
+             VALUES ($1, $2, 'OWNER')
+             ON CONFLICT (scan_id, user_id) DO UPDATE SET role = 'OWNER';`,
+            [createdScanId, partnerReq.user_id],
+            platform?.env
+          );
+        }
+
         await executeYugabyteSql(
           `UPDATE public.scan_partner_requests
            SET status = 'APPROVED', reviewed_by = $2, reviewed_at = now()
-           WHERE id = $1`,
+           WHERE id = $1;`,
           [requestId, locals.user!.id],
           platform?.env
         );
+
+        invalidateScansDirectoryCache();
+        invalidateAdminScansCache();
+        if (partnerReq.user_id) {
+          invalidateUserSession(partnerReq.user_id);
+        }
+
+        try {
+          await createNotification({
+            recipientUserId: partnerReq.user_id,
+            type: 'SYSTEM_ANNOUNCEMENT',
+            title: 'Parceria de Scan Aprovada! 🎉',
+            body: `Parabéns! Sua solicitação para a scan "${partnerReq.scan_name}" foi aprovada pela administração do Project Nox. Seu painel de gestão (/scan) já está liberado!`,
+            deepLink: '/scan',
+            scanId: createdScanId
+          }, platform);
+        } catch {}
       } else {
         await executeYugabyteSql(
           `UPDATE public.scan_partner_requests
            SET status = 'REJECTED', reviewed_by = $2, reviewed_at = now(), rejection_reason = $3
-           WHERE id = $1`,
+           WHERE id = $1;`,
           [requestId, locals.user!.id, reason],
           platform?.env
         );
+
+        try {
+          await createNotification({
+            recipientUserId: partnerReq.user_id,
+            type: 'SYSTEM_ANNOUNCEMENT',
+            title: 'Solicitação de Parceria de Scan',
+            body: `Sua solicitação para a scan "${partnerReq.scan_name}" foi recusada pela administração.${reason ? ` Motivo: ${reason}` : ''}`,
+            deepLink: '/scans/cadastrar'
+          }, platform);
+        } catch {}
       }
     } catch (e: any) {
-      console.warn('YSQL partner request sync error (non-fatal):', e?.message);
-    }
-
-    if (actionType === 'APPROVE') {
-      const createdScanId = data?.scan_id;
-
-      // 3. Attach candidate Logo & Banner if provided
-      if (createdScanId && (meta.logo_id || meta.banner_id)) {
-        try {
-          await db
-            .from('scans')
-            .update({
-              logo_id: meta.logo_id || null,
-              banner_id: meta.banner_id || null
-            })
-            .eq('id', createdScanId);
-
-          await executeYugabyteSql(
-            `UPDATE public.scans
-             SET logo_id = COALESCE($2::uuid, logo_id),
-                 banner_id = COALESCE($3::uuid, banner_id),
-                 updated_at = now()
-             WHERE id = $1`,
-            [createdScanId, meta.logo_id || null, meta.banner_id || null],
-            platform?.env
-          );
-        } catch (e: any) {
-          console.warn('Failed to attach candidate media to approved scan:', e?.message);
-        }
-      }
-
-      invalidateScansDirectoryCache();
-      invalidateAdminScansCache();
-      if (partnerReq.user_id) {
-        invalidateUserSession(partnerReq.user_id);
-      }
-
-      // 4. Dispatch congratulatory in-app notification
-      try {
-        await createNotification({
-          recipientUserId: partnerReq.user_id,
-          type: 'SYSTEM_ANNOUNCEMENT',
-          title: 'Parceria de Scan Aprovada! 🎉',
-          body: `Parabéns! Sua solicitação para a scan "${partnerReq.scan_name}" foi aprovada pela administração do Project Nox. Seu painel de gestão (/scan) já está liberado!`,
-          deepLink: '/scan',
-          scanId: createdScanId
-        }, platform);
-      } catch (e: any) {
-        console.warn('Failed to send approval notification:', e?.message);
-      }
-    } else {
-      // Dispatch rejection notification with reason
-      try {
-        await createNotification({
-          recipientUserId: partnerReq.user_id,
-          type: 'SYSTEM_ANNOUNCEMENT',
-          title: 'Solicitação de Parceria de Scan',
-          body: `Sua solicitação para a scan "${partnerReq.scan_name}" foi recusada pela administração.${reason ? ` Motivo: ${reason}` : ''}`,
-          deepLink: '/scans/cadastrar'
-        }, platform);
-      } catch (e: any) {
-        console.warn('Failed to send rejection notification:', e?.message);
-      }
+      return fail(500, { message: 'Erro ao avaliar parceria: ' + (e?.message || e) });
     }
 
     invalidateAdminTicketsCache();
-    return { success: true, reviewedPartner: data };
+    return { success: true, reviewedPartner: { scan_id: createdScanId } };
   },
 
   moderateComment: async ({ request, locals, platform }) => {
@@ -778,18 +743,17 @@ export const actions: Actions = {
     const formData = await request.formData();
     const reportId = formData.get('report_id') as string;
     const commentId = formData.get('comment_id') as string;
-    const actionType = formData.get('action') as string; // 'hide', 'unhide', 'delete', 'suspend_user', 'dismiss_report', 'resolve_report'
+    const actionType = formData.get('action') as string;
     const notes = (formData.get('notes') as string || '').trim();
-
-    const privilegedDb = getAdminDb(locals, platform);
 
     // MANDATORY WORKFLOW GUARD: If operating on a report, must assume it before taking verdict actions
     if (reportId) {
-      const { data: rep } = await privilegedDb
-        .from('reports')
-        .select('id, assigned_to, status')
-        .eq('id', reportId)
-        .maybeSingle();
+      const repRes = await executeYugabyteSql(
+        `SELECT id, assigned_to, status FROM public.reports WHERE id = $1 LIMIT 1;`,
+        [reportId],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+      const rep = repRes.rows[0];
 
       if (rep && !rep.assigned_to) {
         return fail(400, { message: 'Você precisa assumir esta denúncia antes de executar ações de moderação ou emitir um veredito.' });
@@ -801,14 +765,13 @@ export const actions: Actions = {
 
     if (actionType === 'hide') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
-      await privilegedDb.from('comments').update({ removed: true }).eq('id', commentId);
+      await executeYugabyteSql(`UPDATE public.comments SET removed = true WHERE id = $1;`, [commentId], platform?.env);
       if (reportId) {
-        await privilegedDb.from('reports').update({
-          status: 'RESOLVIDO',
-          resolution_notes: notes || 'Comentário ocultado pela moderação.',
-          assigned_to: locals.user!.id,
-          updated_at: new Date().toISOString()
-        }).eq('id', reportId);
+        await executeYugabyteSql(
+          `UPDATE public.reports SET status = 'RESOLVIDO', resolution_notes = $1, assigned_to = $2, updated_at = now() WHERE id = $3;`,
+          [notes || 'Comentário ocultado pela moderação.', locals.user!.id, reportId],
+          platform?.env
+        );
       }
       invalidateAdminTicketsCache();
       return { success: true, action: 'hide' };
@@ -816,7 +779,11 @@ export const actions: Actions = {
 
     if (actionType === 'unhide') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
-      await privilegedDb.from('comments').update({ removed: false, deleted: false, deleted_at: null }).eq('id', commentId);
+      await executeYugabyteSql(
+        `UPDATE public.comments SET removed = false, deleted = false, deleted_at = NULL WHERE id = $1;`,
+        [commentId],
+        platform?.env
+      );
       invalidateAdminTicketsCache();
       return { success: true, action: 'unhide' };
     }
@@ -824,44 +791,25 @@ export const actions: Actions = {
     if (actionType === 'delete') {
       if (!commentId) return fail(400, { message: 'Comentário inválido.' });
 
-      // 1. Soft-delete comment to ensure it is immediately excluded from the public site while preserving audit history
-      const { error: commErr } = await privilegedDb
-        .from('comments')
-        .update({
-          removed: true,
-          deleted: true,
-          deleted_at: new Date().toISOString()
-        })
-        .eq('id', commentId);
+      await executeYugabyteSql(
+        `UPDATE public.comments SET removed = true, deleted = true, deleted_at = now() WHERE id = $1;`,
+        [commentId],
+        platform?.env
+      );
 
-      if (commErr) {
-        return fail(500, { message: 'Falha ao excluir comentário: ' + commErr.message });
-      }
-
-      // 2. Automatically resolve all open reports associated with this deleted comment
       const resolutionNotes = notes || 'Comentário excluído definitivamente pela moderação.';
-      await privilegedDb
-        .from('reports')
-        .update({
-          status: 'RESOLVIDO',
-          resolution_notes: resolutionNotes,
-          assigned_to: locals.user!.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('comment_id', commentId)
-        .in('status', ['NOVO', 'EM_ANALISE']);
+      await executeYugabyteSql(
+        `UPDATE public.reports SET status = 'RESOLVIDO', resolution_notes = $1, assigned_to = $2, updated_at = now() WHERE comment_id = $3 AND status IN ('NOVO', 'EM_ANALISE');`,
+        [resolutionNotes, locals.user!.id, commentId],
+        platform?.env
+      );
 
-      // 3. Also ensure the current report is marked resolved
       if (reportId) {
-        await privilegedDb
-          .from('reports')
-          .update({
-            status: 'RESOLVIDO',
-            resolution_notes: resolutionNotes,
-            assigned_to: locals.user!.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', reportId);
+        await executeYugabyteSql(
+          `UPDATE public.reports SET status = 'RESOLVIDO', resolution_notes = $1, assigned_to = $2, updated_at = now() WHERE id = $3;`,
+          [resolutionNotes, locals.user!.id, reportId],
+          platform?.env
+        );
       }
 
       invalidateAdminTicketsCache();
@@ -871,15 +819,14 @@ export const actions: Actions = {
     if (actionType === 'suspend_user') {
       const targetUserId = formData.get('target_user_id') as string;
       if (!targetUserId) return fail(400, { message: 'Usuário alvo inválido.' });
-      await privilegedDb.from('access_roles').update({ suspended: true }).eq('user_id', targetUserId);
+      await executeYugabyteSql(`UPDATE public.access_roles SET suspended = true WHERE user_id = $1;`, [targetUserId], platform?.env);
       invalidateUserSession(targetUserId);
       if (reportId) {
-        await privilegedDb.from('reports').update({
-          status: 'RESOLVIDO',
-          resolution_notes: notes || 'Usuário suspenso pela moderação.',
-          assigned_to: locals.user!.id,
-          updated_at: new Date().toISOString()
-        }).eq('id', reportId);
+        await executeYugabyteSql(
+          `UPDATE public.reports SET status = 'RESOLVIDO', resolution_notes = $1, assigned_to = $2, updated_at = now() WHERE id = $3;`,
+          [notes || 'Usuário suspenso pela moderação.', locals.user!.id, reportId],
+          platform?.env
+        );
       }
       invalidateAdminTicketsCache();
       return { success: true, action: 'suspend_user' };
@@ -887,24 +834,22 @@ export const actions: Actions = {
 
     if (actionType === 'dismiss_report') {
       if (!reportId) return fail(400, { message: 'Denúncia inválida.' });
-      await privilegedDb.from('reports').update({
-        status: 'REJEITADO',
-        resolution_notes: notes || 'Denúncia dispensada pela moderação.',
-        assigned_to: locals.user!.id,
-        updated_at: new Date().toISOString()
-      }).eq('id', reportId);
+      await executeYugabyteSql(
+        `UPDATE public.reports SET status = 'REJEITADO', resolution_notes = $1, assigned_to = $2, updated_at = now() WHERE id = $3;`,
+        [notes || 'Denúncia dispensada pela moderação.', locals.user!.id, reportId],
+        platform?.env
+      );
       invalidateAdminTicketsCache();
       return { success: true, action: 'dismiss_report' };
     }
 
     if (actionType === 'resolve_report') {
       if (!reportId) return fail(400, { message: 'Denúncia inválida.' });
-      await privilegedDb.from('reports').update({
-        status: 'RESOLVIDO',
-        resolution_notes: notes || 'Ocorrência resolvida pela moderação.',
-        assigned_to: locals.user!.id,
-        updated_at: new Date().toISOString()
-      }).eq('id', reportId);
+      await executeYugabyteSql(
+        `UPDATE public.reports SET status = 'RESOLVIDO', resolution_notes = $1, assigned_to = $2, updated_at = now() WHERE id = $3;`,
+        [notes || 'Ocorrência resolvida pela moderação.', locals.user!.id, reportId],
+        platform?.env
+      );
       invalidateAdminTicketsCache();
       return { success: true, action: 'resolve_report' };
     }
@@ -919,7 +864,7 @@ export const actions: Actions = {
 
     const formData = await request.formData();
     const ticketId = formData.get('ticket_id') as string;
-    const ticketType = formData.get('ticket_type') as string; // 'report' | 'scan' | 'moderation'
+    const ticketType = formData.get('ticket_type') as string;
 
     if (!ticketId || !ticketType) {
       return fail(400, { message: 'Dados incompletos para assumir ticket.' });
@@ -927,93 +872,75 @@ export const actions: Actions = {
 
     const isAdmin = locals.role === 'ADMIN';
 
-    // Permission: Scans and Moderation are ADMIN ONLY
     if ((ticketType === 'scan' || ticketType === 'moderation') && !isAdmin) {
       return fail(403, { message: 'Apenas Administradores Globais podem assumir este tipo de ticket.' });
     }
 
-    const db = getAdminDb(locals, platform);
-    const nowIso = new Date().toISOString();
-
     if (ticketType === 'scan') {
-      const { data: current } = await db
-        .from('scan_partner_requests')
-        .select('id, assigned_to')
-        .eq('id', ticketId)
-        .maybeSingle();
+      const scanRes = await executeYugabyteSql(
+        `SELECT id, assigned_to FROM public.scan_partner_requests WHERE id = $1 LIMIT 1;`,
+        [ticketId],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+      const current = scanRes.rows[0];
 
       if (!current) return fail(404, { message: 'Solicitação de scan não encontrada.' });
       if (current.assigned_to && current.assigned_to !== locals.user.id && !isAdmin) {
         return fail(409, { message: 'Este ticket já está sendo atendido por outro operador.' });
       }
 
-      const { error: updErr } = await db
-        .from('scan_partner_requests')
-        .update({
-          assigned_to: locals.user.id,
-          assigned_at: nowIso
-        })
-        .eq('id', ticketId);
-
-      if (updErr) return fail(500, { message: 'Falha ao assumir ticket: ' + updErr.message });
+      await executeYugabyteSql(
+        `UPDATE public.scan_partner_requests SET assigned_to = $1, assigned_at = now() WHERE id = $2;`,
+        [locals.user.id, ticketId],
+        platform?.env
+      );
 
       try {
-        await db.from('audit_log').insert({
-          actor_id: locals.user.id,
-          action: 'ticket_claim',
-          target_id: ticketId,
-          metadata: { ticket_type: 'scan' }
-        });
-      } catch (logErr) {
-        console.error('[audit_log] Error in ticket_claim scan:', logErr);
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.audit_log (actor_id, action, target_id, metadata) VALUES ($1, 'ticket_claim', $2, $3::jsonb);`,
+          [locals.user.id, ticketId, JSON.stringify({ ticket_type: 'scan' })],
+          platform?.env
+        );
+      } catch {}
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'claim', ticketId };
     } else {
-      // Content report or Moderation report (can be single ID or comma-separated cluster IDs)
       const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
       if (ids.length === 0) return fail(400, { message: 'Nenhum ID de relatório fornecido.' });
 
-      const { data: currents } = await db
-        .from('reports')
-        .select('id, assigned_to, status')
-        .in('id', ids);
+      const repsRes = await executeYugabyteSql(
+        `SELECT id, assigned_to, status FROM public.reports WHERE id = ANY($1::uuid[]);`,
+        [ids],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+      const currents = repsRes.rows;
 
       if (!currents || currents.length === 0) return fail(404, { message: 'Relatório não encontrado.' });
       
-      const alreadyAssignedOther = currents.find(c => c.assigned_to && c.assigned_to !== locals.user.id);
+      const alreadyAssignedOther = currents.find((c: any) => c.assigned_to && c.assigned_to !== locals.user.id);
       if (alreadyAssignedOther && !isAdmin) {
         return fail(409, { message: 'Este ticket já está sendo atendido por outro operador.' });
       }
 
-      const hasNew = currents.some(c => c.status === 'NOVO');
-      const updateData: any = {
-        assigned_to: locals.user.id,
-        assigned_at: nowIso,
-        updated_at: nowIso
-      };
-      if (hasNew) {
-        updateData.status = 'EM_ANALISE';
-      }
-
-      const { error: updErr } = await db
-        .from('reports')
-        .update(updateData)
-        .in('id', ids);
-
-      if (updErr) return fail(500, { message: 'Falha ao assumir ticket: ' + updErr.message });
+      await executeYugabyteSql(
+        `UPDATE public.reports
+         SET assigned_to = $1,
+             assigned_at = now(),
+             updated_at = now(),
+             status = CASE WHEN status = 'NOVO' THEN 'EM_ANALISE' ELSE status END
+         WHERE id = ANY($2::uuid[]);`,
+        [locals.user.id, ids],
+        platform?.env
+      );
 
       try {
-        await db.from('audit_log').insert({
-          actor_id: locals.user.id,
-          action: 'ticket_claim',
-          target_id: ids[0],
-          metadata: { ticket_type: ticketType, count: ids.length, ids }
-        });
-      } catch (logErr) {
-        console.error('[audit_log] Error in ticket_claim report:', logErr);
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.audit_log (actor_id, action, target_id, metadata) VALUES ($1, 'ticket_claim', $2, $3::jsonb);`,
+          [locals.user.id, ids[0], JSON.stringify({ ticket_type: ticketType, count: ids.length, ids })],
+          platform?.env
+        );
+      } catch {}
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'claim', ticketId };
@@ -1034,39 +961,33 @@ export const actions: Actions = {
     }
 
     const isAdmin = locals.role === 'ADMIN';
-    const db = getAdminDb(locals, platform);
-    const nowIso = new Date().toISOString();
 
     if (ticketType === 'scan') {
-      const { data: current } = await db
-        .from('scan_partner_requests')
-        .select('id, assigned_to')
-        .eq('id', ticketId)
-        .maybeSingle();
+      const scanRes = await executeYugabyteSql(
+        `SELECT id, assigned_to FROM public.scan_partner_requests WHERE id = $1 LIMIT 1;`,
+        [ticketId],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+      const current = scanRes.rows[0];
 
       if (!current) return fail(404, { message: 'Solicitação não encontrada.' });
       if (current.assigned_to !== locals.user.id && !isAdmin) {
         return fail(403, { message: 'Você não tem permissão para liberar o ticket de outro operador.' });
       }
 
-      await db
-        .from('scan_partner_requests')
-        .update({
-          assigned_to: null,
-          assigned_at: null
-        })
-        .eq('id', ticketId);
+      await executeYugabyteSql(
+        `UPDATE public.scan_partner_requests SET assigned_to = NULL, assigned_at = NULL WHERE id = $1;`,
+        [ticketId],
+        platform?.env
+      );
 
       try {
-        await db.from('audit_log').insert({
-          actor_id: locals.user.id,
-          action: 'ticket_release',
-          target_id: ticketId,
-          metadata: { ticket_type: 'scan' }
-        });
-      } catch (logErr) {
-        console.error('[audit_log] Error in ticket_release scan:', logErr);
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.audit_log (actor_id, action, target_id, metadata) VALUES ($1, 'ticket_release', $2, $3::jsonb);`,
+          [locals.user.id, ticketId, JSON.stringify({ ticket_type: 'scan' })],
+          platform?.env
+        );
+      } catch {}
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'release', ticketId };
@@ -1074,50 +995,38 @@ export const actions: Actions = {
       const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
       if (ids.length === 0) return fail(400, { message: 'Nenhum ID de relatório fornecido.' });
 
-      const { data: currents } = await db
-        .from('reports')
-        .select('id, assigned_to, status')
-        .in('id', ids);
+      const repsRes = await executeYugabyteSql(
+        `SELECT id, assigned_to, status FROM public.reports WHERE id = ANY($1::uuid[]);`,
+        [ids],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+      const currents = repsRes.rows;
 
       if (!currents || currents.length === 0) return fail(404, { message: 'Relatório não encontrado.' });
       
-      const assignedToOther = currents.find(c => c.assigned_to && c.assigned_to !== locals.user.id);
+      const assignedToOther = currents.find((c: any) => c.assigned_to && c.assigned_to !== locals.user.id);
       if (assignedToOther && !isAdmin) {
         return fail(403, { message: 'Você não tem permissão para liberar o ticket de outro operador.' });
       }
 
-      await db
-        .from('reports')
-        .update({
-          assigned_to: null,
-          assigned_at: null,
-          status: 'NOVO',
-          updated_at: nowIso
-        })
-        .in('id', ids)
-        .eq('status', 'EM_ANALISE');
-
-      // Also reset any that were not in EM_ANALISE if assigned
-      await db
-        .from('reports')
-        .update({
-          assigned_to: null,
-          assigned_at: null,
-          updated_at: nowIso
-        })
-        .in('id', ids)
-        .neq('status', 'EM_ANALISE');
+      await executeYugabyteSql(
+        `UPDATE public.reports
+         SET assigned_to = NULL,
+             assigned_at = NULL,
+             status = CASE WHEN status = 'EM_ANALISE' THEN 'NOVO' ELSE status END,
+             updated_at = now()
+         WHERE id = ANY($1::uuid[]);`,
+        [ids],
+        platform?.env
+      );
 
       try {
-        await db.from('audit_log').insert({
-          actor_id: locals.user.id,
-          action: 'ticket_release',
-          target_id: ids[0],
-          metadata: { ticket_type: ticketType, count: ids.length, ids }
-        });
-      } catch (logErr) {
-        console.error('[audit_log] Error in ticket_release report:', logErr);
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.audit_log (actor_id, action, target_id, metadata) VALUES ($1, 'ticket_release', $2, $3::jsonb);`,
+          [locals.user.id, ids[0], JSON.stringify({ ticket_type: ticketType, count: ids.length, ids })],
+          platform?.env
+        );
+      } catch {}
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'release', ticketId };
@@ -1144,31 +1053,22 @@ export const actions: Actions = {
       return fail(400, { message: 'Confirmação incorreta. Digite EXCLUIR para confirmar a exclusão do ticket.' });
     }
 
-    const db = getAdminDb(locals, platform);
-    const nowIso = new Date().toISOString();
-
     if (ticketType === 'scan') {
-      const { error: delErr } = await db
-        .from('scan_partner_requests')
-        .update({
-          deleted_at: nowIso,
-          deleted_by: locals.user.id,
-          deletion_reason: reason || 'Exclusão administrativa de ticket'
-        })
-        .eq('id', ticketId);
-
-      if (delErr) return fail(500, { message: 'Erro ao excluir ticket de scan: ' + delErr.message });
+      await executeYugabyteSql(
+        `UPDATE public.scan_partner_requests
+         SET deleted_at = now(), deleted_by = $1, deletion_reason = $2
+         WHERE id = $3;`,
+        [locals.user.id, reason || 'Exclusão administrativa de ticket', ticketId],
+        platform?.env
+      );
 
       try {
-        await db.from('audit_log').insert({
-          actor_id: locals.user.id,
-          action: 'ticket_delete',
-          target_id: ticketId,
-          metadata: { ticket_type: 'scan', reason }
-        });
-      } catch (logErr) {
-        console.error('[audit_log] Error in ticket_delete scan:', logErr);
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.audit_log (actor_id, action, target_id, metadata) VALUES ($1, 'ticket_delete', $2, $3::jsonb);`,
+          [locals.user.id, ticketId, JSON.stringify({ ticket_type: 'scan', reason })],
+          platform?.env
+        );
+      } catch {}
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'delete', ticketId };
@@ -1176,27 +1076,21 @@ export const actions: Actions = {
       const ids = ticketId.split(',').map(s => s.trim()).filter(Boolean);
       if (ids.length === 0) return fail(400, { message: 'Nenhum ID informado para exclusão.' });
 
-      const { error: delErr } = await db
-        .from('reports')
-        .update({
-          deleted_at: nowIso,
-          deleted_by: locals.user.id,
-          deletion_reason: reason || 'Exclusão administrativa de ticket'
-        })
-        .in('id', ids);
-
-      if (delErr) return fail(500, { message: 'Erro ao excluir ticket: ' + delErr.message });
+      await executeYugabyteSql(
+        `UPDATE public.reports
+         SET deleted_at = now(), deleted_by = $1, deletion_reason = $2
+         WHERE id = ANY($3::uuid[]);`,
+        [locals.user.id, reason || 'Exclusão administrativa de ticket', ids],
+        platform?.env
+      );
 
       try {
-        await db.from('audit_log').insert({
-          actor_id: locals.user.id,
-          action: 'ticket_delete',
-          target_id: ids[0],
-          metadata: { ticket_type: ticketType, count: ids.length, ids, reason }
-        });
-      } catch (logErr) {
-        console.error('[audit_log] Error in ticket_delete report:', logErr);
-      }
+        await executeYugabyteSql(
+          `INSERT INTO public.audit_log (actor_id, action, target_id, metadata) VALUES ($1, 'ticket_delete', $2, $3::jsonb);`,
+          [locals.user.id, ids[0], JSON.stringify({ ticket_type: ticketType, count: ids.length, ids, reason })],
+          platform?.env
+        );
+      } catch {}
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'delete', ticketId };

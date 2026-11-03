@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { editor, privileged, WORK_FIELDS } from '$lib/server/db';
-import { logAdminLoadError, throwOnAdminLoadError } from '$lib/server/admin-load-errors';
+import { editor } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import {
   buildChapterProvenance,
   buildWorkProvenance,
@@ -11,124 +11,118 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function isMissingMetadataProvenance(error: { code?: string | null; message?: string | null } | null | undefined) {
-  return Boolean(
-    error &&
-      /metadata_provenance/i.test(error.message || '') &&
-      (error.code === 'PGRST204' || /column|schema cache/i.test(error.message || ''))
-  );
-}
-
-export const load = async ({ locals, params, request }) => {
+export const load = async ({ locals, params, platform }: any) => {
   editor(locals);
   if (params.id !== 'nova' && !UUID.test(params.id)) error(404, 'Obra não encontrada');
 
-  const queryContext = {
-    route: '/admin/obras/[id]',
-    requestId: request.headers.get('cf-ray') || request.headers.get('x-request-id')
-  };
-  const provenanceDb = params.id === 'nova' ? null : privileged();
-  const queries = await Promise.all([
-    params.id === 'nova'
-      ? Promise.resolve({ data: null, error: null })
-      : locals.db.from('works').select(WORK_FIELDS).eq('id', params.id).maybeSingle(),
-    locals.db.from('tags').select('*').order('name'),
-    params.id === 'nova'
-      ? Promise.resolve({ data: [], error: null })
-      : locals.db.from('work_tags').select('tag_id').eq('work_id', params.id),
-    params.id === 'nova'
-      ? Promise.resolve({ data: [], error: null })
-      : locals.db
-          .from('chapters')
-          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at')
-          .eq('work_id', params.id)
-          .order('chapter_order_key', { ascending: false, nullsFirst: false })
-          .order('number', { ascending: false, nullsFirst: false })
-          .order('id', { ascending: false }),
-    locals.db.from('scans').select('id,name,slug,is_official,status').order('is_official', { ascending: false }).order('name'),
-    params.id === 'nova'
-      ? Promise.resolve({ data: [], error: null })
-      : locals.db
-          .from('work_scans')
-          .select('scan_id,is_primary,scans(id,name,slug,is_official)')
-          .eq('work_id', params.id),
-    params.id === 'nova'
-      ? Promise.resolve({ data: [], error: null })
-      : provenanceDb!
-          .from('importer_work_mappings')
-          .select('id,source,source_work_id,source_slug,source_title,sync_status,last_synced_at,is_primary,metadata,updated_at')
-          .eq('work_id', params.id),
-    params.id === 'nova'
-      ? Promise.resolve({ data: [], error: null })
-      : provenanceDb!
-          .from('importer_sources')
-          .select('id,name,base_url,enabled,status'),
-    params.id === 'nova'
-      ? Promise.resolve({ data: null, error: null })
-      : provenanceDb!.from('works').select('metadata_provenance').eq('id', params.id).maybeSingle(),
-    params.id === 'nova'
-      ? Promise.resolve({ data: [], error: null })
-      : provenanceDb!
-          .from('importer_chapter_mappings')
-          .select('id,chapter_id,work_id,work_mapping_id,source,source_chapter_id,status,is_page_provider,created_at,updated_at')
-          .eq('work_id', params.id)
+  const isNova = params.id === 'nova';
+
+  const [
+    workRes,
+    tagsRes,
+    selectedRes,
+    chaptersRes,
+    allScansRes,
+    workScansRes,
+    workMappingsRes,
+    sourcesRes,
+    chapterMappingsRes
+  ] = await Promise.all([
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(
+          `SELECT id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,age_rating,published,featured,cover_id,updated_at,created_at,content_rating,views_total,metadata_provenance
+           FROM public.works WHERE id = $1 LIMIT 1;`,
+          [params.id],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
+    executeYugabyteSql(`SELECT * FROM public.tags ORDER BY name;`, [], platform?.env).catch(() => ({ rows: [] })),
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(`SELECT tag_id FROM public.work_tags WHERE work_id = $1;`, [params.id], platform?.env).catch(() => ({ rows: [] })),
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(
+          `SELECT id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at
+           FROM public.chapters
+           WHERE work_id = $1
+           ORDER BY chapter_order_key DESC NULLS LAST, number DESC NULLS LAST, id DESC;`,
+          [params.id],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
+    executeYugabyteSql(`SELECT id,name,slug,is_official,status FROM public.scans ORDER BY is_official DESC, name;`, [], platform?.env).catch(() => ({ rows: [] })),
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(
+          `SELECT ws.scan_id, ws.is_primary, json_build_object('id', s.id, 'name', s.name, 'slug', s.slug, 'is_official', s.is_official) AS scans
+           FROM public.work_scans ws
+           JOIN public.scans s ON s.id = ws.scan_id
+           WHERE ws.work_id = $1;`,
+          [params.id],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(
+          `SELECT id,source,source_work_id,source_slug,source_title,sync_status,last_synced_at,is_primary,metadata,updated_at
+           FROM public.importer_work_mappings
+           WHERE work_id = $1;`,
+          [params.id],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(
+          `SELECT id,name,base_url,enabled,status FROM public.importer_sources;`,
+          [],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
+    isNova
+      ? Promise.resolve({ rows: [] })
+      : executeYugabyteSql(
+          `SELECT id,chapter_id,work_id,work_mapping_id,source,source_chapter_id,status,is_page_provider,created_at,updated_at
+           FROM public.importer_chapter_mappings
+           WHERE work_id = $1;`,
+          [params.id],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
   ]);
-  const [work, tags, selected, chapters, allScans, workScans, workMappings, sources, provenanceMetadata, chapterMappingsRaw] = queries;
 
-  let metadataProvenanceAvailable = true;
-  if (params.id !== 'nova' && provenanceMetadata.error) {
-    if (isMissingMetadataProvenance(provenanceMetadata.error)) {
-      logAdminLoadError('admin_load_query_degraded', provenanceMetadata.error, {
-        ...queryContext,
-        operation: 'work_metadata_provenance'
-      });
-      metadataProvenanceAvailable = false;
-    } else {
-      throwOnAdminLoadError(provenanceMetadata, { ...queryContext, operation: 'work_metadata_provenance' });
-    }
-  }
+  const workData = workRes.rows[0] || null;
+  if (!isNova && !workData) error(404, 'Obra não encontrada');
 
-  throwOnAdminLoadError(work, { ...queryContext, operation: 'work' });
-  throwOnAdminLoadError(tags, { ...queryContext, operation: 'tags' });
-  throwOnAdminLoadError(selected, { ...queryContext, operation: 'work_tags' });
-  throwOnAdminLoadError(chapters, { ...queryContext, operation: 'chapters' });
-  throwOnAdminLoadError(allScans, { ...queryContext, operation: 'scans' });
-  throwOnAdminLoadError(workScans, { ...queryContext, operation: 'work_scans' });
-  throwOnAdminLoadError(workMappings, { ...queryContext, operation: 'importer_work_mappings' });
-  throwOnAdminLoadError(sources, { ...queryContext, operation: 'importer_sources' });
+  const tagsData = tagsRes.rows || [];
+  const selectedData = selectedRes.rows || [];
+  const chaptersData = chaptersRes.rows || [];
+  const allScansData = allScansRes.rows || [];
+  const workScansData = workScansRes.rows || [];
+  const workMappingsData = workMappingsRes.rows || [];
+  const sourcesData = (sourcesRes.rows || []) as SourceRecord[];
+  const chapterMappingsData = (chapterMappingsRes.rows || []) as ChapterMappingRecord[];
 
-  if (params.id !== 'nova' && !work.data) error(404, 'Obra não encontrada');
+  const chapterIds = chaptersData.map((chapter: any) => chapter.id);
 
-  const chapterIds = (chapters.data || []).map((chapter) => chapter.id);
-  const chapterMappings =
-    params.id === 'nova' || chapterIds.length === 0
-      ? { data: [] }
-      : chapterMappingsRaw;
-
-  throwOnAdminLoadError(chapterMappings, { ...queryContext, operation: 'importer_chapter_mappings' });
-
-  const sourceRecords = (sources.data || []) as SourceRecord[];
-  const provenance = work.data
+  const provenance = workData
     ? buildWorkProvenance(
-        provenanceMetadata.data?.metadata_provenance,
-        (workMappings.data || []) as WorkMappingRecord[],
-        sourceRecords
+        workData.metadata_provenance,
+        workMappingsData as WorkMappingRecord[],
+        sourcesData
       )
     : null;
 
   return {
-    work: work.data,
-    tags: tags.data || [],
-    selected: selected.data?.map((t) => t.tag_id) || [],
-    chapters: chapters.data || [],
-    allScans: allScans.data || [],
-    workScans: workScans.data || [],
+    work: workData,
+    tags: tagsData,
+    selected: selectedData.map((t: any) => t.tag_id),
+    chapters: chaptersData,
+    allScans: allScansData,
+    workScans: workScansData,
     provenance,
-    metadataProvenanceAvailable,
+    metadataProvenanceAvailable: true,
     chapterProvenance: buildChapterProvenance(
       chapterIds,
-      (chapterMappings.data || []) as ChapterMappingRecord[],
-      sourceRecords
+      chapterMappingsData,
+      sourcesData
     )
   };
 };

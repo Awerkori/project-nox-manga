@@ -1,4 +1,3 @@
-import { privileged } from './db';
 import { createNotification } from './notifications';
 import { executeYugabyteSql } from './yugabyte';
 
@@ -57,12 +56,6 @@ function formatBrazilianDate(isoString: string | null | undefined): string {
 /**
  * Dispatches friendly stale reminders to assignees whose claimed stages
  * have remained without progress or activity for thresholdDays (default 3 days).
- *
- * Rules:
- * 1. Targeted strictly to the assigned user (assignee).
- * 2. Deduplicated with 3-day cooldown buckets (stale_reminder:{stageId}:{userId}:{bucket}).
- * 3. Cancelled/Skipped if stage is completed, cancelled, or paused.
- * 4. If assigned member was removed from scan, stage is automatically released and returned to queue.
  */
 export async function dispatchStaleTaskReminders(options: {
   thresholdDays?: number;
@@ -72,8 +65,6 @@ export async function dispatchStaleTaskReminders(options: {
   const thresholdDays = options.thresholdDays ?? 3;
   const nowMs = options.nowMs ?? Date.now();
   const thresholdDate = new Date(nowMs - thresholdDays * 86_400_000).toISOString();
-
-  const db = privileged();
   const platformEnv = options.platform?.env;
 
   const result: StaleRemindersResult = {
@@ -87,30 +78,26 @@ export async function dispatchStaleTaskReminders(options: {
   // 1. Fetch claimed in-progress stages older than threshold
   let stagesData: any[] = [];
   try {
-    const { data, error } = await db
-      .from('scan_chapter_stages')
-      .select(`
-        id,
-        scan_id,
-        production_chapter_id,
-        stage_id,
-        status,
-        assigned_to,
-        claimed_at,
-        last_activity_at,
-        scans:scan_id ( id, name, slug, status ),
-        scan_production_chapters:production_chapter_id ( id, chapter_number, status, work_id, works:work_id ( id, title, slug ) ),
-        scan_workflow_stages:stage_id ( id, name, slug )
-      `)
-      .eq('status', 'IN_PROGRESS')
-      .not('assigned_to', 'is', null)
-      .lte('last_activity_at', thresholdDate);
-
-    if (error) {
-      console.error('[STALE_REMINDER] Erro ao consultar scan_chapter_stages:', error);
-      return result;
-    }
-    stagesData = data || [];
+    const res = await executeYugabyteSql(
+      `SELECT 
+        scs.id, scs.scan_id, scs.production_chapter_id, scs.stage_id, scs.status,
+        scs.assigned_to, scs.claimed_at, scs.last_activity_at,
+        s.name AS scan_name, s.status AS scan_status,
+        spc.chapter_number, spc.status AS chapter_status,
+        w.id AS work_id, w.title AS work_title,
+        sws.name AS stage_name, sws.slug AS stage_slug
+      FROM public.scan_chapter_stages scs
+      JOIN public.scans s ON s.id = scs.scan_id
+      JOIN public.scan_production_chapters spc ON spc.id = scs.production_chapter_id
+      JOIN public.works w ON w.id = spc.work_id
+      JOIN public.scan_workflow_stages sws ON sws.id = scs.stage_id
+      WHERE scs.status = 'IN_PROGRESS'
+        AND scs.assigned_to IS NOT NULL
+        AND scs.last_activity_at <= $1::timestamptz;`,
+      [thresholdDate],
+      platformEnv
+    );
+    stagesData = res.rows || [];
   } catch (err) {
     console.error('[STALE_REMINDER] Exceção ao consultar etapas:', err);
     return result;
@@ -123,43 +110,38 @@ export async function dispatchStaleTaskReminders(options: {
     const stageId = row.id;
     const scanId = row.scan_id;
     const userId = row.assigned_to;
-    const prodChapter = row.scan_production_chapters;
-    const work = prodChapter?.works;
-    const scan = row.scans;
-    const wfStage = row.scan_workflow_stages;
+    const workTitle = row.work_title || 'Obra';
+    const chapterNumber = row.chapter_number || 1;
+    const scanName = row.scan_name || 'Scan';
+    const stageName = row.stage_name || 'Etapa';
 
     // Safety checks: production chapter must be in active progress
-    if (!prodChapter || prodChapter.status === 'PAUSED' || prodChapter.status === 'CANCELLED' || prodChapter.status === 'PUBLISHED') {
+    if (!row.chapter_status || ['PAUSED', 'CANCELLED', 'PUBLISHED'].includes(row.chapter_status)) {
       result.dedupedOrSkipped++;
-      result.details.push({ stageId, userId, workTitle: work?.title || 'Obra', chapterNumber: prodChapter?.chapter_number || 0, action: 'SKIPPED' });
+      result.details.push({ stageId, userId, workTitle, chapterNumber, action: 'SKIPPED' });
       continue;
     }
 
-    const workTitle = work?.title || 'Obra';
-    const chapterNumber = prodChapter?.chapter_number || 1;
-    const scanName = scan?.name || 'Scan';
-    const stageName = wfStage?.name || 'Etapa';
-
     // 2. Verify assignee is still an active, non-hidden member of this scan
-    const { data: memberRecord } = await db
-      .from('scan_members')
-      .select('user_id, hidden_by_admin')
-      .eq('scan_id', scanId)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const memberRes = await executeYugabyteSql(
+      `SELECT user_id, hidden_by_admin FROM public.scan_members WHERE scan_id = $1 AND user_id = $2 LIMIT 1;`,
+      [scanId, userId],
+      platformEnv
+    ).catch(() => ({ rows: [] }));
+    const memberRecord = memberRes.rows[0];
 
     if (!memberRecord || memberRecord.hidden_by_admin) {
-      // Member lost access or was removed from scan! Unassign stage safely.
       console.warn(`[STALE_REMINDER] Membro ${userId} não pertence mais à scan ${scanId}. Liberando etapa ${stageId}.`);
-      await db
-        .from('scan_chapter_stages')
-        .update({
-          assigned_to: null,
-          status: 'AVAILABLE',
-          availability_reason: 'returned_to_queue',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', stageId);
+      await executeYugabyteSql(
+        `UPDATE public.scan_chapter_stages
+         SET assigned_to = NULL,
+             status = 'AVAILABLE',
+             availability_reason = 'returned_to_queue',
+             updated_at = now()
+         WHERE id = $1;`,
+        [stageId],
+        platformEnv
+      ).catch(() => {});
 
       result.unassignedDueToRemoval++;
       result.details.push({ stageId, userId, workTitle, chapterNumber, action: 'UNASSIGNED' });
@@ -176,15 +158,6 @@ export async function dispatchStaleTaskReminders(options: {
     const deepLink = `/scan?id=${scanId}&tab=tasks&stageId=${stageId}`;
     const title = `Lembrete: Tarefa em Andamento — ${workTitle} Cap. ${chapterNumber}`;
     const body = `Olá! Você possui a etapa ${stageName} em andamento na ${scanName} há mais de ${daysInactive} dias sem nova atividade registrada.\n\nCaso já tenha concluído ou precise de ajuda, acesse o painel para atualizar a tarefa.`;
-
-    const meta: Record<string, string> = {
-      'Obra': workTitle,
-      'Capítulo': String(chapterNumber),
-      'Etapa': stageName,
-      'Scan': scanName,
-      'Atribuído em': formatBrazilianDate(row.claimed_at),
-      'Última Atividade': formatBrazilianDate(row.last_activity_at)
-    };
 
     const notifRes = await createNotification(
       {
@@ -230,45 +203,53 @@ export async function dispatchUnclaimedStageReminders(options: {
   const thresholdDays = options.thresholdDays ?? 3;
   const nowMs = options.nowMs ?? Date.now();
   const thresholdDate = new Date(nowMs - thresholdDays * 86_400_000).toISOString();
-  const db = privileged();
+  const platformEnv = options.platform?.env;
 
-  const { data: stages } = await db
-    .from('scan_chapter_stages')
-    .select(`
-      id,
-      scan_id,
-      production_chapter_id,
-      stage_id,
-      status,
-      created_at,
-      updated_at,
-      scans:scan_id ( id, name ),
-      scan_production_chapters:production_chapter_id ( id, chapter_number, status, works:work_id ( id, title ) ),
-      scan_workflow_stages:stage_id ( id, name, slug, allowed_position_ids )
-    `)
-    .eq('status', 'AVAILABLE')
-    .is('assigned_to', null)
-    .lte('updated_at', thresholdDate);
+  let stages: any[] = [];
+  try {
+    const res = await executeYugabyteSql(
+      `SELECT 
+        scs.id, scs.scan_id, scs.production_chapter_id, scs.stage_id, scs.status,
+        scs.created_at, scs.updated_at,
+        s.name AS scan_name,
+        spc.chapter_number, spc.status AS chapter_status,
+        w.title AS work_title,
+        sws.name AS stage_name
+      FROM public.scan_chapter_stages scs
+      JOIN public.scans s ON s.id = scs.scan_id
+      JOIN public.scan_production_chapters spc ON spc.id = scs.production_chapter_id
+      JOIN public.works w ON w.id = spc.work_id
+      JOIN public.scan_workflow_stages sws ON sws.id = scs.stage_id
+      WHERE scs.status = 'AVAILABLE'
+        AND scs.assigned_to IS NULL
+        AND scs.updated_at <= $1::timestamptz;`,
+      [thresholdDate],
+      platformEnv
+    );
+    stages = res.rows || [];
+  } catch (e) {
+    console.error('[UNCLAIMED_REMINDER] Error fetching stages:', e);
+    return { scanned: 0, reminded: 0 };
+  }
 
   let reminded = 0;
-  for (const s of stages || []) {
-    const prod = s.scan_production_chapters;
-    if (!prod || prod.status !== 'IN_PROGRESS') continue;
+  for (const s of stages) {
+    if (s.chapter_status !== 'IN_PROGRESS') continue;
 
     const cooldownBucket = Math.floor(nowMs / (3 * 86_400_000));
-    const workTitle = prod?.works?.title || 'Obra';
-    const chapterNum = prod?.chapter_number || 1;
-    const stageName = s.scan_workflow_stages?.name || 'Etapa';
+    const workTitle = s.work_title || 'Obra';
+    const chapterNum = s.chapter_number || 1;
+    const stageName = s.stage_name || 'Etapa';
 
     // Find scan leadership (OWNER and ADMIN) to alert about stale unclaimed stage
-    const { data: leaders } = await db
-      .from('scan_members')
-      .select('user_id')
-      .eq('scan_id', s.scan_id)
-      .in('role', ['OWNER', 'ADMIN'])
-      .eq('hidden_by_admin', false);
+    const leadersRes = await executeYugabyteSql(
+      `SELECT user_id FROM public.scan_members WHERE scan_id = $1 AND role IN ('OWNER', 'ADMIN') AND hidden_by_admin = false;`,
+      [s.scan_id],
+      platformEnv
+    ).catch(() => ({ rows: [] }));
+    const leaders = leadersRes.rows || [];
 
-    for (const leader of leaders || []) {
+    for (const leader of leaders) {
       const dedupeKey = `unclaimed_stage:${s.id}:${leader.user_id}:${cooldownBucket}`;
       const res = await createNotification({
         recipientUserId: leader.user_id,
@@ -286,5 +267,5 @@ export async function dispatchUnclaimedStageReminders(options: {
     }
   }
 
-  return { scanned: (stages || []).length, reminded };
+  return { scanned: stages.length, reminded };
 }

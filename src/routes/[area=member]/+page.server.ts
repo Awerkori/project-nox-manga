@@ -1,5 +1,4 @@
 import { redirect } from '@sveltejs/kit';
-import { check, WORK_FIELDS } from '$lib/server/db';
 import { MEMBER_PAGE_SIZE, pageNumber, pageLink } from '$lib/pagination';
 import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
@@ -19,7 +18,6 @@ export const load = async ({ locals, params, url, platform }: any) => {
   let historyCount = 0;
   let notifData: any[] = [];
   let notifCount = 0;
-  let ybSuccess = false;
 
   try {
     if (['biblioteca', 'favoritos'].includes(params.area)) {
@@ -40,7 +38,6 @@ export const load = async ({ locals, params, url, platform }: any) => {
       );
       libraryData = ybRes.rows || [];
       libraryCount = libraryData.length > 0 ? parseInt(libraryData[0].full_count || '0', 10) : 0;
-      ybSuccess = true;
     } else if (params.area === 'historico') {
       const ybRes = await executeYugabyteSql(
         `SELECT r.user_id, r.chapter_id, r.page, r.max_page, r.completed_at, r.updated_at,
@@ -54,7 +51,6 @@ export const load = async ({ locals, params, url, platform }: any) => {
       );
       historyData = ybRes.rows || [];
       historyCount = historyData.length > 0 ? parseInt(historyData[0].full_count || '0', 10) : 0;
-      ybSuccess = true;
     } else if (params.area === 'notificacoes') {
       const ybRes = await executeYugabyteSql(
         `SELECT n.*, count(*) OVER() AS full_count
@@ -68,57 +64,9 @@ export const load = async ({ locals, params, url, platform }: any) => {
       );
       notifData = ybRes.rows || [];
       notifCount = notifData.length > 0 ? parseInt(notifData[0].full_count || '0', 10) : 0;
-      ybSuccess = true;
     }
-  } catch {
-    ybSuccess = false;
-  }
-
-
-
-  const empty = { data: [], error: null, count: 0 };
-  if (!ybSuccess && locals.db) {
-    let query = locals.db
-      .from('library')
-      .select(`*,works!inner(${WORK_FIELDS})`, { count: 'exact' })
-      .eq('user_id', locals.user.id)
-      .eq('works.published', true)
-      .order('updated_at', { ascending: false })
-      .order('work_id')
-      .range(start, start + MEMBER_PAGE_SIZE - 1);
-    if (params.area === 'favoritos') query = query.eq('favorite', true);
-    if (tab) query = query.eq('status', tab);
-    let notificationsQuery = locals.db
-      .from('notifications')
-      .select('*', { count: 'exact' })
-      .eq('user_id', locals.user.id)
-      .order('created_at', { ascending: false })
-      .order('id')
-      .range(start, start + MEMBER_PAGE_SIZE - 1);
-    if (filter) notificationsQuery = notificationsQuery.is('read_at', null);
-    const [library, history, notifications] = await Promise.all([
-      ['biblioteca', 'favoritos'].includes(params.area) ? query : Promise.resolve(empty),
-      params.area === 'historico'
-        ? locals.db
-            .from('reading')
-            .select('*', { count: 'exact' })
-            .eq('user_id', locals.user.id)
-            .order('updated_at', { ascending: false })
-            .order('chapter_id')
-            .range(start, start + MEMBER_PAGE_SIZE - 1)
-        : Promise.resolve(empty),
-      params.area === 'notificacoes' ? notificationsQuery : Promise.resolve(empty)
-    ]);
-    if ([library, history, notifications].some((result: any) => result.error?.code === 'PGRST103'))
-      redirect(303, pageLink(`/${area}`, 1, { status: tab, filtro: filter }));
-    [library, history, notifications].forEach(check);
-
-    libraryData = library.data || [];
-    libraryCount = library.count || 0;
-    historyData = history.data || [];
-    historyCount = history.count || 0;
-    notifData = notifications.data || [];
-    notifCount = notifications.count || 0;
+  } catch (err) {
+    console.warn('[MEMBER_AREA_SQL_ERROR]', err);
   }
 
   const total =
@@ -131,7 +79,6 @@ export const load = async ({ locals, params, url, platform }: any) => {
   let completedWorksCount = 0;
 
   if (area === 'perfil') {
-    let ybPerfilSuccess = false;
     try {
       const perfRes = await executeYugabyteSql(
         `SELECT 
@@ -145,35 +92,9 @@ export const load = async ({ locals, params, url, platform }: any) => {
         completedCount = parseInt(perfRes.rows[0].completed || '0', 10);
         libTotalCount = parseInt(perfRes.rows[0].library_total || '0', 10);
         completedWorksCount = parseInt(perfRes.rows[0].completed_works || '0', 10);
-        ybPerfilSuccess = true;
       }
     } catch (err) {
       console.warn('[MEMBER_PROFILE_STATS_WARN]', err);
-    }
-
-    if (!ybPerfilSuccess && locals.db) {
-      const [completed, libraryTotal, completedWorks] = await Promise.all([
-        locals.db
-          .from('reading')
-          .select('chapter_id', { count: 'exact', head: true })
-          .eq('user_id', locals.user.id)
-          .not('completed_at', 'is', null),
-        locals.db
-          .from('library')
-          .select('work_id,works!inner(id)', { count: 'exact', head: true })
-          .eq('user_id', locals.user.id)
-          .eq('works.published', true),
-        locals.db
-          .from('library')
-          .select('work_id,works!inner(id)', { count: 'exact', head: true })
-          .eq('user_id', locals.user.id)
-          .eq('works.published', true)
-          .eq('status', 'COMPLETED')
-      ]);
-      [completed, libraryTotal, completedWorks].forEach(check);
-      completedCount = completed.count || 0;
-      libTotalCount = libraryTotal.count || 0;
-      completedWorksCount = completedWorks.count || 0;
     }
   }
 

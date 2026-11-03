@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET: RequestHandler = async ({ url, locals, cookies }) => {
+export const GET: RequestHandler = async ({ url, locals, cookies, platform }: any) => {
   const chapterId = url.searchParams.get('chapterId');
   if (!chapterId) {
     return json({ error: 'chapterId é obrigatório' }, { status: 400 });
@@ -20,19 +21,35 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
     }
   }
 
-  const { data, error } = await locals.db.rpc('get_chapter_reactions', {
-    p_chapter_id: chapterId,
-    p_visitor_id: visitorId
-  });
+  const platformEnv = platform?.env;
 
-  if (error) {
-    return json({ error: error.message }, { status: 500 });
+  try {
+    const [countsRes, userRes] = await Promise.all([
+      executeYugabyteSql(
+        `SELECT emoji, count(*)::int AS cnt FROM public.chapter_reactions WHERE chapter_id = $1 GROUP BY emoji;`,
+        [chapterId],
+        platformEnv
+      ),
+      executeYugabyteSql(
+        `SELECT emoji FROM public.chapter_reactions WHERE chapter_id = $1 AND visitor_id = $2;`,
+        [chapterId, visitorId],
+        platformEnv
+      )
+    ]);
+
+    const counts: Record<string, number> = {};
+    for (const row of countsRes.rows) {
+      counts[row.emoji] = row.cnt;
+    }
+
+    const userReactions = userRes.rows.map((r: any) => r.emoji);
+    return json({ counts, userReactions });
+  } catch (err: any) {
+    return json({ error: err?.message || 'Falha ao buscar reações' }, { status: 500 });
   }
-
-  return json(data || { counts: {}, userReactions: [] });
 };
 
-export const POST: RequestHandler = async ({ request, locals, cookies }) => {
+export const POST: RequestHandler = async ({ request, locals, cookies, platform }: any) => {
   const body = await request.json().catch(() => ({}));
   const { chapterId, emoji } = body;
 
@@ -59,15 +76,51 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
     }
   }
 
-  const { data, error } = await locals.db.rpc('toggle_chapter_reaction', {
-    p_chapter_id: chapterId,
-    p_visitor_id: visitorId,
-    p_emoji: emoji
-  });
+  const platformEnv = platform?.env;
 
-  if (error) {
-    return json({ error: error.message }, { status: 500 });
+  try {
+    const existing = await executeYugabyteSql(
+      `SELECT id FROM public.chapter_reactions WHERE chapter_id = $1 AND visitor_id = $2 AND emoji = $3 LIMIT 1;`,
+      [chapterId, visitorId, emoji],
+      platformEnv
+    );
+
+    if (existing.rows.length > 0) {
+      await executeYugabyteSql(
+        `DELETE FROM public.chapter_reactions WHERE id = $1;`,
+        [existing.rows[0].id],
+        platformEnv
+      );
+    } else {
+      await executeYugabyteSql(
+        `INSERT INTO public.chapter_reactions (id, chapter_id, visitor_id, emoji, created_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, now());`,
+        [chapterId, visitorId, emoji],
+        platformEnv
+      );
+    }
+
+    const [countsRes, userRes] = await Promise.all([
+      executeYugabyteSql(
+        `SELECT emoji, count(*)::int AS cnt FROM public.chapter_reactions WHERE chapter_id = $1 GROUP BY emoji;`,
+        [chapterId],
+        platformEnv
+      ),
+      executeYugabyteSql(
+        `SELECT emoji FROM public.chapter_reactions WHERE chapter_id = $1 AND visitor_id = $2;`,
+        [chapterId, visitorId],
+        platformEnv
+      )
+    ]);
+
+    const counts: Record<string, number> = {};
+    for (const row of countsRes.rows) {
+      counts[row.emoji] = row.cnt;
+    }
+
+    const userReactions = userRes.rows.map((r: any) => r.emoji);
+    return json({ counts, userReactions });
+  } catch (err: any) {
+    return json({ error: err?.message || 'Falha ao alternar reação' }, { status: 500 });
   }
-
-  return json(data);
 };

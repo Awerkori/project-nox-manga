@@ -1,4 +1,4 @@
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from './yugabyte';
 import { createNotification } from './notifications';
 import { stripSpoilers } from '$lib/comments';
 
@@ -57,12 +57,6 @@ export function extractMentions(text: string): string[] {
 /**
  * Resolves mentioned users and dispatches in-app notifications and email outbox records
  * using the unified createNotification service.
- * Enforces:
- * - Auto-mention PERMITIDA (direta ou por cargo)
- * - Deduplication (1 user = 1 notification + 1 email mesmo se mencionado 2x ou por cargo + user)
- * - Persistência estruturada em public.scan_message_mentions e scan_messages.mentions
- * - Privacy preservation for private channels
- * - Realtime broadcast & Brevo dispatch via outbox imediata
  */
 export async function dispatchMentions({
   locals,
@@ -80,7 +74,6 @@ export async function dispatchMentions({
   excludeUserIds = [],
   platform
 }: DispatchMentionsParams): Promise<{ count: number; notifiedUserIds: string[] }> {
-  const db = privileged();
   const targetUserMap = new Map<string, MentionTarget>();
   const structuredMentionsToPersist: Array<{
     message_id: string;
@@ -93,7 +86,12 @@ export async function dispatchMentions({
   // Obter nome do autor para mensagens personalizadas
   let authorName = 'Alguém';
   try {
-    const { data: authorMem } = await db.from('members').select('display_name, username').eq('id', authorId).maybeSingle();
+    const authorRes = await executeYugabyteSql(
+      `SELECT display_name, username FROM public.members WHERE id = $1 LIMIT 1;`,
+      [authorId],
+      platform?.env
+    );
+    const authorMem = authorRes.rows[0];
     if (authorMem) {
       authorName = authorMem.display_name || authorMem.username || 'Alguém';
     }
@@ -128,14 +126,15 @@ export async function dispatchMentions({
         const roleId = item.target_role_id || item.id;
         if (roleId && scanId) {
           // Buscar todos os membros que possuem essa posição na Scan
-          const { data: roleMembers } = await db
-            .from('scan_member_positions')
-            .select('user_id')
-            .eq('position_id', roleId);
+          const roleRes = await executeYugabyteSql(
+            `SELECT user_id FROM public.scan_member_positions WHERE position_id = $1;`,
+            [roleId],
+            platform?.env
+          );
+          const roleMembers = roleRes.rows;
 
           if (roleMembers && roleMembers.length > 0) {
             for (const rm of roleMembers) {
-              // Se já foi adicionado como USER, manter USER (prioridade)
               const existing = targetUserMap.get(rm.user_id);
               if (!existing || existing.mentionType !== 'USER') {
                 targetUserMap.set(rm.user_id, {
@@ -161,10 +160,12 @@ export async function dispatchMentions({
         }
       } else if (normalizedType === 'ALL') {
         if (scanId) {
-          const { data: allMembers } = await db
-            .from('scan_members')
-            .select('user_id')
-            .eq('scan_id', scanId);
+          const allRes = await executeYugabyteSql(
+            `SELECT user_id FROM public.scan_members WHERE scan_id = $1;`,
+            [scanId],
+            platform?.env
+          );
+          const allMembers = allRes.rows;
 
           if (allMembers && allMembers.length > 0) {
             for (const am of allMembers) {
@@ -197,62 +198,66 @@ export async function dispatchMentions({
   const rawTags = extractMentions(text);
   if (scanId && rawTags.length > 0) {
     let isPrivateChannel = false;
-    let channelName = '';
     if (channelId) {
-      const { data: ch } = await db
-        .from('scan_channels')
-        .select('is_private, name')
-        .eq('id', channelId)
-        .maybeSingle();
-      if (ch) {
-        if (ch.is_private) isPrivateChannel = true;
-        if (ch.name) channelName = ch.name;
+      const chRes = await executeYugabyteSql(
+        `SELECT is_private, name FROM public.scan_channels WHERE id = $1 LIMIT 1;`,
+        [channelId],
+        platform?.env
+      );
+      const ch = chRes.rows[0];
+      if (ch && ch.is_private) {
+        isPrivateChannel = true;
       }
     }
 
-    const { data: resolved } = await db.rpc('resolve_scan_mentions', {
-      p_scan_id: scanId,
-      p_text: text
-    });
+    try {
+      const resolvedRes = await executeYugabyteSql(
+        `SELECT * FROM public.resolve_scan_mentions($1, $2);`,
+        [scanId, text],
+        platform?.env
+      );
+      const resolved = resolvedRes.rows;
 
-    if (resolved && resolved.length > 0) {
-      for (const r of resolved) {
-        const uid = r.target_user_id;
-        if (uid) {
-          const resolvedType = r.mention_type === 'POSITION' ? 'ROLE' : (r.mention_type as any) || 'USER';
-          const existing = targetUserMap.get(uid);
+      if (resolved && resolved.length > 0) {
+        for (const r of resolved) {
+          const uid = r.target_user_id;
+          if (uid) {
+            const resolvedType = r.mention_type === 'POSITION' ? 'ROLE' : (r.mention_type as any) || 'USER';
+            const existing = targetUserMap.get(uid);
 
-          // Se não existe ou se o novo é USER e o anterior era ROLE/ALL, atualizar para USER
-          if (!existing || (resolvedType === 'USER' && existing.mentionType !== 'USER')) {
-            targetUserMap.set(uid, {
-              userId: uid,
-              username: r.mention_label || 'membro',
-              email: null,
-              mentionType: resolvedType
-            });
-          }
+            if (!existing || (resolvedType === 'USER' && existing.mentionType !== 'USER')) {
+              targetUserMap.set(uid, {
+                userId: uid,
+                username: r.mention_label || 'membro',
+                email: null,
+                mentionType: resolvedType
+              });
+            }
 
-          if (messageId && !structuredMentionsToPersist.some(s => s.target_user_id === uid && s.mention_type === resolvedType)) {
-            structuredMentionsToPersist.push({
-              message_id: messageId,
-              mention_type: resolvedType,
-              target_user_id: resolvedType === 'USER' ? uid : null,
-              target_role_id: null,
-              mention_text: '@' + (r.mention_label || 'membro')
-            });
+            if (messageId && !structuredMentionsToPersist.some(s => s.target_user_id === uid && s.mention_type === resolvedType)) {
+              structuredMentionsToPersist.push({
+                message_id: messageId,
+                mention_type: resolvedType,
+                target_user_id: resolvedType === 'USER' ? uid : null,
+                target_role_id: null,
+                mention_text: '@' + (r.mention_label || 'membro')
+              });
+            }
           }
         }
       }
+    } catch (e) {
+      console.warn('[MENTIONS] resolve_scan_mentions error:', e);
     }
 
     if (isPrivateChannel && targetUserMap.size > 0) {
       const uids = Array.from(targetUserMap.keys());
-      const { data: members } = await db
-        .from('scan_members')
-        .select('user_id')
-        .eq('scan_id', scanId)
-        .in('user_id', uids);
-      const allowedSet = new Set((members || []).map((m: any) => m.user_id));
+      const membersRes = await executeYugabyteSql(
+        `SELECT user_id FROM public.scan_members WHERE scan_id = $1 AND user_id = ANY($2::uuid[]);`,
+        [scanId, uids],
+        platform?.env
+      );
+      const allowedSet = new Set((membersRes.rows || []).map((m: any) => m.user_id));
       for (const uid of uids) {
         if (!allowedSet.has(uid)) {
           targetUserMap.delete(uid);
@@ -261,11 +266,12 @@ export async function dispatchMentions({
     }
   } else if (!scanId && rawTags.length > 0) {
     // Public Platform Context (Work or Chapter Comments)
-    const orFilter = rawTags.map(t => `username.ilike.${t}`).join(',');
-    const { data: members } = await db
-      .from('members')
-      .select('id, username')
-      .or(orFilter);
+    const membersRes = await executeYugabyteSql(
+      `SELECT id, username FROM public.members WHERE LOWER(username) = ANY($1::text[]);`,
+      [rawTags],
+      platform?.env
+    );
+    const members = membersRes.rows;
 
     if (members && members.length > 0) {
       for (const m of members) {
@@ -284,14 +290,25 @@ export async function dispatchMentions({
   // 3. Persistir menções estruturadas no banco
   if (messageId && structuredMentionsToPersist.length > 0) {
     try {
-      await db.from('scan_message_mentions').insert(structuredMentionsToPersist);
+      for (const sm of structuredMentionsToPersist) {
+        await executeYugabyteSql(
+          `INSERT INTO public.scan_message_mentions (message_id, mention_type, target_user_id, target_role_id, mention_text)
+           VALUES ($1, $2, $3, $4, $5);`,
+          [sm.message_id, sm.mention_type, sm.target_user_id, sm.target_role_id, sm.mention_text],
+          platform?.env
+        );
+      }
       const mentionsJson = Array.from(targetUserMap.values()).map(t => ({
         type: t.mentionType,
         user_id: t.userId,
         role_id: t.roleId || null,
         label: '@' + t.username
       }));
-      await db.from('scan_messages').update({ mentions: mentionsJson }).eq('id', messageId);
+      await executeYugabyteSql(
+        `UPDATE public.scan_messages SET mentions = $1::jsonb WHERE id = $2;`,
+        [JSON.stringify(mentionsJson), messageId],
+        platform?.env
+      );
     } catch (err) {
       console.warn('[MENTIONS] Erro ao persistir scan_message_mentions:', err);
     }
@@ -307,12 +324,10 @@ export async function dispatchMentions({
   const notifiedUserIds: string[] = [];
 
   for (const [uid, target] of targetUserMap.entries()) {
-    // Não notificar o autor quando ele menciona a si próprio (@seunome)
     if (uid === authorId) {
       continue;
     }
 
-    // Não duplicar notificações para usuários que já foram notificados por outra via (ex: autor do comentário pai em respostas)
     if (excludeUserIds && excludeUserIds.includes(uid)) {
       continue;
     }
@@ -322,10 +337,8 @@ export async function dispatchMentions({
       ? `Você foi mencionado pelo cargo @${target.username}`
       : (title || (contextType === 'COMMENT' ? `${authorName} mencionou você em um comentário` : contextType === 'MURAL' ? `${authorName} mencionou você no Mural` : `${authorName} mencionou você no Chat`));
 
-    // Dedupe key estrita por usuário e mensagem (ou URL) para garantir EXATAMENTE 1 notificação
     const dedupeKey = `mention:${uid}:${messageId || deepLink}`;
 
-    // Menções em comentários, chat e mural geram notificação IN-APP apenas, sem disparar e-mail transacional
     const res = await createNotification({
       recipientUserId: uid,
       actorUserId: authorId,

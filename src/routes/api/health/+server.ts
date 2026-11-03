@@ -34,11 +34,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }: any) => {
     );
 
     if (!probeRes || !probeRes.rows) {
-      // Fallback probe
-      const fallback = await locals.db.from('works').select('id').limit(1);
-      if (fallback?.error) {
-        throw new Error(fallback.error.message);
-      }
+      throw new Error('YugabyteDB probe timeout or unavailable');
     }
 
     return json(

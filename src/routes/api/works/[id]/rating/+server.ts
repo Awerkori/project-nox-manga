@@ -2,6 +2,7 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { getWorkRating, setWorkRating, removeWorkRating } from '$lib/server/ratings';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -97,15 +98,23 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
     let xpAward = null;
     if (userId) {
       try {
-        const { data: xpRes } = await locals.db.rpc('award_xp', {
-          p_kind: 'RATE_WORK',
-          p_source_id: workId,
-          p_meta: { description: 'Avaliação de obra registrada' }
-        });
-        xpAward = xpRes;
-        if (xpAward?.awarded) {
+        const awarded = await executeYugabyteSql(
+          `INSERT INTO public.xp_awards (user_id, work_id, source, amount, created_at)
+           VALUES ($1, $2, 'RATE_WORK', 15, now())
+           ON CONFLICT DO NOTHING
+           RETURNING id;`,
+          [userId, workId],
+          platform?.env
+        );
+        if (awarded.rows.length > 0) {
+          await executeYugabyteSql(
+            `UPDATE public.members SET xp = xp + 15, season_xp = coalesce(season_xp, 0) + 15 WHERE id = $1;`,
+            [userId],
+            platform?.env
+          );
           invalidateUserSession(userId);
           invalidateRankingCache();
+          xpAward = { awarded: true, amount: 15 };
         }
       } catch (e) {
         // Non-blocking

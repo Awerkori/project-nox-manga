@@ -1,5 +1,4 @@
 import { error, fail } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import { executeYugabyteSql, withYugabyteTransaction } from '$lib/server/yugabyte';
 import { parsePartnerRequestMeta } from '$lib/scans';
 import { createNotification } from '$lib/server/notifications';
@@ -26,92 +25,100 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
     'admin:scans:all',
     20_000,
     async () => {
-  const db = locals.db || privileged();
+      const [
+        scansYsql,
+        partnerReqsRes,
+        projectReqsRes,
+        auditLogsRes,
+        usersRes
+      ] = await Promise.all([
+        executeYugabyteSql<any>(
+          `SELECT scan.*,
+             (SELECT count(*)::int FROM public.work_scans ws WHERE ws.scan_id = scan.id) AS works_count,
+             (SELECT count(*)::int FROM public.chapter_scans cs WHERE cs.scan_id = scan.id) AS chapters_count,
+             (SELECT count(*)::int FROM public.scan_members sm WHERE sm.scan_id = scan.id) AS members_count,
+             (SELECT count(*)::int FROM public.scan_recruitment_openings so WHERE so.scan_id = scan.id AND so.status = 'OPEN') AS openings_count,
+             (SELECT count(*)::int FROM public.scan_production_chapters spc WHERE spc.scan_id = scan.id) AS pipeline_count,
+             (SELECT count(*)::int FROM public.scan_applications sa WHERE sa.scan_id = scan.id) AS applications_count,
+             (SELECT jsonb_build_object('id', member.id, 'username', member.username,
+                                        'display_name', member.display_name, 'avatar_id', member.avatar_id,
+                                        'avatar_crop', member.avatar_crop)
+                FROM public.scan_members owner_members
+                JOIN public.members member ON member.id = owner_members.user_id
+               WHERE owner_members.scan_id = scan.id AND owner_members.role = 'OWNER'
+               ORDER BY owner_members.created_at ASC LIMIT 1) AS owner
+            FROM public.scans scan
+            ORDER BY scan.is_official DESC, scan.name ASC`,
+          [],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
 
-  // The Scan entity and its operational impact counts must come from the
-  // same authoritative YSQL plane used by hardDelete.  Keeping creation on
-  // the old RPC while deletion reads YSQL creates a false "not found" state.
-  const [
-    scansYsql,
-    partnerReqsRes,
-    projectReqsRes,
-    auditLogsRes,
-    usersRes
-  ] = await Promise.all([
-    executeYugabyteSql<any>(
-      `SELECT scan.*,
-         (SELECT count(*)::int FROM public.work_scans ws WHERE ws.scan_id = scan.id) AS works_count,
-         (SELECT count(*)::int FROM public.chapter_scans cs WHERE cs.scan_id = scan.id) AS chapters_count,
-         (SELECT count(*)::int FROM public.scan_members sm WHERE sm.scan_id = scan.id) AS members_count,
-         (SELECT count(*)::int FROM public.scan_recruitment_openings so WHERE so.scan_id = scan.id AND so.status = 'OPEN') AS openings_count,
-         (SELECT count(*)::int FROM public.scan_production_chapters spc WHERE spc.scan_id = scan.id) AS pipeline_count,
-         (SELECT count(*)::int FROM public.scan_applications sa WHERE sa.scan_id = scan.id) AS applications_count,
-         (SELECT jsonb_build_object('id', member.id, 'username', member.username,
-                                    'display_name', member.display_name, 'avatar_id', member.avatar_id,
-                                    'avatar_crop', member.avatar_crop)
-            FROM public.scan_members owner_members
-            JOIN public.members member ON member.id = owner_members.user_id
-           WHERE owner_members.scan_id = scan.id AND owner_members.role = 'OWNER'
-           ORDER BY owner_members.created_at ASC LIMIT 1) AS owner
-        FROM public.scans scan
-        ORDER BY scan.is_official DESC, scan.name ASC`,
-      [],
-      platform?.env
-    ),
-    db
-      .from('scan_partner_requests')
-      .select(`
-        *,
-        members!user_id(id, username, display_name, avatar_id, avatar_crop)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(100),
-    db
-      .from('scan_project_requests')
-      .select(`
-        *,
-        scans!inner(id, name, slug, logo_id),
-        works!inner(id, title, slug, cover_id),
-        members!user_id(id, username, display_name)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(100),
-    db
-      .from('scan_global_audit_log')
-      .select(`
-        *,
-        admin:members!admin_id(id, username, display_name, avatar_id, avatar_crop)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(50),
-    db
-      .from('members')
-      .select('id, username, display_name, avatar_id, avatar_crop')
-      .order('username')
-      .limit(100)
-  ]);
+        executeYugabyteSql(
+          `SELECT spr.*, to_jsonb(m.*) AS members
+           FROM public.scan_partner_requests spr
+           LEFT JOIN public.members m ON m.id = spr.user_id
+           ORDER BY spr.created_at DESC
+           LIMIT 100;`,
+          [],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
 
-  const scans = (scansYsql.rows || []).map((s: any) => ({
-    ...s,
-    works_count: Number(s.works_count || 0),
-    chapters_count: Number(s.chapters_count || 0),
-    members_count: Number(s.members_count || 0),
-    openings_count: Number(s.openings_count || 0),
-    pipeline_count: Number(s.pipeline_count || 0),
-    applications_count: Number(s.applications_count || 0),
-    owner: s.owner || null
-  }));
+        executeYugabyteSql(
+          `SELECT spj.*,
+                  to_jsonb(s.*) AS scans,
+                  to_jsonb(w.*) AS works,
+                  to_jsonb(m.*) AS members
+           FROM public.scan_project_requests spj
+           LEFT JOIN public.scans s ON s.id = spj.scan_id
+           LEFT JOIN public.works w ON w.id = spj.work_id
+           LEFT JOIN public.members m ON m.id = spj.user_id
+           ORDER BY spj.created_at DESC
+           LIMIT 100;`,
+          [],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
 
-  return {
-    scans,
-    partnerRequests: (partnerReqsRes.data || []).map((r: any) => ({
-      ...r,
-      meta: parsePartnerRequestMeta(r.sample_links)
-    })),
-    projectRequests: projectReqsRes.data || [],
-    auditLogs: auditLogsRes.data || [],
-    users: usersRes.data || []
-  };
+        executeYugabyteSql(
+          `SELECT sga.*, to_jsonb(m.*) AS admin
+           FROM public.scan_global_audit_log sga
+           LEFT JOIN public.members m ON m.id = sga.admin_id
+           ORDER BY sga.created_at DESC
+           LIMIT 50;`,
+          [],
+          platform?.env
+        ).catch(() => ({ rows: [] })),
+
+        executeYugabyteSql(
+          `SELECT id, username, display_name, avatar_id, avatar_crop
+           FROM public.members
+           ORDER BY username ASC
+           LIMIT 100;`,
+          [],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
+      ]);
+
+      const scans = (scansYsql.rows || []).map((s: any) => ({
+        ...s,
+        works_count: Number(s.works_count || 0),
+        chapters_count: Number(s.chapters_count || 0),
+        members_count: Number(s.members_count || 0),
+        openings_count: Number(s.openings_count || 0),
+        pipeline_count: Number(s.pipeline_count || 0),
+        applications_count: Number(s.applications_count || 0),
+        owner: s.owner || null
+      }));
+
+      return {
+        scans,
+        partnerRequests: (partnerReqsRes.rows || []).map((r: any) => ({
+          ...r,
+          meta: parsePartnerRequestMeta(r.sample_links)
+        })),
+        projectRequests: projectReqsRes.rows || [],
+        auditLogs: auditLogsRes.rows || [],
+        users: usersRes.rows || []
+      };
     }
   );
 };
@@ -194,7 +201,7 @@ export const actions: Actions = {
     }
   },
 
-  setStatus: async ({ request, locals }) => {
+  setStatus: async ({ request, locals, platform }: any) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
     const formData = await request.formData();
@@ -206,19 +213,28 @@ export const actions: Actions = {
       return fail(400, { message: 'Status ou scan inválidos.' });
     }
 
-    const { error: rpcErr } = await locals.db.rpc('global_admin_set_scan_status', {
-      p_scan_id: scanId,
-      p_status: status,
-      p_reason: reason
-    });
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.scans SET status = $1 WHERE id = $2;`,
+        [status, scanId],
+        platform?.env
+      );
+      await executeYugabyteSql(
+        `INSERT INTO public.scan_global_audit_log (admin_id, action, scan_id, target_scan_id, details)
+         VALUES ($1, $2, $3, $3, $4::jsonb);`,
+        [locals.user.id, 'SET_SCAN_STATUS', scanId, JSON.stringify({ status, reason })],
+        platform?.env
+      ).catch(() => {});
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao atualizar status da scan.' });
+    }
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
     invalidateAdminScansCache();
     invalidateScansDirectoryCache();
     return { success: true, statusChanged: status };
   },
 
-  recoverOwner: async ({ request, locals }) => {
+  recoverOwner: async ({ request, locals, platform }: any) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
     const formData = await request.formData();
@@ -230,13 +246,29 @@ export const actions: Actions = {
       return fail(400, { message: 'Scan e novo dono são obrigatórios.' });
     }
 
-    const { error: rpcErr } = await locals.db.rpc('global_admin_recover_scan_ownership', {
-      p_scan_id: scanId,
-      p_new_owner_id: newOwnerId,
-      p_reason: reason
-    });
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.scan_members SET role = 'MEMBER' WHERE scan_id = $1 AND role = 'OWNER';`,
+        [scanId],
+        platform?.env
+      );
+      await executeYugabyteSql(
+        `INSERT INTO public.scan_members (scan_id, user_id, role)
+         VALUES ($1, $2, 'OWNER')
+         ON CONFLICT (scan_id, user_id) DO UPDATE SET role = 'OWNER';`,
+        [scanId, newOwnerId],
+        platform?.env
+      );
+      await executeYugabyteSql(
+        `INSERT INTO public.scan_global_audit_log (admin_id, action, scan_id, target_scan_id, details)
+         VALUES ($1, $2, $3, $3, $4::jsonb);`,
+        [locals.user.id, 'RECOVER_OWNERSHIP', scanId, JSON.stringify({ new_owner_id: newOwnerId, reason })],
+        platform?.env
+      ).catch(() => {});
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao recuperar ownership da scan.' });
+    }
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
     invalidateAdminScansCache();
     invalidateUserSession(newOwnerId);
     return { success: true, ownerRecovered: true };
@@ -345,7 +377,7 @@ export const actions: Actions = {
     }
   },
 
-  reviewPartner: async ({ request, locals, platform }) => {
+  reviewPartner: async ({ request, locals, platform }: any) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
     const formData = await request.formData();
@@ -357,37 +389,63 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados de avaliação inválidos.' });
     }
 
-    const db = locals.db || privileged();
-
     // 1. Fetch current request to know candidate details & meta
-    const { data: partnerReq, error: reqErr } = await db
-      .from('scan_partner_requests')
-      .select('*')
-      .eq('id', requestId)
-      .maybeSingle();
+    const reqRes = await executeYugabyteSql(
+      `SELECT * FROM public.scan_partner_requests WHERE id = $1 LIMIT 1;`,
+      [requestId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
 
-    if (reqErr || !partnerReq) {
+    const partnerReq = reqRes.rows[0];
+    if (!partnerReq) {
       return fail(404, { message: 'Solicitação de parceria não encontrada.' });
     }
 
-    // 2. Call RPC to approve or reject
-    const { data, error: rpcErr } = await locals.db.rpc('review_scan_partner_request', {
-      p_request_id: requestId,
-      p_action: actionType,
-      p_reason: reason || undefined
-    });
-
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-
     const meta = parsePartnerRequestMeta(partnerReq.sample_links);
+    let createdScanId: string | null = null;
 
-    // Keep YSQL partner requests table in sync
     try {
       if (actionType === 'APPROVE') {
+        const slug = partnerReq.scan_name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '') || `scan-${Date.now().toString(36)}`;
+
+        const scanInsert = await executeYugabyteSql(
+          `INSERT INTO public.scans (name, slug, description, website, discord, status, logo_id, banner_id)
+           VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6, $7)
+           ON CONFLICT (slug) DO UPDATE SET status = 'ACTIVE'
+           RETURNING id;`,
+          [
+            partnerReq.scan_name,
+            slug,
+            partnerReq.description || '',
+            partnerReq.website || null,
+            partnerReq.discord || null,
+            meta.logo_id || null,
+            meta.banner_id || null
+          ],
+          platform?.env
+        );
+
+        createdScanId = scanInsert.rows[0]?.id;
+
+        if (createdScanId && partnerReq.user_id) {
+          await executeYugabyteSql(
+            `INSERT INTO public.scan_members (scan_id, user_id, role)
+             VALUES ($1, $2, 'OWNER')
+             ON CONFLICT (scan_id, user_id) DO UPDATE SET role = 'OWNER';`,
+            [createdScanId, partnerReq.user_id],
+            platform?.env
+          );
+        }
+
         await executeYugabyteSql(
           `UPDATE public.scan_partner_requests
            SET status = 'APPROVED', reviewed_by = $2, reviewed_at = now()
-           WHERE id = $1`,
+           WHERE id = $1;`,
           [requestId, locals.user!.id],
           platform?.env
         );
@@ -395,43 +453,16 @@ export const actions: Actions = {
         await executeYugabyteSql(
           `UPDATE public.scan_partner_requests
            SET status = 'REJECTED', reviewed_by = $2, reviewed_at = now(), rejection_reason = $3
-           WHERE id = $1`,
+           WHERE id = $1;`,
           [requestId, locals.user!.id, reason],
           platform?.env
         );
       }
     } catch (e: any) {
-      console.warn('YSQL partner request sync error (non-fatal):', e?.message);
+      return fail(400, { message: e?.message || 'Falha ao processar solicitação de parceria' });
     }
 
     if (actionType === 'APPROVE') {
-      const createdScanId = data?.scan_id;
-
-      // 3. Attach candidate Logo & Banner if provided
-      if (createdScanId && (meta.logo_id || meta.banner_id)) {
-        try {
-          await db
-            .from('scans')
-            .update({
-              logo_id: meta.logo_id || null,
-              banner_id: meta.banner_id || null
-            })
-            .eq('id', createdScanId);
-
-          await executeYugabyteSql(
-            `UPDATE public.scans
-             SET logo_id = COALESCE($2::uuid, logo_id),
-                 banner_id = COALESCE($3::uuid, banner_id),
-                 updated_at = now()
-             WHERE id = $1`,
-            [createdScanId, meta.logo_id || null, meta.banner_id || null],
-            platform?.env
-          );
-        } catch (e: any) {
-          console.warn('Failed to attach candidate media to approved scan:', e?.message);
-        }
-      }
-
       invalidateScansDirectoryCache();
       invalidateAdminScansCache();
       invalidateAdminTicketsCache();
@@ -447,7 +478,7 @@ export const actions: Actions = {
           title: 'Parceria de Scan Aprovada! 🎉',
           body: `Parabéns! Sua solicitação para a scan "${partnerReq.scan_name}" foi aprovada pela administração do Project Nox. Seu painel de gestão (/scan) já está liberado!`,
           deepLink: '/scan',
-          scanId: createdScanId
+          scanId: createdScanId || undefined
         }, platform);
       } catch (e: any) {
         console.warn('Failed to send approval notification:', e?.message);
@@ -469,10 +500,10 @@ export const actions: Actions = {
 
     invalidateAdminScansCache();
     invalidateAdminTicketsCache();
-    return { success: true, reviewedPartner: data };
+    return { success: true, reviewedPartner: { scan_id: createdScanId } };
   },
 
-  reviewProject: async ({ request, locals }) => {
+  reviewProject: async ({ request, locals, platform }: any) => {
     if (locals.role !== 'ADMIN') return fail(403, { message: 'Acesso negado. Apenas ADMIN global.' });
 
     const formData = await request.formData();
@@ -484,14 +515,41 @@ export const actions: Actions = {
       return fail(400, { message: 'Dados de avaliação inválidos.' });
     }
 
-    const { data, error: rpcErr } = await locals.db.rpc('review_scan_project_request', {
-      p_request_id: requestId,
-      p_action: actionType,
-      p_reason: reason || undefined
-    });
+    try {
+      if (actionType === 'APPROVE') {
+        const updateRes = await executeYugabyteSql(
+          `UPDATE public.scan_project_requests
+           SET status = 'APPROVED', reviewed_by = $2, reviewed_at = now()
+           WHERE id = $1
+           RETURNING scan_id, work_id;`,
+          [requestId, locals.user!.id],
+          platform?.env
+        );
 
-    if (rpcErr) return fail(400, { message: rpcErr.message });
+        const row = updateRes.rows[0];
+        if (row?.work_id && row?.scan_id) {
+          await executeYugabyteSql(
+            `INSERT INTO public.work_scans (work_id, scan_id, is_primary)
+             VALUES ($1, $2, false)
+             ON CONFLICT (work_id, scan_id) DO NOTHING;`,
+            [row.work_id, row.scan_id],
+            platform?.env
+          );
+        }
+      } else {
+        await executeYugabyteSql(
+          `UPDATE public.scan_project_requests
+           SET status = 'REJECTED', reviewed_by = $2, reviewed_at = now(), rejection_reason = $3
+           WHERE id = $1;`,
+          [requestId, locals.user!.id, reason],
+          platform?.env
+        );
+      }
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao revisar pedido de projeto' });
+    }
+
     invalidateAdminScansCache();
-    return { success: true, reviewedProject: data };
+    return { success: true, reviewedProject: { id: requestId, action: actionType } };
   }
 };

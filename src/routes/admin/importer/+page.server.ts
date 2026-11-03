@@ -1,5 +1,6 @@
 import { invalidateImporterSnapshotCache, loadSnapshot } from "$lib/server/importer-snapshot";
 import { fail, error } from '@sveltejs/kit';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -18,7 +19,7 @@ function slugify(value: string): string {
 }
 
 export const actions: Actions = {
-  prioritize: async ({ request, locals }) => {
+  prioritize: async ({ request, locals, platform }: any) => {
     const form = await request.formData();
     let workId = form.get('work_id')?.toString() || null;
     const candidateTitle = form.get('candidate_title')?.toString()?.trim() || null;
@@ -27,6 +28,7 @@ export const actions: Actions = {
     const sourceUrl = form.get('source_url')?.toString() || null;
     const reason = form.get('reason')?.toString() || null;
     const forceReplace = form.get('force_replace')?.toString() === 'true';
+    const platformEnv = platform?.env;
 
     if (source === 'toonlivre' || source === 'nexus_toons') {
       return fail(400, { error: 'Esta fonte está permanentemente excluída por diretriz do projeto.' });
@@ -36,76 +38,91 @@ export const actions: Actions = {
     if (!workId && candidateTitle && sourceWorkId) {
       const slug = slugify(candidateTitle);
 
-      const { data: existingWork } = await locals.db
-        .from('works')
-        .select('id, title, slug')
-        .eq('slug', slug)
-        .maybeSingle();
+      const existingRes = await executeYugabyteSql(
+        `SELECT id, title, slug FROM public.works WHERE slug = $1 LIMIT 1;`,
+        [slug],
+        platformEnv
+      );
+      const existingWork = existingRes.rows[0];
 
       if (existingWork?.id) {
         workId = existingWork.id;
       } else {
-        const { data: newWork, error: newWorkErr } = await locals.db
-          .from('works')
-          .insert({
-            title: candidateTitle,
-            slug,
-            kind: 'MANHWA',
-            published: true,
-            description: 'Obra descoberta e sincronizada via Prioridade Absoluta'
-          })
-          .select('id')
-          .single();
-
-        if (newWorkErr) {
-          return fail(400, { error: 'Falha ao registrar nova obra: ' + newWorkErr.message });
-        }
-        workId = newWork.id;
+        const newWorkRes = await executeYugabyteSql(
+          `INSERT INTO public.works (id, title, slug, kind, published, description)
+           VALUES (gen_random_uuid(), $1, $2, 'MANHWA', true, 'Obra descoberta e sincronizada via Prioridade Absoluta')
+           RETURNING id;`,
+          [candidateTitle, slug],
+          platformEnv
+        );
+        workId = newWorkRes.rows[0]?.id;
       }
 
-      await locals.db
-        .from('importer_work_mappings')
-        .upsert({
-          work_id: workId,
-          source,
-          source_work_id: sourceWorkId,
-          source_slug: slug,
-          source_title: candidateTitle,
-          metadata: sourceUrl ? { sourceUrl } : {},
-          sync_status: 'PENDING'
-        }, { onConflict: 'source,source_work_id' });
+      await executeYugabyteSql(
+        `INSERT INTO public.importer_work_mappings (work_id, source, source_work_id, source_slug, source_title, metadata, sync_status)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'PENDING')
+         ON CONFLICT (source, source_work_id) DO UPDATE SET sync_status = 'PENDING', updated_at = now();`,
+        [workId, source, sourceWorkId, slug, candidateTitle, JSON.stringify(sourceUrl ? { sourceUrl } : {})],
+        platformEnv
+      );
     }
 
     if (!workId) {
       return fail(400, { error: 'Selecione uma obra para priorizar.' });
     }
 
-    const { data, error } = await locals.db.rpc('importer_prioritize_work', {
-      p_work_id: workId,
-      p_reason: reason || undefined,
-      p_force_replace: forceReplace
-    });
+    // Check for active conflict
+    const activeReqRes = await executeYugabyteSql(
+      `SELECT r.id, r.work_id, w.title
+       FROM public.importer_staff_requests r
+       LEFT JOIN public.works w ON w.id = r.work_id
+       WHERE r.status IN ('QUEUED', 'IMPORTING')
+       LIMIT 1;`,
+      [],
+      platformEnv
+    );
+    const activeReq = activeReqRes.rows[0];
 
-    if (error) {
-      return fail(400, { error: error.message });
-    }
-
-    const res = data as any;
-    if (res?.conflict) {
+    if (activeReq && activeReq.work_id !== workId && !forceReplace) {
       return {
         conflict: true,
         workId,
-        activeWorkId: res.active_work_id,
-        activeWorkTitle: res.active_work_title,
-        message: res.message
+        activeWorkId: activeReq.work_id,
+        activeWorkTitle: activeReq.title || 'Outra obra ativa',
+        message: `Já existe uma obra em Prioridade Absoluta (${activeReq.title || 'ativa'}). Deseja substituir?`
       };
     }
 
+    if (activeReq && activeReq.work_id !== workId && forceReplace) {
+      await executeYugabyteSql(
+        `UPDATE public.importer_staff_requests
+         SET status = 'CANCELLED', cancelled_by = $1, cancelled_at = now(), cancel_reason = 'Substituída por outra obra prioritária'
+         WHERE id = $2;`,
+        [locals.user?.id || null, activeReq.id],
+        platformEnv
+      );
+    }
+
+    await executeYugabyteSql(
+      `INSERT INTO public.importer_staff_requests (id, work_id, requested_by, reason, status, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, 'QUEUED', now(), now());`,
+      [workId, locals.user?.id || null, reason],
+      platformEnv
+    );
+
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue
+       SET priority = 100, updated_at = now()
+       WHERE (payload->>'workId')::text = $1 AND status IN ('QUEUED', 'RETRY');`,
+      [workId],
+      platformEnv
+    ).catch(() => {});
+
     invalidateImporterSnapshotCache();
-    return { success: true, message: res?.message || 'Obra colocada em Prioridade Absoluta com sucesso!' };
+    return { success: true, message: 'Obra colocada em Prioridade Absoluta com sucesso!' };
   },
 
-  cancel: async ({ request, locals }) => {
+  cancel: async ({ request, locals, platform }: any) => {
     const form = await request.formData();
     const requestId = form.get('request_id')?.toString();
 
@@ -113,64 +130,47 @@ export const actions: Actions = {
       return fail(400, { error: 'ID de solicitação inválido.' });
     }
 
-    const { data, error } = await locals.db.rpc('importer_cancel_staff_request', {
-      p_request_id: requestId
-    });
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
-
-    const res = data as any;
-    if (!res?.success) {
-      return fail(400, { error: res?.message || 'Não foi possível cancelar a prioridade.' });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.importer_staff_requests
+       SET status = 'CANCELLED', cancelled_by = $1, cancelled_at = now(), cancel_reason = 'Cancelada pela Staff'
+       WHERE id = $2;`,
+      [locals.user?.id || null, requestId],
+      platform?.env
+    );
 
     invalidateImporterSnapshotCache();
-    return { success: true, message: res?.message || 'Prioridade cancelada com sucesso.' };
+    return { success: true, message: 'Prioridade cancelada com sucesso.' };
   },
 
-  retryBlocked: async ({ request, locals }) => {
+  retryBlocked: async ({ request, locals, platform }: any) => {
     const form = await request.formData();
     const requestId = form.get('request_id')?.toString();
     const workId = form.get('work_id')?.toString();
+    const platformEnv = platform?.env;
 
     if (!requestId || !workId) {
       return fail(400, { error: 'Parâmetros inválidos para reativação.' });
     }
 
-    const { data: failedJobs } = await locals.db
-      .from('importer_queue')
-      .select('id, payload')
-      .eq('status', 'FAILED');
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue
+       SET status = 'QUEUED', attempts = 0, next_run_at = now(), priority = 100, updated_at = now()
+       WHERE (payload->>'workId')::text = $1 AND status = 'FAILED';`,
+      [workId],
+      platformEnv
+    );
 
-    const matchingIds = (failedJobs || [])
-      .filter((j: any) => (j.payload as any)?.workId === workId)
-      .map((j: any) => j.id);
-
-    if (matchingIds.length > 0) {
-      await locals.db
-        .from('importer_queue')
-        .update({
-          status: 'QUEUED',
-          attempts: 0,
-          next_run_at: new Date().toISOString(),
-          priority: 100,
-          updated_at: new Date().toISOString()
-        })
-        .in('id', matchingIds);
-    }
-
-    await locals.db
-      .from('importer_staff_requests')
-      .update({ status: 'QUEUED', updated_at: new Date().toISOString() })
-      .eq('id', requestId);
+    await executeYugabyteSql(
+      `UPDATE public.importer_staff_requests SET status = 'QUEUED', updated_at = now() WHERE id = $1;`,
+      [requestId],
+      platformEnv
+    );
 
     invalidateImporterSnapshotCache();
     return { success: true, message: 'Prioridade reativada! Capítulos reenfileirados com prioridade 100.' };
   },
 
-  reconcile: async ({ request, locals }) => {
+  reconcile: async ({ request, platform }: any) => {
     const form = await request.formData();
     const workId = form.get('work_id')?.toString();
 
@@ -178,73 +178,58 @@ export const actions: Actions = {
       return fail(400, { error: 'ID de obra inválido.' });
     }
 
-    const { error } = await locals.db.rpc('importer_request_reconciliation', {
-      p_work_id: workId
-    });
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.importer_work_mappings SET sync_status = 'PENDING', updated_at = now() WHERE work_id = $1;`,
+      [workId],
+      platform?.env
+    );
 
     invalidateImporterSnapshotCache();
     return { success: true, message: 'Reconciliação multi-fonte iniciada com sucesso!' };
   },
 
-  retryJob: async ({ request, locals }) => {
+  retryJob: async ({ request, platform }: any) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
     if (!jobId) {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    const { error } = await locals.db
-      .from('importer_queue')
-      .update({
-        status: 'QUEUED',
-        next_run_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId);
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue SET status = 'QUEUED', next_run_at = now(), updated_at = now() WHERE id = $1;`,
+      [jobId],
+      platform?.env
+    );
 
     invalidateImporterSnapshotCache();
     return { success: true, message: 'Job reenfileirado para execução imediata!' };
   },
 
-  retryAll: async ({ request, locals }) => {
+  retryAll: async ({ request, platform }: any) => {
     const form = await request.formData();
     const source = form.get('source')?.toString();
     const pattern = form.get('pattern')?.toString();
-
-    let query = locals.db
-      .from('importer_queue')
-      .update({
-        status: 'QUEUED',
-        next_run_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('status', 'RETRY');
+    const platformEnv = platform?.env;
 
     if (source && source !== 'ALL') {
-      query = query.eq('source', source);
-    }
-    if (pattern && pattern.trim()) {
-      query = query.ilike('last_error', `%${pattern.trim()}%`);
-    }
-
-    const { error } = await query;
-    if (error) {
-      return fail(400, { error: error.message });
+      await executeYugabyteSql(
+        `UPDATE public.importer_queue SET status = 'QUEUED', next_run_at = now(), updated_at = now() WHERE status = 'RETRY' AND source = $1;`,
+        [source],
+        platformEnv
+      );
+    } else {
+      await executeYugabyteSql(
+        `UPDATE public.importer_queue SET status = 'QUEUED', next_run_at = now(), updated_at = now() WHERE status = 'RETRY';`,
+        [],
+        platformEnv
+      );
     }
 
     invalidateImporterSnapshotCache();
     return { success: true, message: 'Todos os jobs do grupo reenfileirados para retry!' };
   },
 
-  pauseJob: async ({ request, locals }) => {
+  pauseJob: async ({ request, locals, platform }: any) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
     const reason = form.get('reason')?.toString() || 'Pausado via painel da Staff';
@@ -252,41 +237,34 @@ export const actions: Actions = {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    const { error } = await (locals.db.rpc as any)('importer_staff_pause_job', {
-      p_job_id: jobId,
-      p_actor_id: locals.user?.id || null,
-      p_reason: reason
-    });
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue SET status = 'PAUSED', last_error = $1, updated_at = now() WHERE id = $2;`,
+      [reason, jobId],
+      platform?.env
+    );
 
     invalidateImporterSnapshotCache();
     return { success: true, message: 'Job pausado pela Staff.' };
   },
 
-  resumeJob: async ({ request, locals }) => {
+  resumeJob: async ({ request, platform }: any) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
     if (!jobId) {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    const { error } = await (locals.db.rpc as any)('importer_staff_resume_job', {
-      p_job_id: jobId,
-      p_actor_id: locals.user?.id || null
-    });
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue SET status = 'QUEUED', next_run_at = now(), updated_at = now() WHERE id = $1;`,
+      [jobId],
+      platform?.env
+    );
 
     invalidateImporterSnapshotCache();
     return { success: true, message: 'Job retomado e reenfileirado para execução!' };
   },
 
-  postponeJob: async ({ request, locals }) => {
+  postponeJob: async ({ request, platform }: any) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
     const hours = parseInt(form.get('hours')?.toString() || '24', 10);
@@ -294,21 +272,17 @@ export const actions: Actions = {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    const { error } = await (locals.db.rpc as any)('importer_staff_postpone_job', {
-      p_job_id: jobId,
-      p_delay: `${hours} hours`,
-      p_actor_id: locals.user?.id || null
-    });
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue SET next_run_at = now() + ($1 || ' hours')::interval, updated_at = now() WHERE id = $2;`,
+      [String(hours), jobId],
+      platform?.env
+    );
 
     invalidateImporterSnapshotCache();
     return { success: true, message: `Job adiado por ${hours} horas.` };
   },
 
-  cancelJob: async ({ request, locals }) => {
+  cancelJob: async ({ request, platform }: any) => {
     const form = await request.formData();
     const jobId = form.get('job_id')?.toString();
     const reason = form.get('reason')?.toString() || 'Cancelado via painel da Staff';
@@ -316,62 +290,47 @@ export const actions: Actions = {
       return fail(400, { error: 'ID de job ausente.' });
     }
 
-    const { data, error } = await (locals.db.rpc as any)('importer_staff_cancel_job', {
-      p_job_id: jobId,
-      p_actor_id: locals.user?.id || null,
-      p_reason: reason
-    });
+    await executeYugabyteSql(
+      `UPDATE public.importer_queue SET status = 'CANCELLED', last_error = $1, updated_at = now() WHERE id = $2;`,
+      [reason, jobId],
+      platform?.env
+    );
 
-    if (error) {
-      return fail(400, { error: error.message });
-    }
-
-    const res = data as any;
     invalidateImporterSnapshotCache();
-    return { success: true, message: res?.message || 'Job cancelado pela Staff.' };
+    return { success: true, message: 'Job cancelado pela Staff.' };
   },
 
-  freezeWork: async ({ request, locals }) => {
-    const form = await request.formData();
-    const workId = form.get('work_id')?.toString();
-    const reason = form.get('reason')?.toString() || 'Congelado via painel da Staff';
-    if (!workId) {
-      return fail(400, { error: 'ID de obra ausente.' });
-    }
-
-    const { data, error } = await (locals.db.rpc as any)('importer_staff_freeze_work', {
-      p_work_id: workId,
-      p_actor_id: locals.user?.id || null,
-      p_reason: reason
-    });
-
-    if (error) {
-      return fail(400, { error: error.message });
-    }
-
-    const res = data as any;
-    invalidateImporterSnapshotCache();
-    return { success: true, message: res?.message || 'Obra congelada com sucesso pela Staff.' };
-  },
-
-  unfreezeWork: async ({ request, locals }) => {
+  freezeWork: async ({ request, platform }: any) => {
     const form = await request.formData();
     const workId = form.get('work_id')?.toString();
     if (!workId) {
       return fail(400, { error: 'ID de obra ausente.' });
     }
 
-    const { data, error } = await (locals.db.rpc as any)('importer_staff_unfreeze_work', {
-      p_work_id: workId,
-      p_actor_id: locals.user?.id || null
-    });
+    await executeYugabyteSql(
+      `UPDATE public.importer_work_health SET status = 'FROZEN', updated_at = now() WHERE work_id = $1;`,
+      [workId],
+      platform?.env
+    );
 
-    if (error) {
-      return fail(400, { error: error.message });
+    invalidateImporterSnapshotCache();
+    return { success: true, message: 'Obra congelada com sucesso pela Staff.' };
+  },
+
+  unfreezeWork: async ({ request, platform }: any) => {
+    const form = await request.formData();
+    const workId = form.get('work_id')?.toString();
+    if (!workId) {
+      return fail(400, { error: 'ID de obra ausente.' });
     }
 
-    const res = data as any;
+    await executeYugabyteSql(
+      `UPDATE public.importer_work_health SET status = 'HEALTHY', updated_at = now() WHERE work_id = $1;`,
+      [workId],
+      platform?.env
+    );
+
     invalidateImporterSnapshotCache();
-    return { success: true, message: res?.message || 'Obra descongelada com sucesso. Reconciliação reativada.' };
+    return { success: true, message: 'Obra descongelada com sucesso. Reconciliação reativada.' };
   }
 };

@@ -1,5 +1,4 @@
 import { error } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import {
   resolveBotDownloadClient,
   normalizeBotReference,
@@ -177,12 +176,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     if (prewarmed) return prewarmed;
   }
 
-  const db = privileged();
-  let media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
-  if (!media) {
-    const { data: supaMedia } = await db.from('media').select('*').eq('id', params.id).maybeSingle();
-    media = supaMedia;
-  }
+  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,

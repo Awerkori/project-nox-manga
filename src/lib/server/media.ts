@@ -1,5 +1,4 @@
 import { error } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { inspectImage } from '$lib/media-validation';
 import { TelegramStorageError } from '$lib/server/telegram';

@@ -126,19 +126,6 @@ export const GET = async ({ url, locals, cookies, platform }: any) => {
       redirect(303, type === 'recovery' ? '/redefinir' : next);
     }
 
-    // 2. Fallback to Supabase GoTrue OTP
-    if (locals.db?.auth?.verifyOtp) {
-      try {
-        const { error } = await locals.db.auth.verifyOtp({ token_hash, type });
-        if (!error) {
-          await claimInvite(locals);
-          redirect(303, type === 'recovery' ? '/redefinir' : next);
-        }
-      } catch (e: any) {
-        if (e?.status === 303) throw e;
-      }
-    }
-    // Never log token values or the full URL; keep only a safe provider code.
     console.warn(`[AUTH_CONFIRM] mode=otp type=${type} result=failed`);
   }
 

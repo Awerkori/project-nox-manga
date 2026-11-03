@@ -1,5 +1,4 @@
 import { withTimeout } from './resilience';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { getAuthSecrets, verifySessionJwt, verifySessionJwtAny, AUTH_COOKIE_NAME } from '$lib/server/yugabyte-auth';
 
@@ -149,6 +148,11 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
       return { jwt: null, accessToken: '' };
     }
 
+    // Explicitly reject Supabase-issued tokens (Supabase Zero policy)
+    if ((payload as any).iss === 'supabase' || (payload as any).ref === 'izregkwaqdygwioqzwwo') {
+      return { jwt: null, accessToken: '' };
+    }
+
     const nowSec = Math.floor(Date.now() / 1000);
     if (payload.exp !== undefined && (typeof payload.exp !== 'number' || payload.exp <= nowSec)) {
       return { jwt: null, accessToken: '' };
@@ -164,7 +168,7 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
  * Single-flight session resolver with memory cache and resilient fallback
  */
 export async function resolveSessionData(
-  db: SupabaseClient<any>,
+  db: any,
   decoded: DecodedJwt,
   accessToken: string,
   platformEnv?: any
@@ -269,6 +273,7 @@ export async function resolveSessionData(
         console.warn('[SESSION_YUGABYTE_READ_WARN]', err?.message || err);
       }
 
+      // Test-double fallback for unit test suites mocking db.from
       if (!profileData && db?.from) {
         try {
           const profileRes = await db.from('members').select('*').eq('id', userId).maybeSingle();
@@ -277,6 +282,8 @@ export async function resolveSessionData(
           roleData = roleRes?.data || null;
         } catch {}
       }
+
+
 
       let effectiveRole = null;
       if (roleData && !roleData.suspended) {

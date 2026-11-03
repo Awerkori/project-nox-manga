@@ -1,5 +1,4 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 const RESERVED_USERNAMES = new Set([
@@ -81,41 +80,12 @@ export const GET = async ({ url, locals, platform }: any) => {
       }
       collision = true;
     }
-  } catch {
-    // Secondary fallback to Supabase privileged client
-    try {
-      if (locals.user) {
-        const { data: currentMember } = await privileged()
-          .from('members')
-          .select('username')
-          .eq('id', locals.user.id)
-          .maybeSingle();
-
-        if (currentMember?.username?.toLowerCase() === raw) {
-          return json({ available: true, username: raw, current: true }, { headers: { 'Cache-Control': 'no-store' } });
-        }
-      }
-
-      const { data: col, error: collisionError } = await privileged()
-        .from('members')
-        .select('id')
-        .ilike('username', raw)
-        .maybeSingle();
-
-      if (collisionError) {
-        console.warn(`[AUTH_HANDLE_CHECK] provider_error=${collisionError.code || 'UNKNOWN'}`);
-        return json(
-          { available: false, reason: 'Não foi possível verificar agora. Tente novamente.' },
-          { status: 503, headers: { 'Cache-Control': 'no-store' } }
-        );
-      }
-      collision = Boolean(col);
-    } catch {
-      return json(
-        { available: false, reason: 'Não foi possível verificar agora. Tente novamente.' },
-        { status: 503, headers: { 'Cache-Control': 'no-store' } }
-      );
-    }
+  } catch (err: any) {
+    console.warn(`[AUTH_HANDLE_CHECK_ERROR]`, err?.message);
+    return json(
+      { available: false, reason: 'Não foi possível verificar agora. Tente novamente.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 
   if (collision) {

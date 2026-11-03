@@ -153,10 +153,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       try {
         const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env);
         if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
-      } catch {
-        const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-        if (p.data?.age_status) ageStatus = p.data.age_status;
-      }
+      } catch {}
     }
     if (ageStatus === 'MINOR') {
       error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');

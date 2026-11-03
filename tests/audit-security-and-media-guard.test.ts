@@ -9,7 +9,7 @@ import {
 import { signSessionJwt, getAuthSecret } from '../src/lib/server/yugabyte-auth';
 
 describe('Project Nox Final Security Audit — Priority 1: JWT & Session Security', () => {
-  const secret = 'project-nox-production-auth-key-2026-secure-token';
+  const secret = getAuthSecret();
   const validUserId = '11111111-1111-4111-8111-111111111111';
   const victimAdminId = '99999999-9999-4999-8999-999999999999';
 

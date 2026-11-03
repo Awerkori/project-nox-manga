@@ -71,7 +71,6 @@
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { invalidate } from '$app/navigation';
-  import { getSupabaseBrowserClient } from '$lib/supabase';
   import {
     Menu,
     Search,
@@ -197,70 +196,7 @@
   let sidebarMobileOpen = $state(false);
 
   // Global Realtime synchronization across sessions
-  let realtimeChannel: any = null;
-  let invalidateTimer: any = null;
 
-  function debouncedInvalidate() {
-    if (invalidateTimer) clearTimeout(invalidateTimer);
-    invalidateTimer = setTimeout(async () => {
-      await invalidate('scan:workspace');
-    }, 1500);
-  }
-
-  $effect(() => {
-    const scanId = data.currentScan?.id;
-    if (!scanId || typeof window === 'undefined') return;
-
-    const client = getSupabaseBrowserClient();
-    if (!client) return;
-
-    if (realtimeChannel) {
-      client.removeChannel(realtimeChannel);
-      realtimeChannel = null;
-    }
-
-    realtimeChannel = client
-      .channel(`scan_global_sync:${scanId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_chapter_stages',
-          filter: `scan_id=eq.${scanId}`
-        },
-        debouncedInvalidate
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_production_chapters',
-          filter: `scan_id=eq.${scanId}`
-        },
-        debouncedInvalidate
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_recruitment_openings',
-          filter: `scan_id=eq.${scanId}`
-        },
-        debouncedInvalidate
-      )
-      .subscribe();
-
-    return () => {
-      if (invalidateTimer) clearTimeout(invalidateTimer);
-      if (realtimeChannel) {
-        client.removeChannel(realtimeChannel);
-        realtimeChannel = null;
-      }
-    };
-  });
 
   let lastNavigatedHref = '';
 

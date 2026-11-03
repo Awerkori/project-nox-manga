@@ -47,35 +47,16 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     ratingRes = yugabyteBundle.rating;
   }
 
-  // 2. Resilient fallback to Supabase if not found in Yugabyte
+  // 2. Direct lookup in YugabyteDB if not found in bundle
   if (!work) {
-    let workQuery = locals.db
-      .from('works')
-      .select(WORK_FIELDS)
-      .eq('published', true);
-
-    if (isTargetUuid) {
-      workQuery = workQuery.eq('id', params.slug);
-    } else {
-      workQuery = workQuery.eq('slug', params.slug);
-    }
-
-    const result = await safeDbQuery(
-      workQuery.maybeSingle(),
-      4000,
-      'obra_work'
-    );
-    work = result.data;
-
-    if (!work && result.status === 'SUCCESS_EMPTY' && !isTargetUuid) {
-      const fallbackRes = await safeDbQuery(
-        locals.db.from('works').select(WORK_FIELDS).ilike('slug', params.slug).eq('published', true).maybeSingle(),
-        2000,
-        'obra_slug_fallback'
-      );
-      if (fallbackRes.data) {
-        redirect(301, `/obra/${fallbackRes.data.slug}`);
-      }
+    try {
+      const workSql = isTargetUuid
+        ? `SELECT * FROM public.works WHERE published = true AND id = $1 LIMIT 1;`
+        : `SELECT * FROM public.works WHERE published = true AND LOWER(slug) = LOWER($1) LIMIT 1;`;
+      const ybWorkRes = await executeYugabyteSql(workSql, [params.slug], platform?.env);
+      work = ybWorkRes.rows[0] || null;
+    } catch (err: any) {
+      console.warn('[OBRA_YUGABYTE_WORK_LOOKUP_WARN]', err?.message || err);
     }
   }
 
@@ -117,10 +98,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       try {
         const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env);
         if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
-      } catch {
-        const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-        if (p.data?.age_status) ageStatus = p.data.age_status;
-      }
+      } catch {}
     }
     if (ageStatus === 'MINOR') {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
@@ -194,43 +172,13 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
           setObraAuxCache(work.id, entry);
           return { ...entry, timestamp: Date.now() };
         } catch {
-          return withTimeout(
-            Promise.all([
-              locals.db
-                .from('comments')
-                .select(
-                  'id,user_id,body,created_at,parent_id,removed,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
-                )
-                .eq('work_id', work.id)
-                .is('chapter_id', null)
-                .order('created_at', { ascending: false })
-                .limit(150),
-              locals.db.from('likes').select('user_id').eq('work_id', work.id),
-              locals.db.rpc('work_metrics', { p_work: work.id }),
-              locals.db
-                .from('work_scans')
-                .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
-                .eq('work_id', work.id)
-            ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
-              const entry = {
-                comments: sanitizeComments(commentsRes?.data || []),
-                likes: likesRes?.data || [],
-                metrics: metricsRes?.data?.[0] || null,
-                workScans: scansRes?.data || []
-              };
-              setObraAuxCache(work.id, entry);
-              return { ...entry, timestamp: Date.now() };
-            }),
-            1200,
-            {
-              timestamp: Date.now(),
-              comments: cachedAuxEntry?.comments || [],
-              likes: cachedAuxEntry?.likes || [],
-              metrics: cachedAuxEntry?.metrics || null,
-              workScans: cachedAuxEntry?.workScans || []
-            },
-            'obra_public_aux'
-          );
+          return {
+            timestamp: Date.now(),
+            comments: cachedAuxEntry?.comments || [],
+            likes: cachedAuxEntry?.likes || [],
+            metrics: cachedAuxEntry?.metrics || null,
+            workScans: cachedAuxEntry?.workScans || []
+          };
         }
       });
 
@@ -261,24 +209,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
 
   const chaptersPromise = hasYugabyteWorkBundle
     ? Promise.resolve(chaptersList)
-    : fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env).then(async (list) => {
-        if (list && list.length > 0) return list;
-        // Resilient fallback to Supabase if Yugabyte chapters empty
-        let chaptersQuery = locals.db
-          .from('chapters')
-          .select('id,number,display_number,canonical_chapter_key,chapter_order_key,chapter_kind,edition,language,title,published_at,views_total')
-          .eq('work_id', work.id)
-          .order('chapter_order_key', { ascending: false, nullsFirst: false })
-          .order('canonical_chapter_key', { ascending: false, nullsFirst: false })
-          .order('id', { ascending: false });
-
-        if (!preview) {
-          chaptersQuery = chaptersQuery.not('published_at', 'is', null);
-        }
-
-        const res = await withTimeout(chaptersQuery, 3000, { data: [] } as any, 'obra_chapters_fallback');
-        return res?.data || [];
-      });
+    : fetchWorkChaptersFromYugabyte(work.id, preview, platform?.env);
 
   const tagsPromise = hasYugabyteWorkBundle
     ? Promise.resolve(publicTags)

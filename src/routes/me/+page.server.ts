@@ -1,5 +1,5 @@
 import { redirect, fail } from '@sveltejs/kit';
-import { WORK_FIELDS, privileged } from '$lib/server/db';
+import { WORK_FIELDS } from '$lib/server/db';
 import { withTimeout } from '$lib/server/resilience';
 import { normalizeAvatarCrop } from '$lib/avatar';
 import { storeImage, RateLimitError } from '$lib/server/media';
@@ -91,70 +91,9 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
       allAchievementsData = achRes.rows || [];
       memberAchievementsData = mAchRes.rows || [];
       inventoryData = invRes.rows || [];
-      ybSuccess = true;
     }
   } catch (ybErr) {
-    console.warn('ME_LOAD_YUGABYTE_FALLBACK', ybErr);
-  }
-
-  if (!ybSuccess && locals.db?.from) {
-    try {
-      const [
-        memberRes,
-        libraryRes,
-        historyRes,
-        notificationsRes,
-        allAchievementsRes,
-        memberAchievementsRes,
-        inventoryRes
-      ] = await withTimeout(
-        Promise.all([
-          locals.db
-            .from('members')
-            .select(`*`)
-            .eq('id', locals.user.id)
-            .maybeSingle(),
-          locals.db
-            .from('library')
-            .select(`*, works!inner(${WORK_FIELDS})`)
-            .eq('user_id', locals.user.id)
-            .eq('works.published', true)
-            .order('updated_at', { ascending: false }),
-          locals.db
-            .from('reading')
-            .select('chapter_id, work_id, page, max_page, completed_at, updated_at')
-            .eq('user_id', locals.user.id)
-            .order('updated_at', { ascending: false })
-            .limit(60),
-          locals.db
-            .from('notifications')
-            .select('*')
-            .eq('user_id', locals.user.id)
-            .order('created_at', { ascending: false })
-            .limit(50),
-          loadGlobalAchievements(locals.db),
-          locals.db
-            .from('member_achievements')
-            .select('achievement_id, unlocked_at')
-            .eq('user_id', locals.user.id),
-          locals.db
-            .from('member_inventory')
-            .select(`item_id, acquired_at, shop_items!inner(*)`)
-            .eq('user_id', locals.user.id)
-            .order('acquired_at', { ascending: false })
-        ]),
-        1200,
-        [{ data: locals.sessionCache?.profile || null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }] as any,
-        'me_load_batch'
-      );
-      memberData = memberRes?.data;
-      libraryData = libraryRes?.data || [];
-      historyData = historyRes?.data || [];
-      notificationsData = notificationsRes?.data || [];
-      allAchievementsData = allAchievementsRes?.data || [];
-      memberAchievementsData = memberAchievementsRes?.data || [];
-      inventoryData = inventoryRes?.data || [];
-    } catch {}
+    console.warn('ME_LOAD_YUGABYTE_ERROR', ybErr);
   }
 
   const rawMember =
@@ -210,7 +149,7 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 
   const enrichedHistory =
     Array.isArray(historyData) && historyData.length > 0
-      ? await enrichReadingRowsWithCatalog(historyData, locals.db, platform?.env)
+      ? await enrichReadingRowsWithCatalog(historyData, null, platform?.env)
       : [];
 
   return {
@@ -314,21 +253,6 @@ export const actions: Actions = {
       console.warn('me_profile_yugabyte_update_warning', ybProblem);
     }
 
-    // Best-effort sync to legacy Supabase
-    try {
-      const { data: updatedMemberFromSupa } = await privileged()
-        .from('members')
-        .update(update)
-        .eq('id', locals.user.id)
-        .select('id,username,display_name,bio,avatar_id,banner_id,avatar_frame_id,avatar_crop,banner_crop,name_color')
-        .maybeSingle();
-      if (!updatedMember && updatedMemberFromSupa) {
-        updatedMember = updatedMemberFromSupa;
-      }
-    } catch {
-      // Non-fatal if Supabase is over quota
-    }
-
     if (!updatedMember) {
       return fail(500, { message: 'Não foi possível salvar seu perfil. Nenhuma mídia nova foi ativada.' });
     }
@@ -369,37 +293,24 @@ export const actions: Actions = {
       console.warn('ME_SETTINGS_YUGABYTE_UPDATE_ERROR:', ybErr);
     }
 
-    try {
-      await locals.db
-        .from('members')
-        .update({
-          blur_nsfw: blurNsfw,
-          privacy_show_achievements: privacyShowAchievements,
-          privacy_show_cosmetics: privacyShowCosmetics,
-          privacy_show_favorites: privacyShowFavorites,
-          privacy_show_reading_history: privacyShowReadingHistory,
-          privacy_show_scans: privacyShowScans,
-          privacy_scan_mode: privacyScanMode
-        })
-        .eq('id', locals.user.id);
-    } catch {}
-
     invalidateUserSession(locals.user.id);
     return { success: true, action: 'settings' };
   },
 
-  setFeaturedAchievement: async ({ request, locals }: any) => {
+  setFeaturedAchievement: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const achievementId = (formData.get('achievement_id') as string)?.trim() || null;
 
-    if (locals.db?.rpc) {
-      try {
-        const { error } = await locals.db.rpc('set_featured_achievement', {
-          p_achievement_id: achievementId || ''
-        });
-        if (error) return fail(400, { message: error.message });
-      } catch {}
+    try {
+      await executeYugabyteSql(
+        `UPDATE public.members SET featured_achievement_id = $1 WHERE id = $2;`,
+        [achievementId, locals.user.id],
+        platform?.env
+      );
+      invalidateUserSession(locals.user.id);
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao atualizar conquista em destaque' });
     }
     return { success: true, action: 'featured_achievement' };
   },
@@ -412,14 +323,9 @@ export const actions: Actions = {
         [locals.user.id],
         platform?.env
       );
-    } catch {}
-    try {
-      await locals.db
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .eq('user_id', locals.user.id)
-        .is('read_at', null);
-    } catch {}
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao marcar notificações como lidas' });
+    }
     return { success: true, action: 'notifications' };
   },
 
@@ -434,14 +340,9 @@ export const actions: Actions = {
         [id, locals.user.id],
         platform?.env
       );
-    } catch {}
-    try {
-      await locals.db
-        .from('notifications')
-        .update({ read_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('user_id', locals.user.id);
-    } catch {}
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao marcar notificação' });
+    }
     return { success: true, markedReadId: id };
   },
 
@@ -456,13 +357,9 @@ export const actions: Actions = {
         [JSON.stringify(crop), locals.user.id],
         platform?.env
       );
-    } catch {}
-    try {
-      await locals.db
-        .from('members')
-        .update({ avatar_crop: crop })
-        .eq('id', locals.user.id);
-    } catch {}
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao atualizar enquadramento do avatar' });
+    }
     invalidateUserSession(locals.user.id);
     return { success: true, action: 'avatar_crop', crop };
   },
@@ -485,13 +382,9 @@ export const actions: Actions = {
         [JSON.stringify(crop), locals.user.id],
         platform?.env
       );
-    } catch {}
-    try {
-      await locals.db
-        .from('members')
-        .update({ banner_crop: crop })
-        .eq('id', locals.user.id);
-    } catch {}
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao atualizar enquadramento do banner' });
+    }
     invalidateUserSession(locals.user.id);
     return { success: true, action: 'banner_crop', crop };
   }

@@ -1,86 +1,42 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { adminStaffCache, adminStaffFlights, invalidateAdminStaffCache, withSingleFlightCache } from '$lib/server/admin-cache';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { PageServerLoad, Actions } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, platform }: any) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     throw redirect(303, '/entrar?redirect=/admin/staff');
   }
 
   const staffList = await withSingleFlightCache(adminStaffCache, adminStaffFlights, 'staff_list', 30_000, async () => {
-    let resolved: any[] = [];
     try {
-      // 1. First attempt: relational select on access_roles with members
-      const { data: staffRoles, error: joinErr } = await locals.db
-        .from('access_roles')
-        .select(`
-          user_id,
-          role,
-          suspended,
-          members (
-            id,
-            username,
-            display_name,
-            avatar_id,
-            xp,
-            created_at
-          )
-        `)
-        .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR'])
-        .order('role', { ascending: true });
+      const res = await executeYugabyteSql(
+        `SELECT ar.user_id, ar.role, ar.suspended,
+                m.username, m.display_name, m.avatar_id, m.xp, m.created_at
+         FROM public.access_roles ar
+         LEFT JOIN public.members m ON m.id = ar.user_id
+         WHERE ar.role IN ('ADMIN', 'STAFF_SITE', 'EDITOR')
+         ORDER BY ar.role ASC;`,
+        [],
+        platform?.env
+      );
 
-      if (!joinErr && staffRoles && staffRoles.length > 0) {
-        resolved = staffRoles.map((sr: any) => {
-          const m = Array.isArray(sr.members) ? sr.members[0] : (sr.members || sr.member);
-          return {
-            userId: sr.user_id,
-            role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
-            suspended: Boolean(sr.suspended),
-            updatedAt: m?.created_at || null,
-            username: m?.username || 'desconhecido',
-            displayName: m?.display_name || m?.username || 'Membro',
-            avatarId: m?.avatar_id || null,
-            xp: m?.xp || 0,
-            createdAt: m?.created_at || null
-          };
-        });
-      } else {
-        // 2. Fallback attempt: query access_roles and members separately to avoid join ambiguity
-        const { data: rawRoles } = await locals.db
-          .from('access_roles')
-          .select('user_id, role, suspended')
-          .in('role', ['ADMIN', 'STAFF_SITE', 'EDITOR']);
-
-        if (rawRoles && rawRoles.length > 0) {
-          const userIds = rawRoles.map((r: any) => r.user_id);
-          const { data: memberRows } = await locals.db
-            .from('members')
-            .select('id, username, display_name, avatar_id, xp, created_at')
-            .in('id', userIds);
-
-          const memberMap = new Map((memberRows || []).map((m: any) => [m.id, m]));
-
-          resolved = rawRoles.map((sr: any) => {
-            const m = memberMap.get(sr.user_id);
-            return {
-              userId: sr.user_id,
-              role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
-              suspended: Boolean(sr.suspended),
-              updatedAt: m?.created_at || null,
-              username: m?.username || 'desconhecido',
-              displayName: m?.display_name || m?.username || 'Membro',
-              avatarId: m?.avatar_id || null,
-              xp: m?.xp || 0,
-              createdAt: m?.created_at || null
-            };
-          });
-        }
-      }
+      return (res.rows || []).map((sr: any) => ({
+        userId: sr.user_id,
+        role: sr.role as 'ADMIN' | 'STAFF_SITE' | 'EDITOR',
+        suspended: Boolean(sr.suspended),
+        updatedAt: sr.created_at || null,
+        username: sr.username || 'desconhecido',
+        displayName: sr.display_name || sr.username || 'Membro',
+        avatarId: sr.avatar_id || null,
+        xp: sr.xp || 0,
+        createdAt: sr.created_at || null
+      }));
     } catch (err: any) {
       console.error('Falha inesperada ao carregar equipe:', err);
+      return [];
     }
-    return resolved;
   });
 
   const counts = {
@@ -99,7 +55,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-  updateRole: async ({ request, locals }) => {
+  updateRole: async ({ request, locals, platform }: any) => {
     if (!locals.user || locals.role !== 'ADMIN') {
       return fail(403, { error: 'Apenas administradores podem gerenciar cargos da equipe.' });
     }
@@ -112,13 +68,24 @@ export const actions: Actions = {
       return fail(400, { error: 'Parâmetros inválidos para alteração de cargo.' });
     }
 
-    const { error } = await locals.db.rpc('owner_action', {
-      p_action: 'role',
-      p_data: { id: userId, role }
-    });
-
-    if (error) {
-      return fail(400, { error: error.message || 'Falha ao atualizar cargo do usuário.' });
+    try {
+      if (role === 'USER') {
+        await executeYugabyteSql(
+          `DELETE FROM public.access_roles WHERE user_id = $1;`,
+          [userId],
+          platform?.env
+        );
+      } else {
+        await executeYugabyteSql(
+          `INSERT INTO public.access_roles (user_id, role, suspended)
+           VALUES ($1, $2, false)
+           ON CONFLICT (user_id, role) DO UPDATE SET suspended = false;`,
+          [userId, role],
+          platform?.env
+        );
+      }
+    } catch (err: any) {
+      return fail(400, { error: err?.message || 'Falha ao atualizar cargo do usuário.' });
     }
 
     invalidateUserSession(userId);
@@ -132,7 +99,7 @@ export const actions: Actions = {
     };
   },
 
-  promoteUser: async ({ request, locals }) => {
+  promoteUser: async ({ request, locals, platform }: any) => {
     if (!locals.user || locals.role !== 'ADMIN') {
       return fail(403, { error: 'Apenas administradores podem promover novos membros.' });
     }
@@ -145,13 +112,16 @@ export const actions: Actions = {
       return fail(400, { error: 'Selecione um usuário e um cargo válido (Staff ou Administrador).' });
     }
 
-    const { error } = await locals.db.rpc('owner_action', {
-      p_action: 'role',
-      p_data: { id: userId, role }
-    });
-
-    if (error) {
-      return fail(400, { error: error.message || 'Falha ao promover usuário.' });
+    try {
+      await executeYugabyteSql(
+        `INSERT INTO public.access_roles (user_id, role, suspended)
+         VALUES ($1, $2, false)
+         ON CONFLICT (user_id, role) DO UPDATE SET suspended = false;`,
+        [userId, role],
+        platform?.env
+      );
+    } catch (err: any) {
+      return fail(400, { error: err?.message || 'Falha ao promover usuário.' });
     }
 
     invalidateUserSession(userId);

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { readerChapter, readerContent } from '$lib/server/reader-editorial';
-import { withYugabyteReadSession } from '$lib/server/yugabyte';
+import { withYugabyteReadSession, executeYugabyteSql } from '$lib/server/yugabyte';
 
 // The public Reader already uses direct YSQL for canonical chapter identity.
 // Keep this API on the same authoritative path: PostgREST can otherwise hold
@@ -27,8 +27,10 @@ export const GET = async ({ params, locals, cookies, platform }) => {
       const rawAgeCookie = cookies.get('nox-age-status');
       let ageStatus = locals.sessionCache?.profile?.age_status || rawAgeCookie;
       if (!ageStatus && locals.user) {
-        const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-        if (p.data?.age_status) ageStatus = p.data.age_status;
+        try {
+          const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platformEnv);
+          if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
+        } catch {}
       }
       if (ageStatus === 'MINOR') {
         return json({ error: 'Conteúdo restrito (+18).' }, { status: 403 });

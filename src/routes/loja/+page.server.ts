@@ -18,17 +18,9 @@ export const load = async ({ locals, setHeaders, platform }: any) => {
         platform?.env
       );
       dbItems = ybRes.rows || [];
-    } catch {
-      const res = await withTimeout(
-        locals.db
-          .from('shop_items')
-          .select('*')
-          .order('order_index', { ascending: true }),
-        3000,
-        { data: [] } as any,
-        'shop_items'
-      );
-      dbItems = res?.data || [];
+    } catch (err) {
+      console.warn('[SHOP_ITEMS_SQL_ERROR]', err);
+      dbItems = [];
     }
     const dbMap = new Map(dbItems.map((it: any) => [it.id, it]));
     const curatedMap = new Map(CURATED_COSMETIC_ITEMS.map((it) => [it.id, it]));
@@ -118,25 +110,8 @@ export const load = async ({ locals, setHeaders, platform }: any) => {
       if (memRes.rows[0]) {
         p = memRes.rows[0];
       }
-    } catch {
-      const [invRes, profileRes] = await withTimeout(
-        Promise.all([
-          locals.db
-            .from('member_inventory')
-            .select('item_id')
-            .eq('user_id', locals.user.id),
-          locals.db
-            .from('members')
-            .select('id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
-            .eq('id', locals.user.id)
-            .maybeSingle()
-        ]),
-        1200,
-        [{ data: [] }, { data: profile || null }] as any,
-        'shop_user_data'
-      );
-      userInventory = (invRes?.data || []).map((r: any) => r.item_id);
-      p = profileRes?.data || profile;
+    } catch (err) {
+      console.warn('[SHOP_USER_DATA_SQL_ERROR]', err);
     }
     if (p) {
       if (locals.sessionCache?.profile && typeof p.xp === 'number') {

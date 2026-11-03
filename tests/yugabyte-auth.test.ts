@@ -151,4 +151,23 @@ describe('yugabyte-auth JWT and cookie handling', () => {
     const extracted = extractFullAuthCookie(cookies);
     expect(extracted).toBe(sessionVal);
   });
+
+  it('strictly rejects tokens issued by Supabase (iss: supabase or ref: izregkwaqdygwioqzwwo)', async () => {
+    const secret = getAuthSecret();
+    const nowSec = Math.floor(Date.now() / 1000);
+    const supabasePayload = {
+      sub: '44444444-5555-6666-7777-888888888888',
+      iss: 'supabase',
+      ref: 'izregkwaqdygwioqzwwo',
+      role: 'authenticated',
+      exp: nowSec + 3600
+    };
+
+    const token = await signSessionJwt(supabasePayload, secret);
+    const verified = await verifySessionJwt(token, secret);
+    expect(verified).toBeNull();
+
+    const decoded = decodeSessionJwt(token);
+    expect(decoded.jwt).toBeNull();
+  });
 });

@@ -255,44 +255,9 @@ export const actions = {
         }
         return { success: true, message: 'Confira seu e-mail e abra o link para confirmar sua conta.' };
       }
-      if (ybReg.error?.status === 400) {
-        return fail(400, { message: ybReg.error.message });
-      }
-
-      // Secondary fallback to Supabase if Yugabyte had a transient error
-      if (typeof locals.db?.from === 'function') {
-        const { data: collision } = await locals.db
-          .from('members')
-          .select('id')
-          .ilike('username', rawUsername)
-          .maybeSingle();
-
-        if (collision) {
-          return fail(400, { message: `O nome de usuário @${rawUsername} já está em uso.` });
-        }
-      }
-
-      const signUpOptions: { emailRedirectTo: string; data?: Record<string, string> } = {
-        emailRedirectTo: `${redirectOrigin}/auth/confirm`
-      };
-      signUpOptions.data = {
-        username: rawUsername,
-        ...(displayName ? { display_name: displayName } : {})
-      };
-
-      const { error } = await locals.db.auth.signUp({
-        email,
-        password,
-        options: signUpOptions
+      return fail(400, {
+        message: ybReg.error?.message || 'Não foi possível cadastrar no momento. Tente novamente mais tarde.'
       });
-      if (error)
-        return fail(400, {
-          message:
-            error.code === 'over_email_send_rate_limit'
-              ? 'Limite de envio atingido. Tente novamente mais tarde.'
-              : 'Não foi possível cadastrar no momento. Tente novamente mais tarde.'
-        });
-      return { success: true, message: 'Confira seu e-mail e abra o link para confirmar sua conta.' };
     }
     if (mode === 'recuperar') {
       let emailDispatched = false;
@@ -383,13 +348,7 @@ export const actions = {
         console.error('[YUGABYTE_PASSWORD_UPDATE_ERROR]', ybErr);
       }
 
-      // Secondary fallback to Supabase updateUser
-      if (!passwordUpdated && locals.db?.auth?.updateUser) {
-        try {
-          const { error } = await locals.db.auth.updateUser({ password });
-          if (!error) passwordUpdated = true;
-        } catch {}
-      }
+
 
       if (!passwordUpdated) {
         return fail(400, { message: 'Não foi possível alterar a senha. Solicite um novo link.' });

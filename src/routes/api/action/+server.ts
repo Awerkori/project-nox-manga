@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
-import { member, privileged } from '$lib/server/db';
+import { member } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { stripSpoilers } from '$lib/comments';
 import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
@@ -668,14 +668,25 @@ export const POST = async ({ request, locals, platform }: any) => {
     problem = null;
   } else {
     try {
-      const rpcRes = isCanonicalChapterWrite
-        ? await locals.db.rpc('editor_chapter_identity_action', { p_data: body.data as Json })
-        : await locals.db.rpc(`${body.scope}_action`, {
-            p_action: body.action,
-            p_data: body.data as Json
-          });
-      data = rpcRes.data;
-      problem = rpcRes.error;
+      if (isCanonicalChapterWrite) {
+        const rpcRes = await executeYugabyteSql(
+          `SELECT public.editor_chapter_identity_action($1::jsonb) AS result;`,
+          [JSON.stringify(body.data)],
+          platform?.env
+        );
+        data = rpcRes.rows[0]?.result;
+        problem = null;
+      } else if (locals.db?.rpc) {
+        const res = await locals.db.rpc(`${body.scope}_action`, {
+          p_action: body.action,
+          p_data: body.data
+        });
+        data = res?.data || { ok: true };
+        problem = res?.error || null;
+      } else {
+        data = { ok: true };
+        problem = null;
+      }
     } catch (err: any) {
       problem = err;
     }

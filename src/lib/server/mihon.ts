@@ -1,4 +1,4 @@
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from './yugabyte';
 
 export async function hashToken(token: string): Promise<string> {
   const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -22,7 +22,7 @@ export interface MihonAuthResult {
   error?: string;
 }
 
-export async function verifyMihonAuth(request: Request): Promise<MihonAuthResult> {
+export async function verifyMihonAuth(request: Request, platformEnv?: any): Promise<MihonAuthResult> {
   const authHeader = request.headers.get('Authorization') || '';
   const match = authHeader.match(/^Bearer\s+([A-Za-z0-9_\-]+)$/i);
 
@@ -33,28 +33,44 @@ export async function verifyMihonAuth(request: Request): Promise<MihonAuthResult
   const rawToken = match[1];
   const hash = await hashToken(rawToken);
 
-  const admin = privileged();
-  const { data, error } = await admin
-    .from('mihon_tokens')
-    .select('id, user_id, expires_at, revoked, members(id, username, age_status, xp, is_test)')
-    .eq('token_hash', hash)
-    .eq('revoked', false)
-    .gt('expires_at', new Date().toISOString())
-    .maybeSingle();
+  try {
+    const res = await executeYugabyteSql(
+      `SELECT t.id, t.user_id, t.expires_at, t.revoked,
+              m.id AS member_id, m.username, m.age_status, m.xp, m.is_test
+       FROM public.mihon_tokens t
+       JOIN public.members m ON m.id = t.user_id
+       WHERE t.token_hash = $1
+         AND t.revoked = false
+         AND t.expires_at > now()
+       LIMIT 1;`,
+      [hash],
+      platformEnv
+    );
 
-  if (error || !data || !data.members) {
-    return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token inválido ou expirado' };
+    const row = res.rows[0];
+    if (!row) {
+      return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token inválido ou expirado' };
+    }
+
+    const member: MihonUser = {
+      id: row.member_id || row.user_id,
+      username: row.username,
+      age_status: row.age_status || 'UNKNOWN',
+      xp: row.xp || 0,
+      is_test: Boolean(row.is_test)
+    };
+
+    return {
+      authenticated: true,
+      user: member,
+      ageStatus: member.age_status || 'UNKNOWN'
+    };
+  } catch (err: any) {
+    return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Erro ao verificar token' };
   }
-
-  const member = Array.isArray(data.members) ? data.members[0] : data.members;
-  return {
-    authenticated: true,
-    user: member as unknown as MihonUser,
-    ageStatus: (member as { age_status?: 'UNKNOWN' | 'MINOR' | 'ADULT' }).age_status || 'UNKNOWN'
-  };
 }
 
-export async function generateMihonToken(userId: string, deviceName = 'Mihon App'): Promise<{ token: string; expiresAt: string }> {
+export async function generateMihonToken(userId: string, deviceName = 'Mihon App', platformEnv?: any): Promise<{ token: string; expiresAt: string }> {
   const randomBytes = new Uint8Array(24);
   crypto.getRandomValues(randomBytes);
   const randomHex = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -65,15 +81,12 @@ export async function generateMihonToken(userId: string, deviceName = 'Mihon App
   expiresDate.setDate(expiresDate.getDate() + 180); // 180 days validity
   const expiresAt = expiresDate.toISOString();
 
-  const admin = privileged();
-  const { error } = await admin.from('mihon_tokens').insert({
-    user_id: userId,
-    token_hash: hash,
-    token_type: 'access',
-    device_name: deviceName,
-    expires_at: expiresAt
-  });
+  await executeYugabyteSql(
+    `INSERT INTO public.mihon_tokens (user_id, token_hash, token_type, device_name, expires_at)
+     VALUES ($1, $2, 'access', $3, $4::timestamptz);`,
+    [userId, hash, deviceName, expiresAt],
+    platformEnv
+  );
 
-  if (error) throw new Error('Não foi possível registrar o token.');
   return { token, expiresAt };
 }

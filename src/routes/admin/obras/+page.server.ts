@@ -1,11 +1,11 @@
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import {
   adminAuxPanelCache,
   adminAuxPanelFlights,
   withSingleFlightCache
 } from '$lib/server/admin-cache';
 
-export const load = async ({ locals, url }: any) => {
+export const load = async ({ url, platform }: any) => {
   const search = (url.searchParams.get('q') || '').trim();
   const kind = (
     url.searchParams.get('tipo') ||
@@ -30,54 +30,50 @@ export const load = async ({ locals, url }: any) => {
     cacheKey,
     20_000,
     async () => {
-      const db = locals.db || privileged();
+      let whereClauses: string[] = ['1=1'];
+      let params: any[] = [];
 
-      let works: any[];
-      let total: number;
-      let totalPages: number;
-
-      try {
-        const rpcRes = await db.rpc('admin_search_works', {
-          p_search: search || null,
-          p_kind: kind,
-          p_status: status,
-          p_page: page,
-          p_per_page: perPage
-        });
-
-        if (!rpcRes.error && rpcRes.data) {
-          works = rpcRes.data.works || [];
-          total = Number(rpcRes.data.total) || 0;
-          totalPages = Number(rpcRes.data.total_pages) || 1;
-        } else {
-          throw new Error(rpcRes.error?.message || 'RPC returned no data');
-        }
-      } catch (err: any) {
-        console.warn('admin_search_works RPC fallback executing:', err?.message);
-        let q = db
-          .from('works')
-          .select(
-            'id,slug,title,aliases,synopsis,description,author,artist,kind,status,year,age_rating,published,featured,cover_id,updated_at,created_at,content_rating,views_total',
-            { count: 'exact' }
-          );
-
-        if (kind !== 'ALL') q = q.eq('kind', kind);
-        if (status === 'PUBLISHED') q = q.eq('published', true);
-        if (status === 'DRAFT') q = q.or('published.is.null,published.eq.false');
-        if (search) {
-          q = q.or(
-            `title.ilike.%${search}%,slug.ilike.%${search}%,search_text.ilike.%${search}%,author.ilike.%${search}%`
-          );
-        }
-
-        const { data: fallbackData, count: fallbackCount } = await q
-          .order('updated_at', { ascending: false })
-          .range((page - 1) * perPage, page * perPage - 1);
-
-        works = fallbackData || [];
-        total = fallbackCount || works.length;
-        totalPages = Math.ceil(total / perPage) || 1;
+      if (kind !== 'ALL') {
+        params.push(kind);
+        whereClauses.push(`kind = $${params.length}`);
       }
+      if (status === 'PUBLISHED') {
+        whereClauses.push(`published = true`);
+      } else if (status === 'DRAFT') {
+        whereClauses.push(`(published IS NULL OR published = false)`);
+      }
+      if (search) {
+        params.push(`%${search}%`);
+        const idx = params.length;
+        whereClauses.push(`(title ILIKE $${idx} OR slug ILIKE $${idx} OR author ILIKE $${idx})`);
+      }
+
+      const whereSql = whereClauses.join(' AND ');
+
+      const countRes = await executeYugabyteSql<{ cnt: number }>(
+        `SELECT COUNT(*)::int AS cnt FROM public.works WHERE ${whereSql};`,
+        params,
+        platform?.env
+      ).catch(() => ({ rows: [{ cnt: 0 }] }));
+      const total = countRes.rows[0]?.cnt || 0;
+      const totalPages = Math.ceil(total / perPage) || 1;
+
+      const offset = (page - 1) * perPage;
+      const dataParams = [...params, perPage, offset];
+      const limitParamIdx = params.length + 1;
+      const offsetParamIdx = params.length + 2;
+
+      const dataRes = await executeYugabyteSql(
+        `SELECT id, slug, title, aliases, synopsis, description, author, artist, kind, status, year, age_rating, published, featured, cover_id, updated_at, created_at, content_rating, views_total
+         FROM public.works
+         WHERE ${whereSql}
+         ORDER BY updated_at DESC
+         LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx};`,
+        dataParams,
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+
+      const works = dataRes.rows || [];
 
       return {
         works,

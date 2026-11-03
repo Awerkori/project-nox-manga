@@ -1,5 +1,4 @@
 import { json } from '@sveltejs/kit';
-import { privileged } from '$lib/server/db';
 import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 
 async function hashString(str: string): Promise<string> {
@@ -166,26 +165,6 @@ export const POST = async ({ params, locals, request, getClientAddress, platform
     }
   } catch (err: any) {
     console.warn('[VIEW_YUGABYTE_RECORD_ERROR]', err?.message || err);
-  }
-
-  // 2. Synchronize with Supabase in background only when counted
-  if (yugabyteCounted) {
-    const syncPromise = (async () => {
-      try {
-        const db = privileged();
-        await db.rpc('record_chapter_view', {
-          p_chapter_id: chapterId,
-          p_user_id: userId ?? undefined,
-          p_anon_hash: anonHash ?? undefined,
-          p_origin: 'WEB'
-        });
-      } catch {
-        // Non-blocking
-      }
-    })();
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(syncPromise);
-    }
   }
 
   if (yugabyteCounted) {

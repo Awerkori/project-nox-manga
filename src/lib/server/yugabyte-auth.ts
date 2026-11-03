@@ -29,10 +29,6 @@ export interface AuthSession {
 
 export const AUTH_COOKIE_NAME = 'nox-auth-token';
 export const LEGACY_AUTH_COOKIE_NAME = 'sb-izregkwaqdygwioqzwwo-auth-token';
-const DEFAULT_AUTH_SECRET = 'project-nox-production-auth-key-2026-secure-token';
-const PRODUCTION_AUTH_SECRET = 'f382a52479e0004ff94cb34891b29a259c77c6883b4c1074b1263d6b1d8e1215';
-const DEV_AUTH_SECRET = '7d32bfd2c16ff793a97f2508dd91eb095104f23ee7c37b0573ae81dddbe84ca7';
-
 export function getAuthSecrets(platformEnv?: any): string[] {
   const secrets = new Set<string>();
   const add = (s?: string) => {
@@ -41,25 +37,20 @@ export function getAuthSecrets(platformEnv?: any): string[] {
   add(platformEnv?.AUTH_SECRET);
   add(platformEnv?.JWT_SECRET);
   add(platformEnv?.BETTER_AUTH_SECRET);
-  add(platformEnv?.SUPABASE_JWT_SECRET);
-  add(platformEnv?.SUPABASE_SERVICE_ROLE_KEY);
   if (typeof process !== 'undefined' && process.env) {
     add(process.env.AUTH_SECRET);
     add(process.env.JWT_SECRET);
     add(process.env.BETTER_AUTH_SECRET);
-    add(process.env.SUPABASE_JWT_SECRET);
-    add(process.env.SUPABASE_SERVICE_ROLE_KEY);
   }
-  // Authoritative fallback secrets for Cloudflare Worker environments where env secrets are not bound
-  add(DEV_AUTH_SECRET);
-  add(PRODUCTION_AUTH_SECRET);
-  add(DEFAULT_AUTH_SECRET);
   return Array.from(secrets);
 }
 
 export function getAuthSecret(platformEnv?: any): string {
   const secrets = getAuthSecrets(platformEnv);
-  return secrets[0] || DEV_AUTH_SECRET;
+  if (secrets.length === 0) {
+    throw new Error('AUTH_SECRET_MISSING: Nenhum segredo criptográfico de autenticação configurado no ambiente.');
+  }
+  return secrets[0];
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -140,6 +131,11 @@ export async function verifySessionJwt(token: string, secret: string): Promise<D
 
     // Reject anonymous tokens masquerading as user sessions
     if ((payload as any).role === 'anon' || payload.aud === 'anon') {
+      return null;
+    }
+
+    // Explicitly reject Supabase-issued tokens (Supabase Zero policy)
+    if ((payload as any).iss === 'supabase' || (payload as any).ref === 'izregkwaqdygwioqzwwo') {
       return null;
     }
 
@@ -344,11 +340,16 @@ export function clearAllAuthCookies(cookies: Cookies): void {
     cookies.delete(AUTH_COOKIE_NAME, { path: '/' });
     cookies.delete(LEGACY_AUTH_COOKIE_NAME, { path: '/' });
     cookies.delete('nox-auth-token', { path: '/' });
+    for (let i = 0; i < 5; i++) {
+      cookies.delete(`${AUTH_COOKIE_NAME}.${i}`, { path: '/' });
+      cookies.delete(`${LEGACY_AUTH_COOKIE_NAME}.${i}`, { path: '/' });
+      cookies.delete(`nox-auth-token.${i}`, { path: '/' });
+    }
   } catch {}
 
   if (typeof cookies.getAll === 'function') {
     for (const c of cookies.getAll()) {
-      if (/^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === AUTH_COOKIE_NAME || c.name === LEGACY_AUTH_COOKIE_NAME || c.name === 'nox-auth-token') {
+      if (/^(?:sb-.*-auth-token|nox-auth-token)(?:\.\d+)?$/.test(c.name) || c.name === AUTH_COOKIE_NAME || c.name === LEGACY_AUTH_COOKIE_NAME) {
         cookies.delete(c.name, { path: '/' });
       }
     }

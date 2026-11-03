@@ -1,4 +1,3 @@
-import { databaseConfig } from '$lib/server/config';
 import { withTimeout } from '$lib/server/resilience';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
@@ -142,7 +141,11 @@ export const load = async ({ locals, url, cookies, platform }: any) => {
     userScans =
       userScansRes?.data?.map((m: any) => ({
         role: m.role,
-        ...m.scans
+        id: m.id || m.scan_id || m.scans?.id,
+        name: m.name || m.scans?.name,
+        slug: m.slug || m.scans?.slug,
+        logo_id: m.logo_id || m.scans?.logo_id,
+        status: m.status || m.scans?.status
       })) || [];
   }
 

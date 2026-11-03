@@ -19,8 +19,6 @@
     Copy
   } from '@lucide/svelte';
   import { onMount, onDestroy } from 'svelte';
-  import { getSupabaseBrowserClient } from '$lib/supabase';
-  import type { RealtimeChannel } from '@supabase/supabase-js';
   import { enhance } from '$app/forms';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
@@ -191,21 +189,12 @@
     }
   }
 
-  // Realtime Supabase Channel Subscription & Typing Broadcast
-  let realtimeChannel: RealtimeChannel | null = null;
+  // Chat Polling & Typing State
+  let chatPollTimer: any = null;
   let typingUsers = $state<Record<string, { username: string; timer: any }>>({});
-  let lastTypingBroadcast = 0;
 
   function broadcastTyping() {
-    const now = Date.now();
-    if (now - lastTypingBroadcast > 2000 && realtimeChannel) {
-      lastTypingBroadcast = now;
-      realtimeChannel.send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: { userId: currentUserId, username: myDisplayName }
-      });
-    }
+    // Native chat typing broadcast stub
   }
 
   let typingText = $derived.by(() => {
@@ -239,53 +228,10 @@
 
   onMount(() => {
     void loadChatSnapshot();
-    const client = getSupabaseBrowserClient();
-    if (!client || !currentScanId) return;
-
-    realtimeChannel = client
-      .channel('scan_chat:' + currentScanId, {
-        config: { broadcast: { self: false } }
-      })
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_messages',
-          filter: 'scan_id=eq.' + currentScanId
-        },
-        async () => {
-          await loadChatSnapshot();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scan_message_reactions'
-        },
-        async () => {
-          await loadChatSnapshot();
-        }
-      )
-      .on('broadcast', { event: 'typing' }, ({ payload }: any) => {
-        if (!payload || payload.userId === currentUserId) return;
-        const uid = payload.userId;
-        if (typingUsers[uid]?.timer) {
-          clearTimeout(typingUsers[uid].timer);
-        }
-        const timer = setTimeout(() => {
-          const copy = { ...typingUsers };
-          delete copy[uid];
-          typingUsers = copy;
-        }, 3000);
-        typingUsers = {
-          ...typingUsers,
-          [uid]: { username: payload.username || 'Membro', timer }
-        };
-      })
-      .subscribe();
+    // Poll chat updates every 8 seconds while mounted
+    chatPollTimer = setInterval(() => {
+      void loadChatSnapshot();
+    }, 8000);
 
     // Deep link hash handling (#msg-<id>)
     if (typeof window !== 'undefined' && window.location.hash?.startsWith('#msg-')) {
@@ -303,8 +249,9 @@
   });
 
   onDestroy(() => {
-    if (realtimeChannel) {
-      realtimeChannel.unsubscribe();
+    if (chatPollTimer) {
+      clearInterval(chatPollTimer);
+      chatPollTimer = null;
     }
     for (const item of Object.values(typingUsers)) {
       if (item.timer) clearTimeout(item.timer);

@@ -1,4 +1,4 @@
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { normalizeBotReference, KNOWN_MANGA_SHARDS } from '$lib/server/storage-router';
 
 export type ReconciliationStatus =
@@ -171,21 +171,22 @@ export function auditMediaRecord(
 /**
  * Executes a non-destructive storage reconciliation sampling audit across all 7 storage pools.
  */
-export async function runStorageReconciliationAudit(sampleLimitPerPool: number = 50): Promise<ReconciliationReport> {
+export async function runStorageReconciliationAudit(sampleLimitPerPool: number = 50, platformEnv?: any): Promise<ReconciliationReport> {
   const timestamp = new Date().toISOString();
-  const db = privileged();
 
   // 1. Query all pools
-  const { data: pools } = await db.from('storage_pools').select('id, key');
+  const poolsRes = await executeYugabyteSql(`SELECT id, key FROM public.storage_pools;`, [], platformEnv).catch(() => ({ rows: [] }));
+  const pools = poolsRes.rows || [];
   const poolsMap = new Map<string, { id: string; key: string }>();
-  for (const p of pools || []) {
+  for (const p of pools) {
     poolsMap.set(p.id, p);
   }
 
   // 2. Query all shards
-  const { data: shards } = await db.from('storage_shards').select('id, pool_id, bot_reference, display_name');
+  const shardsRes = await executeYugabyteSql(`SELECT id, pool_id, bot_reference, display_name FROM public.storage_shards;`, [], platformEnv).catch(() => ({ rows: [] }));
+  const shards = shardsRes.rows || [];
   const shardsMap = new Map<string, ShardLookup>();
-  for (const s of shards || []) {
+  for (const s of shards) {
     const pool = poolsMap.get(s.pool_id);
     shardsMap.set(s.id, {
       id: s.id,
@@ -197,24 +198,29 @@ export async function runStorageReconciliationAudit(sampleLimitPerPool: number =
   }
 
   // 3. Sample media records
-  const { data: sampleMedia } = await db
-    .from('media')
-    .select('id, provider, provider_key, purpose, storage_pool_id, storage_shard_id, bot_reference, chapter_id, scan_id')
-    .order('created_at', { ascending: false })
-    .limit(sampleLimitPerPool * 7);
+  const sampleRes = await executeYugabyteSql(
+    `SELECT id, provider, provider_key, purpose, storage_pool_id, storage_shard_id, bot_reference, chapter_id, scan_id
+     FROM public.media
+     ORDER BY created_at DESC
+     LIMIT $1;`,
+    [sampleLimitPerPool * 7],
+    platformEnv
+  ).catch(() => ({ rows: [] }));
+  const sampleMedia = sampleRes.rows || [];
 
   // 4. Gather chapter IDs from sample for existence check
-  const chapterIdsToCheck = (sampleMedia || [])
-    .map((m) => m.chapter_id)
-    .filter((id): id is string => Boolean(id));
+  const chapterIdsToCheck = sampleMedia
+    .map((m: any) => m.chapter_id)
+    .filter((id: any): id is string => Boolean(id));
 
   let existingChapterIds: Set<string> | undefined;
   if (chapterIdsToCheck.length > 0) {
-    const { data: foundChapters } = await db
-      .from('chapters')
-      .select('id')
-      .in('id', chapterIdsToCheck);
-    existingChapterIds = new Set((foundChapters || []).map((c) => c.id));
+    const chRes = await executeYugabyteSql(
+      `SELECT id FROM public.chapters WHERE id = ANY($1::uuid[]);`,
+      [chapterIdsToCheck],
+      platformEnv
+    ).catch(() => ({ rows: [] }));
+    existingChapterIds = new Set(chRes.rows.map((c: any) => c.id));
   }
 
   const breakdown: Record<ReconciliationStatus, number> = {
