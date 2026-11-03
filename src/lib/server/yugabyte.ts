@@ -314,47 +314,39 @@ export async function executeYugabyteSql<T = any>(
   if (hyperdrive?.connectionString) {
     const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node);
     if (isNode) {
+      const pool = getSharedPool(hyperdrive.connectionString);
+      const queryStart = performance.now();
+      const res = await pool.query(query, params);
+      const queryDur = Math.round(performance.now() - queryStart);
+      if (queryDur > 500) {
+        console.warn(`[YUGABYTE_SLOW_QUERY] query=${queryDur}ms`);
+      }
+      return {
+        rows: res.rows || [],
+        rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
+      };
+    } else {
+      const connectStart = performance.now();
+      const client = new Client({
+        connectionString: hyperdrive.connectionString,
+        connectionTimeoutMillis: 5000,
+        query_timeout: 8000
+      });
       try {
-        const pool = getSharedPool(hyperdrive.connectionString);
+        await client.connect();
+        const connectDur = Math.round(performance.now() - connectStart);
         const queryStart = performance.now();
-        const res = await pool.query(query, params);
+        const res = await client.query(query, params);
         const queryDur = Math.round(performance.now() - queryStart);
         if (queryDur > 500) {
-          console.warn(`[YUGABYTE_SLOW_QUERY] query=${queryDur}ms`);
+          console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
         }
         return {
           rows: res.rows || [],
           rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
         };
-      } catch (hdErr: any) {
-        throw hdErr;
-      }
-    } else {
-      const connectStart = performance.now();
-      try {
-        const client = new Client({
-          connectionString: hyperdrive.connectionString,
-          connectionTimeoutMillis: 5000,
-          query_timeout: 8000
-        });
-        try {
-          await client.connect();
-          const connectDur = Math.round(performance.now() - connectStart);
-          const queryStart = performance.now();
-          const res = await client.query(query, params);
-          const queryDur = Math.round(performance.now() - queryStart);
-          if (queryDur > 500) {
-            console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
-          }
-          return {
-            rows: res.rows || [],
-            rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
-          };
-        } finally {
-          await client.end().catch(() => {});
-        }
-      } catch (hdErr: any) {
-        throw hdErr;
+      } finally {
+        await client.end().catch(() => {});
       }
     }
   }
