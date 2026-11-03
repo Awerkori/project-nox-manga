@@ -1,10 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { withTimeout } from '$lib/server/resilience';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 const startTime = Date.now();
 
-export const GET: RequestHandler = async ({ locals, url }) => {
+export const GET: RequestHandler = async ({ locals, url, platform }: any) => {
   const checkDb = url.searchParams.has('db');
 
   const baseResponse: Record<string, any> = {
@@ -23,34 +24,21 @@ export const GET: RequestHandler = async ({ locals, url }) => {
     });
   }
 
-  // Bounded DB probe with 1000ms strict timeout
+  // Bounded DB probe with 1000ms strict timeout against authoritative YugabyteDB
   try {
     const probeRes = await withTimeout(
-      locals.db.from('works').select('id').limit(1),
+      executeYugabyteSql('SELECT id FROM works LIMIT 1;', [], platform?.env),
       1000,
-      { data: null, error: { message: 'Database probe timeout (1000ms)' } } as any,
+      null,
       'health_db_probe'
     );
 
-    if (probeRes?.error) {
-      return json(
-        {
-          ...baseResponse,
-          status: 'degraded',
-          db: {
-            status: 'unreachable_or_degraded',
-            error: probeRes.error.message
-          }
-        },
-        {
-          status: 200,
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Project-Nox-Edge': 'healthy',
-            'X-Project-Nox-DB': 'degraded'
-          }
-        }
-      );
+    if (!probeRes || !probeRes.rows) {
+      // Fallback probe
+      const fallback = await locals.db.from('works').select('id').limit(1);
+      if (fallback?.error) {
+        throw new Error(fallback.error.message);
+      }
     }
 
     return json(

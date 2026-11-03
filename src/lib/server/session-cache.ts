@@ -1,6 +1,7 @@
 import { withTimeout } from './resilience';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from './yugabyte';
+import { getAuthSecret, verifySessionJwt } from './yugabyte-auth';
 
 export interface DecodedJwt {
   sub: string;
@@ -130,31 +131,40 @@ export async function resolveSessionData(
       if (cachedVerification && cachedVerification.userId === decoded.sub && cachedVerification.expiresAt > now) {
         identityVerified = true;
       } else {
-        const verified = await withTimeout(
-          db.auth.getUser(accessToken),
-          2000,
-          null,
-          'session_verify_user'
-        );
-        if (!verified?.data?.user || verified.error || verified.data.user.id !== decoded.sub) {
-          const errMsg = String(verified?.error?.message || '');
-          const isQuotaOrDegraded = !verified || /exceed_cached_egress_quota|payment required|402|fetch failed|network|timeout/i.test(errMsg) || (verified?.error as any)?.status === 402;
-          if (isQuotaOrDegraded && decoded.sub && (!decoded.exp || decoded.exp * 1000 > now)) {
-            try {
-              const mem = await executeYugabyteSql(`SELECT id FROM members WHERE id = $1 LIMIT 1;`, [decoded.sub], platformEnv);
-              if (mem.rows[0]) {
-                identityVerified = true;
-              }
-            } catch {
-              // fallback
-            }
-          }
-          if (!identityVerified) {
-            throw new Error('SESSION_NOT_VERIFIED');
-          }
-        } else {
+        // Fast-path: Web Crypto local HMAC verification
+        const authSecret = getAuthSecret(platformEnv);
+        const verifiedByJwt = await verifySessionJwt(accessToken, authSecret);
+        if (verifiedByJwt && verifiedByJwt.sub === decoded.sub) {
           identityVerified = true;
+        } else if (decoded.sub && (!decoded.exp || decoded.exp * 1000 > now)) {
+          // Authoritative YugabyteDB membership check
+          try {
+            const mem = await executeYugabyteSql(`SELECT id FROM members WHERE id = $1 LIMIT 1;`, [decoded.sub], platformEnv);
+            if (mem.rows[0]) {
+              identityVerified = true;
+            }
+          } catch {
+            // fallback
+          }
         }
+
+        // Secondary fallback for legacy/external sessions if not yet verified
+        if (!identityVerified && db?.auth?.getUser) {
+          const verified = await withTimeout(
+            db.auth.getUser(accessToken),
+            800,
+            null,
+            'session_verify_user'
+          );
+          if (verified?.data?.user && verified.data.user.id === decoded.sub) {
+            identityVerified = true;
+          }
+        }
+
+        if (!identityVerified) {
+          throw new Error('SESSION_NOT_VERIFIED');
+        }
+
         if (verifiedTokens.size > 1000) {
           const oldest = verifiedTokens.keys().next().value;
           if (oldest) verifiedTokens.delete(oldest);

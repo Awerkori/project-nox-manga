@@ -4,10 +4,29 @@ import {
   fetchHomeBundleFromYugabyte,
   fetchHomeWorksFromYugabyte,
   fetchMostReadFromYugabyte,
-  fetchRecentReleasesFromYugabyte
+  fetchRecentReleasesFromYugabyte,
+  executeYugabyteSql
 } from '$lib/server/yugabyte';
 import { chapterDisplayNumber, compareChapterIdentity } from '$lib/chapter-identity';
 import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
+
+async function fetchUserReadingFromYugabyte(userId: string, platformEnv?: any): Promise<{ data: any[] }> {
+  try {
+    const res = await executeYugabyteSql(
+      `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at
+       FROM reading r
+       JOIN chapters c ON c.id = r.chapter_id
+       WHERE r.user_id = $1
+       ORDER BY r.updated_at DESC
+       LIMIT 20;`,
+      [userId],
+      platformEnv
+    );
+    return { data: res.rows || [] };
+  } catch {
+    return { data: [] };
+  }
+}
 
 type HomeCachePayload = {
   timestamp: number;
@@ -53,16 +72,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
 
   // If public content cache is fresh and user is authenticated, use cached public content and only fetch personal reading data
   if (hasFreshPublicCache && homePublicCache && locals.user) {
-    const readingRes = await safeDbQuery(
-      locals.db
-        .from('reading')
-        .select('chapter_id,work_id,page,max_page,completed_at,updated_at')
-        .eq('user_id', locals.user.id)
-        .order('updated_at', { ascending: false })
-        .limit(20),
-      3000,
-      'home_reading'
-    );
+    const readingRes = await fetchUserReadingFromYugabyte(locals.user.id, platform?.env);
     const enrichedReadingRows =
       readingRes.data && readingRes.data.length > 0
         ? await enrichReadingRowsWithCatalog(readingRes.data as any[], locals.db, platform?.env)
@@ -116,21 +126,12 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
     };
   }
 
-  // Cold cache: fetch public bundle from authoritative Yugabyte (in ONE single query) and reading from Supabase
+  // Cold cache: fetch public bundle and personal reading from authoritative Yugabyte (in parallel)
   const [initialBundle, readingRes] = await Promise.all([
     fetchHomeBundleFromYugabyte(platform?.env),
     locals.user
-      ? safeDbQuery(
-          locals.db
-            .from('reading')
-            .select('chapter_id,work_id,page,max_page,completed_at,updated_at')
-            .eq('user_id', locals.user.id)
-            .order('updated_at', { ascending: false })
-            .limit(20),
-          3000,
-          'home_reading'
-        )
-      : Promise.resolve({ data: null, error: null, status: 'SUCCESS' as const, isDegraded: false })
+      ? fetchUserReadingFromYugabyte(locals.user.id, platform?.env)
+      : Promise.resolve({ data: [] })
   ]);
 
   let bundle = initialBundle;

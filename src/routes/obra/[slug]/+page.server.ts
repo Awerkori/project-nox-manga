@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
-import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
+import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
 import { getWorkRating } from '$lib/server/ratings';
 import { getObraAuxCache, setObraAuxCache, getOrFetchObraAux } from '$lib/server/obra-cache';
 import { sanitizeComments } from '$lib/comments';
@@ -114,8 +114,13 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     if (locals.sessionCache?.profile?.age_status) {
       ageStatus = locals.sessionCache.profile.age_status;
     } else if (locals.user) {
-      const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
-      if (p.data?.age_status) ageStatus = p.data.age_status;
+      try {
+        const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env);
+        if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
+      } catch {
+        const p = await locals.db.from('members').select('age_status').eq('id', locals.user.id).maybeSingle();
+        if (p.data?.age_status) ageStatus = p.data.age_status;
+      }
     }
     if (ageStatus === 'MINOR') {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');
@@ -132,66 +137,141 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
         metrics: cachedAuxEntry.metrics,
         workScans: cachedAuxEntry.workScans
       })
-    : getOrFetchObraAux(work.id, () =>
-        withTimeout(
-          Promise.all([
-            locals.db
-              .from('comments')
-              .select(
-                'id,user_id,body,created_at,parent_id,removed,deleted,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
-              )
-              .eq('work_id', work.id)
-              .is('chapter_id', null)
-              .order('created_at', { ascending: false })
-              .limit(150),
-            locals.db.from('likes').select('user_id').eq('work_id', work.id),
-            locals.db.rpc('work_metrics', { p_work: work.id }),
-            locals.db
-              .from('work_scans')
-              .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
-              .eq('work_id', work.id)
-          ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
-            const entry = {
-              comments: sanitizeComments(commentsRes?.data || []),
-              likes: likesRes?.data || [],
-              metrics: metricsRes?.data?.[0] || null,
-              workScans: scansRes?.data || []
-            };
-            setObraAuxCache(work.id, entry);
-            return { ...entry, timestamp: Date.now() };
-          }),
-          3500,
-          {
-            timestamp: Date.now(),
-            comments: cachedAuxEntry?.comments || [],
-            likes: cachedAuxEntry?.likes || [],
-            metrics: cachedAuxEntry?.metrics || null,
-            workScans: cachedAuxEntry?.workScans || []
-          },
-          'obra_public_aux'
-        )
-      );
+    : getOrFetchObraAux(work.id, async () => {
+        try {
+          const [commentsRes, likesRes, metricsRes, scansRes] = await Promise.all([
+            executeYugabyteSql(
+              `SELECT c.id, c.user_id, c.body, c.created_at, c.parent_id, c.removed,
+                      json_build_object(
+                        'username', m.username,
+                        'display_name', m.display_name,
+                        'avatar_id', m.avatar_id,
+                        'avatar_crop', m.avatar_crop,
+                        'name_color', m.name_color,
+                        'avatar_frame_id', m.avatar_frame_id,
+                        'equipped_comment_banner_id', m.equipped_comment_banner_id,
+                        'equipped_banner_id', m.equipped_banner_id,
+                        'equipped_title_id', m.equipped_title_id
+                      ) AS members,
+                      COALESCE((SELECT json_agg(json_build_object('user_id', cl.user_id)) FROM comment_likes cl WHERE cl.comment_id = c.id), '[]'::json) AS comment_likes
+               FROM comments c
+               LEFT JOIN members m ON m.id = c.user_id
+               WHERE c.work_id = $1 AND c.chapter_id IS NULL
+               ORDER BY c.created_at DESC
+               LIMIT 150;`,
+              [work.id],
+              platform?.env
+            ),
+            executeYugabyteSql(`SELECT user_id FROM likes WHERE work_id = $1;`, [work.id], platform?.env),
+            executeYugabyteSql(`SELECT * FROM public.work_metrics($1);`, [work.id], platform?.env),
+            executeYugabyteSql(
+              `SELECT ws.is_primary,
+                      json_build_object(
+                        'id', s.id,
+                        'name', s.name,
+                        'slug', s.slug,
+                        'logo_id', s.logo_id,
+                        'description', s.description,
+                        'is_official', s.is_official,
+                        'discord', s.discord,
+                        'fluxer', s.fluxer,
+                        'website', s.website
+                      ) AS scans
+               FROM work_scans ws
+               JOIN scans s ON s.id = ws.scan_id
+               WHERE ws.work_id = $1;`,
+              [work.id],
+              platform?.env
+            )
+          ]);
+
+          const entry = {
+            comments: sanitizeComments(commentsRes?.rows || []),
+            likes: likesRes?.rows || [],
+            metrics: metricsRes?.rows?.[0] || null,
+            workScans: scansRes?.rows || []
+          };
+          setObraAuxCache(work.id, entry);
+          return { ...entry, timestamp: Date.now() };
+        } catch {
+          return withTimeout(
+            Promise.all([
+              locals.db
+                .from('comments')
+                .select(
+                  'id,user_id,body,created_at,parent_id,removed,members!comments_user_id_fkey(username,display_name,avatar_id,avatar_crop,name_color,avatar_frame_id,equipped_comment_banner_id,equipped_banner_id,equipped_title_id),comment_likes(user_id)'
+                )
+                .eq('work_id', work.id)
+                .is('chapter_id', null)
+                .order('created_at', { ascending: false })
+                .limit(150),
+              locals.db.from('likes').select('user_id').eq('work_id', work.id),
+              locals.db.rpc('work_metrics', { p_work: work.id }),
+              locals.db
+                .from('work_scans')
+                .select('is_primary,scans(id,name,slug,logo_id,description,is_official,discord,fluxer,website)')
+                .eq('work_id', work.id)
+            ]).then(([commentsRes, likesRes, metricsRes, scansRes]: any) => {
+              const entry = {
+                comments: sanitizeComments(commentsRes?.data || []),
+                likes: likesRes?.data || [],
+                metrics: metricsRes?.data?.[0] || null,
+                workScans: scansRes?.data || []
+              };
+              setObraAuxCache(work.id, entry);
+              return { ...entry, timestamp: Date.now() };
+            }),
+            1200,
+            {
+              timestamp: Date.now(),
+              comments: cachedAuxEntry?.comments || [],
+              likes: cachedAuxEntry?.likes || [],
+              metrics: cachedAuxEntry?.metrics || null,
+              workScans: cachedAuxEntry?.workScans || []
+            },
+            'obra_public_aux'
+          );
+        }
+      });
 
   const personalPromise = locals.user
-    ? withTimeout(
-        Promise.all([
-          locals.db
-            .from('library')
-            .select('*')
-            .eq('user_id', locals.user.id)
-            .eq('work_id', work.id)
-            .maybeSingle(),
-          locals.db
-            .from('reading')
-            .select('chapter_id,page,completed_at')
-            .eq('user_id', locals.user.id)
-            .eq('work_id', work.id)
-            .order('updated_at', { ascending: false })
-        ]),
-        2500,
-        [{ data: null }, { data: [] }] as any,
-        'obra_personal_data'
-      )
+    ? (async () => {
+        try {
+          const [libRes, readRes] = await Promise.all([
+            executeYugabyteSql(`SELECT * FROM library WHERE user_id = $1 AND work_id = $2 LIMIT 1;`, [locals.user.id, work.id], platform?.env),
+            executeYugabyteSql(
+              `SELECT r.chapter_id, r.page, r.completed_at
+               FROM reading r
+               JOIN chapters c ON c.id = r.chapter_id
+               WHERE r.user_id = $1 AND c.work_id = $2
+               ORDER BY r.updated_at DESC;`,
+              [locals.user.id, work.id],
+              platform?.env
+            )
+          ]);
+          return [{ data: libRes.rows[0] || null }, { data: readRes.rows || [] }];
+        } catch {
+          return withTimeout(
+            Promise.all([
+              locals.db
+                .from('library')
+                .select('*')
+                .eq('user_id', locals.user.id)
+                .eq('work_id', work.id)
+                .maybeSingle(),
+              locals.db
+                .from('reading')
+                .select('chapter_id,page,completed_at')
+                .eq('user_id', locals.user.id)
+                .eq('work_id', work.id)
+                .order('updated_at', { ascending: false })
+            ]),
+            1000,
+            [{ data: null }, { data: [] }] as any,
+            'obra_personal_data'
+          );
+        }
+      })()
     : Promise.resolve([{ data: null }, { data: [] }]);
 
   const hasYugabyteWorkBundle = Boolean(yugabyteBundle?.work);

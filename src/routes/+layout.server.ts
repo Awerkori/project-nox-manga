@@ -1,5 +1,6 @@
 import { databaseConfig } from '$lib/server/config';
 import { withTimeout } from '$lib/server/resilience';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 const DEFAULT_CONFIG: Record<string, string> = {
   site_name: 'Project Nox',
@@ -22,7 +23,7 @@ const MAX_LAYOUT_FLIGHT_AGE_MS = 3_000;
 let customFramesFlight: { promise: Promise<void>; startedAt: number } | null = null;
 let settingsFlight: { promise: Promise<void>; startedAt: number } | null = null;
 
-export const load = async ({ locals, url, cookies }) => {
+export const load = async ({ locals, url, cookies, platform }: any) => {
   const now = Date.now();
   const needFrames = now - cachedCustomFrames.timestamp > CUSTOM_FRAMES_TTL_MS;
   const needSettings = !cachedSettings || now - cachedSettings.timestamp > SETTINGS_CACHE_TTL_MS;
@@ -33,28 +34,45 @@ export const load = async ({ locals, url, cookies }) => {
     : customFramesFlight && now - customFramesFlight.startedAt < MAX_LAYOUT_FLIGHT_AGE_MS
       ? customFramesFlight.promise
       : (() => {
-          const run = (async () => {
+          let run: Promise<void>;
+          run = (async () => {
             try {
-              const res = await withTimeout(
-                locals.db
-                  .from('shop_items')
-                  .select('id, asset_url, style_data')
-                  .eq('kind', 'AVATAR_FRAME')
-                  .neq('asset_url', ''),
-                1200,
-                { data: null } as any,
-                'custom_frames'
+              const ybRes = await executeYugabyteSql(
+                `SELECT id, asset_url, style_data FROM shop_items WHERE kind = 'AVATAR_FRAME' AND asset_url IS NOT NULL AND asset_url != '';`,
+                [],
+                platform?.env
               );
-              if (Array.isArray(res?.data)) {
+              if (Array.isArray(ybRes?.rows)) {
                 cachedCustomFrames = {
                   timestamp: Date.now(),
-                  frames: res.data
+                  frames: ybRes.rows
                     .filter((f: any) => f.asset_url)
                     .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
                 };
               }
             } catch {
-              // Keep stale frames; procedural frames don't depend on this.
+              try {
+                const res = await withTimeout(
+                  locals.db
+                    .from('shop_items')
+                    .select('id, asset_url, style_data')
+                    .eq('kind', 'AVATAR_FRAME')
+                    .neq('asset_url', ''),
+                  800,
+                  { data: null } as any,
+                  'custom_frames'
+                );
+                if (Array.isArray(res?.data)) {
+                  cachedCustomFrames = {
+                    timestamp: Date.now(),
+                    frames: res.data
+                      .filter((f: any) => f.asset_url)
+                      .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
+                  };
+                }
+              } catch {
+                // Keep stale frames
+              }
             } finally {
               if (customFramesFlight?.promise === run) customFramesFlight = null;
             }
@@ -68,23 +86,38 @@ export const load = async ({ locals, url, cookies }) => {
     : settingsFlight && now - settingsFlight.startedAt < MAX_LAYOUT_FLIGHT_AGE_MS
       ? settingsFlight.promise
       : (() => {
-          const run = (async () => {
+          let run: Promise<void>;
+          run = (async () => {
             try {
-              databaseConfig();
-              const settingsRes = await withTimeout(
-                locals.db.rpc('public_settings'),
-                1200,
-                { data: null } as any,
-                'public_settings'
+              const ybSettings = await executeYugabyteSql(
+                `SELECT key, value FROM settings WHERE key IN ('site_name', 'description', 'contact', 'maintenance', 'registration_open');`,
+                [],
+                platform?.env
               );
-              if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
+              if (Array.isArray(ybSettings?.rows) && ybSettings.rows.length > 0) {
                 const nextConfig = Object.fromEntries(
-                  settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
+                  ybSettings.rows.map((s: { key: string; value: string }) => [s.key, s.value])
                 );
                 cachedSettings = { timestamp: Date.now(), config: nextConfig };
               }
             } catch {
-              // Keep stale config if available, otherwise default
+              try {
+                databaseConfig();
+                const settingsRes = await withTimeout(
+                  locals.db.rpc('public_settings'),
+                  800,
+                  { data: null } as any,
+                  'public_settings'
+                );
+                if (Array.isArray(settingsRes?.data) && settingsRes.data.length > 0) {
+                  const nextConfig = Object.fromEntries(
+                    settingsRes.data.map((s: { key: string; value: string }) => [s.key, s.value])
+                  );
+                  cachedSettings = { timestamp: Date.now(), config: nextConfig };
+                }
+              } catch {
+                // Keep stale config
+              }
             } finally {
               if (settingsFlight?.promise === run) settingsFlight = null;
             }
@@ -95,19 +128,41 @@ export const load = async ({ locals, url, cookies }) => {
 
   const userFallbackTask = !needUserFallback
     ? Promise.resolve(null)
-    : withTimeout(
-        Promise.all([
-          locals.db.from('members').select('*').eq('id', locals.user!.id).maybeSingle(),
-          locals.db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', locals.user!.id).is('read_at', null),
-          locals.db
-            .from('scan_members')
-            .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-            .eq('user_id', locals.user!.id)
-        ]),
-        1500,
-        [{ data: null }, { count: 0 }, { data: [] }] as any,
-        'layout_user_batch'
-      );
+    : (async () => {
+        try {
+          const [ybMem, ybNotif, ybScans] = await Promise.all([
+            executeYugabyteSql(`SELECT * FROM members WHERE id = $1 LIMIT 1;`, [locals.user!.id], platform?.env),
+            executeYugabyteSql(`SELECT count(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL;`, [locals.user!.id], platform?.env),
+            executeYugabyteSql(
+              `SELECT sm.role, sm.scan_id, s.id, s.name, s.slug, s.logo_id, s.status
+               FROM scan_members sm
+               JOIN scans s ON s.id = sm.scan_id
+               WHERE sm.user_id = $1 AND s.status = 'ACTIVE';`,
+              [locals.user!.id],
+              platform?.env
+            )
+          ]);
+          return [
+            { data: ybMem.rows[0] || null },
+            { count: parseInt(ybNotif.rows[0]?.count || '0', 10) },
+            { data: ybScans.rows || [] }
+          ];
+        } catch {
+          return withTimeout(
+            Promise.all([
+              locals.db.from('members').select('*').eq('id', locals.user!.id).maybeSingle(),
+              locals.db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', locals.user!.id).is('read_at', null),
+              locals.db
+                .from('scan_members')
+                .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
+                .eq('user_id', locals.user!.id)
+            ]),
+            1000,
+            [{ data: null }, { count: 0 }, { data: [] }] as any,
+            'layout_user_batch'
+          );
+        }
+      })();
 
   const [, , userBatch] = await Promise.all([framesTask, settingsTask, userFallbackTask]);
 
