@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
 import { safeDbQuery, withTimeout } from '$lib/server/resilience';
-import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
+import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte, executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 import { getWorkRating } from '$lib/server/ratings';
 import { getObraAuxCache, setObraAuxCache, getOrFetchObraAux } from '$lib/server/obra-cache';
 import { sanitizeComments } from '$lib/comments';
@@ -117,7 +117,14 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       })
     : getOrFetchObraAux(work.id, async () => {
         try {
-          const [commentsRes, likesRes, metricsRes, scansRes] = await Promise.all([
+          // A cold public page needs four independent auxiliary reads.  Do
+          // not turn that into four simultaneous Hyperdrive backends per
+          // Worker isolate: share at most two connections for this request.
+          // The data and failure fallback remain unchanged, while the site
+          // leaves scarce YSQL seats for the Importer under load.
+          const [commentsRes, likesRes, metricsRes, scansRes] = await withYugabyteReadSession(
+            platform?.env,
+            async (readEnv) => Promise.all([
             executeYugabyteSql(
               `SELECT c.id, c.user_id, c.body, c.created_at, c.parent_id, c.removed,
                       json_build_object(
@@ -138,10 +145,10 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
                ORDER BY c.created_at DESC
                LIMIT 150;`,
               [work.id],
-              platform?.env
+              readEnv
             ),
-            executeYugabyteSql(`SELECT user_id FROM likes WHERE work_id = $1;`, [work.id], platform?.env),
-            executeYugabyteSql(`SELECT * FROM public.work_metrics($1);`, [work.id], platform?.env),
+            executeYugabyteSql(`SELECT user_id FROM likes WHERE work_id = $1;`, [work.id], readEnv),
+            executeYugabyteSql(`SELECT * FROM public.work_metrics($1);`, [work.id], readEnv),
             executeYugabyteSql(
               `SELECT ws.is_primary,
                       json_build_object(
@@ -159,9 +166,11 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
                JOIN scans s ON s.id = ws.scan_id
                WHERE ws.work_id = $1;`,
               [work.id],
-              platform?.env
+              readEnv
             )
-          ]);
+            ]),
+            2
+          );
 
           const entry = {
             comments: sanitizeComments(commentsRes?.rows || []),
