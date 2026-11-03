@@ -11,8 +11,6 @@ try {
 } catch {
   // Supabase Zero mode: running fully decoupled on native YugabyteDB
 }
-import { existsSync } from 'node:fs';
-import crypto from 'node:crypto';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 if (!process.env.PUBLIC_SUPABASE_URL && existsSync('.dev.vars.preview_full')) {
@@ -77,7 +75,7 @@ function createNativeOwnerCookie(origin) {
 }
 
 export async function ownerCookies(origin = 'http://127.0.0.1:5173') {
-  if (!process.env.PUBLIC_SUPABASE_URL || !process.env.PUBLIC_SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!createClient || !process.env.PUBLIC_SUPABASE_URL || !process.env.PUBLIC_SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     const fallback = createNativeOwnerCookie(origin);
     if (fallback) return fallback;
     throw new Error('OWNER_SESSION_UNAVAILABLE: configure a legitimate Supabase QA session; synthetic JWTs are prohibited.');
