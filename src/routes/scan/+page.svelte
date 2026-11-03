@@ -1303,12 +1303,14 @@
                 productionFiles={data.productionFiles || []}
                 tasks={data.tasks || []}
                 qcIssues={data.qcIssues || []}
+                chapterTimeline={data.chapterTimeline || []}
                 currentUserId={data.userId}
                 userRole={data.userRole}
                 userPositions={data.userPositions || []}
                 seenStages={data.seenStages || []}
                 isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
                 scanId={data.currentScan?.id || ''}
+                scanName={data.currentScan?.name || 'Project Nox'}
                 onSelectStage={(slug: string) => handleSelectTab('pipeline', slug)}
                 onOpenChapter={handleOpenChapter}
                 onOpenQcReader={handleOpenQcReader}

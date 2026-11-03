@@ -118,6 +118,17 @@ async function downloadTelegramMedia(
 export const GET = async ({ locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
+  // Preserve heavy 31MB uncompressed original and typo alias by redirecting to the 5.6MB optimized animated avatar
+  if (params.id === 'bdaa2c94-260c-4f9c-85dc-edfc196815f1' || params.id === '4c812f93-6bb1-40f9-9151-dc2d20e86e5e') {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': '/media/4c86bd8d-1ad8-4142-a660-55fc0824b22a',
+        'Cache-Control': 'public, max-age=86400, s-maxage=86400'
+      }
+    });
+  }
+
   // 1. Check Cloudflare Edge Cache first for instantaneous sub-millisecond response
   const url = new URL(request.url);
   const sizeParam = url.searchParams.get('size');

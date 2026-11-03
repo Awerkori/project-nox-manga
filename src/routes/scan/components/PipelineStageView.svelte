@@ -35,6 +35,7 @@
   import RawProviderStageView from './RawProviderStageView.svelte';
   import EditorialStageWorkspace from './EditorialStageWorkspace.svelte';
   import PreAprovadoStageView from './PreAprovadoStageView.svelte';
+  import PublicadoStageView from './PublicadoStageView.svelte';
 
   let {
     currentStageSlug = 'clean_redraw',
@@ -46,12 +47,14 @@
     productionFiles = [],
     tasks = [],
     qcIssues = [],
+    chapterTimeline = [],
     currentUserId = '',
     userRole = 'MEMBER',
     userPositions = [],
     seenStages = [],
     isOwnerOrAdmin: isOwnerOrAdminProp = false,
     scanId = '',
+    scanName = 'Project Nox',
     onSelectStage = (_slug: string) => {},
     onOpenChapter = (_ch: any) => {},
     onOpenQcReader = (_ch: any, _fromStage?: string) => {}
@@ -479,11 +482,10 @@
       }
     }
 
-    // Special count for publicado
-    const pubCount = chapters.filter((c: any) => c.status === 'PUBLISHED').length;
+    // Publicado is purely historic deliveries - never counted as pending task
     if (counts['publicado']) {
-      counts['publicado'].total = pubCount;
-      counts['publicado'].available = pubCount;
+      counts['publicado'].total = 0;
+      counts['publicado'].available = 0;
     }
 
     return counts;
@@ -681,6 +683,27 @@
     {onOpenChapter}
     onOpenQcReader={(ch) => onOpenQcReader(ch, 'pre_aprovado')}
   />
+{:else if matchesStageSlug(activeCanonical.slug, 'publicado')}
+  <PublicadoStageView
+    {stages}
+    {chapterStages}
+    {chapters}
+    {catalogChapters}
+    {works}
+    {productionFiles}
+    {tasks}
+    {qcIssues}
+    {chapterTimeline}
+    {currentUserId}
+    {userRole}
+    {userPositions}
+    {seenStages}
+    {isOwnerOrAdmin}
+    {scanId}
+    {scanName}
+    {onSelectStage}
+    {onOpenChapter}
+  />
 {:else}
 <div class="pipeline-stage-view-root">
   <!-- Top Location & Stage Header -->
@@ -724,10 +747,12 @@
           >
             <span class="pill-icon" aria-hidden="true">{st.icon}</span>
             <span class="pill-name">{st.name}</span>
-            {#if matchesStageSlug(st.slug, 'pre_aprovado') || matchesStageSlug(st.slug, 'publicado')}
+            {#if matchesStageSlug(st.slug, 'pre_aprovado')}
               {#if totalAvail > 0}
                 <span class="pill-total-badge">{totalAvail}</span>
               {/if}
+            {:else if matchesStageSlug(st.slug, 'publicado')}
+              <!-- Publicado is purely historic deliveries - never show notification badge -->
             {:else if personalNew > 0}
               <span class="pill-personal-badge" title="{personalNew} novos capítulos para seu cargo editorial">
                 {personalNew} novo{personalNew > 1 ? 's' : ''}

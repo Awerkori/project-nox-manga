@@ -103,11 +103,8 @@
       }
     }
 
-    // Publicado is purely historic published chapters
-    if (chapters && chapters.length > 0) {
-      const pubCount = chapters.filter((c: any) => c.status === 'PUBLISHED').length;
-      counts['publicado'] = pubCount;
-    }
+    // Publicado is purely historic published chapters - never counted as pending task
+    counts['publicado'] = 0;
 
     return counts;
   });
@@ -389,10 +386,12 @@
               >
                 <span class="sub-stage-icon" aria-hidden="true">{st.icon}</span>
                 <span class="sub-stage-title">{st.name}</span>
-                {#if matchesStageSlug(st.slug, 'pre_aprovado') || matchesStageSlug(st.slug, 'publicado')}
+                {#if matchesStageSlug(st.slug, 'pre_aprovado')}
                   {#if availCount > 0}
                     <span class="nav-sub-badge">{availCount}</span>
                   {/if}
+                {:else if matchesStageSlug(st.slug, 'publicado')}
+                  <!-- Publicado is historic deliveries - strictly no notification badge -->
                 {:else if personalNew > 0}
                   <span class="nav-sub-personal-badge" title="{personalNew} capítulos novos para você">{personalNew}</span>
                 {:else if availCount > 0}

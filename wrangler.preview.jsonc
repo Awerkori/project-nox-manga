@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "home-preview-manga",
+  "main": "src/worker-wrapper.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": ".svelte-kit/cloudflare",
+    "binding": "ASSETS",
+    "run_worker_first": false,
+    "not_found_handling": "none"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "placement": {
+    "mode": "off"
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "83726ad935554261813c4bb12094c7f3",
+      "localConnectionString": "postgresql://postgres:postgres@localhost:5432/postgres"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "COVER_THUMBNAILS",
+      "id": "cfcadf7da6f446dd851786d833a2f4ec"
+    }
+  ]
+}

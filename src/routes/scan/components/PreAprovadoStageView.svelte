@@ -261,7 +261,8 @@
       }
     }
 
-    counts['publicado'] = chapters.filter((c: any) => c.status === 'PUBLISHED' || locallyPublishedChapterIds[c.id]).length;
+    // Publicado is purely historic deliveries - never counted as pending task
+    counts['publicado'] = 0;
     return counts;
   });
 
@@ -498,7 +499,7 @@
         >
           <span class="stage-tab-icon">{st.icon}</span>
           <span class="stage-tab-label">{st.name}</span>
-          {#if count > 0}
+          {#if count > 0 && !matchesStageSlug(st.slug, 'publicado')}
             <span class="stage-tab-count">{count}</span>
           {/if}
         </button>

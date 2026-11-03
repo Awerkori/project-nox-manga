@@ -172,8 +172,8 @@ var worker_default = {
       });
     }
 
-    // 2. Legacy domain transition: *.workers.dev -> projectnox.org
-    if (url.hostname.endsWith('.workers.dev') && !url.pathname.startsWith('/api') && !url.pathname.startsWith('/_app')) {
+    // 2. Legacy domain transition: *.workers.dev -> projectnox.org (excluding preview workers)
+    if (url.hostname.endsWith('.workers.dev') && !url.hostname.includes('preview') && !url.pathname.startsWith('/api') && !url.pathname.startsWith('/_app')) {
       const canonicalUrl = new URL(req.url);
       canonicalUrl.hostname = 'projectnox.org';
       canonicalUrl.protocol = 'https:';

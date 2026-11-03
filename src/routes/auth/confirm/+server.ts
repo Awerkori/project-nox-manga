@@ -46,24 +46,43 @@ export const GET = async ({ url, locals, cookies, platform }: any) => {
         }
       }
 
-      if (type === 'recovery' && (verified as any).fp) {
+      if (type === 'recovery') {
         try {
           const userRes = await executeYugabyteSql(
             `SELECT encrypted_password, updated_at FROM auth.users WHERE id = $1 LIMIT 1;`,
             [verified.sub],
             platform?.env
           );
-          if (userRes.rows && userRes.rows[0]) {
-            const currentFp = userRes.rows[0].encrypted_password ? userRes.rows[0].encrypted_password.slice(-10) : (userRes.rows[0].updated_at || 'initial');
-            if (currentFp !== (verified as any).fp) {
-              // Token was already used or password was already changed!
-              redirect(303, '/entrar?erro=link-expirado');
-            }
+          if (!userRes.rows || userRes.rows.length === 0) {
+            redirect(303, '/entrar?erro=link-expirado');
+          }
+          const currentFp = userRes.rows[0].encrypted_password
+            ? userRes.rows[0].encrypted_password.slice(-10)
+            : (userRes.rows[0].updated_at || 'initial');
+          if ((verified as any).fp && currentFp !== (verified as any).fp) {
+            // Token was already used or password was already changed!
+            redirect(303, '/entrar?erro=link-expirado');
           }
         } catch (recErr: any) {
           if (recErr?.status === 303) throw recErr;
+          console.error('[AUTH_RECOVERY_SQL_FAILURE]', recErr);
+          // Fail secure: never proceed to authenticated reset session when SQL check fails
+          redirect(303, '/entrar?erro=link-expirado');
         }
       }
+
+      // Load user role from access_roles
+      let userRole = 'USER';
+      try {
+        const roleRes = await executeYugabyteSql(
+          `SELECT role FROM public.access_roles WHERE user_id = $1 AND suspended = false LIMIT 1;`,
+          [verified.sub],
+          platform?.env
+        );
+        if (roleRes.rows && roleRes.rows[0]?.role) {
+          userRole = roleRes.rows[0].role;
+        }
+      } catch {}
 
       const nowSec = Math.floor(Date.now() / 1000);
       const expiresIn = type === 'recovery' ? 3600 : 60 * 60 * 24 * 30; // 30 days for signup confirmation
@@ -89,14 +108,14 @@ export const GET = async ({ url, locals, cookies, platform }: any) => {
           id: verified.sub,
           email: verified.email || '',
           aud: 'authenticated',
-          role: 'authenticated',
+          role: userRole,
           email_confirmed_at: new Date().toISOString()
         }
       };
       const isSecure = url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(url.hostname);
       setAuthCookie(cookies, session, isSecure);
       locals.user = session.user as any;
-      locals.role = 'USER';
+      locals.role = userRole;
       try {
         if (platform?.env) {
           await claimInvite(locals, platform.env);

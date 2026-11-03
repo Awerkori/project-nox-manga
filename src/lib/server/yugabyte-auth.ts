@@ -35,19 +35,15 @@ export function getAuthSecrets(platformEnv?: any): string[] {
   const add = (s?: string) => {
     if (s && typeof s === 'string' && s.trim()) secrets.add(s.trim());
   };
-  add(platformEnv?.SUPABASE_JWT_SECRET);
-  add(platformEnv?.JWT_SECRET);
+  add(platformEnv?.AUTH_SECRET);
   add(platformEnv?.BETTER_AUTH_SECRET);
-  add(platformEnv?.SUPABASE_SERVICE_ROLE_KEY);
-  add(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY);
-  add(platformEnv?.NOX_STORAGE_BRIDGE_TOKEN);
+  add(platformEnv?.JWT_SECRET);
+  add(platformEnv?.SUPABASE_JWT_SECRET);
   if (typeof process !== 'undefined' && process.env) {
-    add(process.env.SUPABASE_JWT_SECRET);
-    add(process.env.JWT_SECRET);
+    add(process.env.AUTH_SECRET);
     add(process.env.BETTER_AUTH_SECRET);
-    add(process.env.SUPABASE_SERVICE_ROLE_KEY);
-    add(process.env.STAFF_SUPABASE_SERVICE_ROLE_KEY);
-    add(process.env.NOX_STORAGE_BRIDGE_TOKEN);
+    add(process.env.JWT_SECRET);
+    add(process.env.SUPABASE_JWT_SECRET);
   }
   // Only allow test fallback secret in development / test environments (e.g. Vitest)
   const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST || process.env?.NODE_ENV === 'test');

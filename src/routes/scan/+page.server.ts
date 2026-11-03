@@ -548,10 +548,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   // itself on that same data plane, skipping correlated comments on initial home overview.
   const taskSnapshotPromise = withTimeout(
     executeYugabyteSql<any>(`
-      SELECT task.id, task.scan_id, task.work_id, task.chapter_id, task.chapter_number,
-        task.title, task.description, task.priority, task.status, task.stage_id,
-        task.stage_name, task.stage_slug, task.stage_color, task.assigned_to,
-        task.assignee_id, task.due_date, task.due_at, task.created_at, task.updated_at,
+      SELECT task.*,
         CASE
           WHEN $2::boolean THEN COALESCE((
             SELECT jsonb_agg(jsonb_build_object(
@@ -731,12 +728,12 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
          jsonb_build_object('id', chapter.id, 'number', chapter.number,
            'title', chapter.title, 'published_at', chapter.published_at,
            'views_total', chapter.views_total,
-           'works', jsonb_build_object('id', work.id, 'title', work.title, 'slug', work.slug)) AS chapters
+           'works', jsonb_build_object('id', work.id, 'title', work.title, 'slug', work.slug, 'cover_id', work.cover_id)) AS chapters
        FROM public.chapter_scans chapter_scan
        JOIN public.chapters chapter ON chapter.id = chapter_scan.chapter_id
        JOIN public.works work ON work.id = chapter.work_id
        WHERE chapter_scan.scan_id = $1
-       ORDER BY chapter_scan.created_at DESC LIMIT 20`,
+       ORDER BY chapter_scan.created_at DESC LIMIT 100`,
       [currentScan.id], platform, 'scan_chapter_scans_ysql'
     ),
     ysqlCollection<any>(
