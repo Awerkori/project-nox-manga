@@ -295,7 +295,9 @@ function getSharedPool(connStr: string): Pool {
 /**
  * Execute raw SQL query against authoritative YugabyteDB.
  * Strategy 1: Hyperdrive native connection via platform.env.HYPERDRIVE (sub-millisecond connection in worker)
- * Strategy 2: High-speed internal Cloudflare Worker Gateway fallback (if secret is present in environment)
+ * Strategy 2: Internal Cloudflare Worker Gateway when Hyperdrive is not configured.
+ * Once a query is attempted, its outcome may be unknown: do not replay it through
+ * another connection, since this helper is also used for writes.
  */
 export async function executeYugabyteSql<T = any>(
   query: string,
@@ -304,11 +306,7 @@ export async function executeYugabyteSql<T = any>(
 ): Promise<SqlResponse<T>> {
   const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
   if (activeSession) {
-    try {
-      return await activeSession.query<T>(query, params);
-    } catch (hdErr: any) {
-      console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
-    }
+    return activeSession.query<T>(query, params);
   }
 
   // Strategy 1: Hyperdrive native pooled connection if available
@@ -329,7 +327,7 @@ export async function executeYugabyteSql<T = any>(
           rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
         };
       } catch (hdErr: any) {
-        console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+        throw hdErr;
       }
     } else {
       const connectStart = performance.now();
@@ -339,9 +337,9 @@ export async function executeYugabyteSql<T = any>(
           connectionTimeoutMillis: 5000,
           query_timeout: 8000
         });
-        await client.connect();
-        const connectDur = Math.round(performance.now() - connectStart);
         try {
+          await client.connect();
+          const connectDur = Math.round(performance.now() - connectStart);
           const queryStart = performance.now();
           const res = await client.query(query, params);
           const queryDur = Math.round(performance.now() - queryStart);
@@ -356,15 +354,15 @@ export async function executeYugabyteSql<T = any>(
           await client.end().catch(() => {});
         }
       } catch (hdErr: any) {
-        console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+        throw hdErr;
       }
     }
   }
 
-  // Strategy 2: Internal Cloudflare Worker Gateway fallback (ONLY if secret token is configured)
+  // Strategy 2: Gateway only when no Hyperdrive binding is available.
   const token = platformEnv?.NOX_STORAGE_BRIDGE_TOKEN || (typeof process !== 'undefined' ? process.env?.NOX_STORAGE_BRIDGE_TOKEN : '');
   if (!token) {
-    throw new Error('Hyperdrive failed and NOX_STORAGE_BRIDGE_TOKEN is not configured for fallback');
+    throw new Error('Hyperdrive is unavailable and NOX_STORAGE_BRIDGE_TOKEN is not configured');
   }
 
   const gatewayUrl = platformEnv?.NOX_IMPORTER_GATEWAY_URL || DEFAULT_GATEWAY_URL;
