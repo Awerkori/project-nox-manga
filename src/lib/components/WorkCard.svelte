@@ -78,7 +78,12 @@
   }
 </script>
 
-<a class="editorial-card" href="/obra/{work.slug}" style="--stagger:{index * 40}ms">
+<a
+  class="editorial-card"
+  href="/obra/{work.slug}"
+  data-sveltekit-preload-data="tap"
+  style="--stagger:{index * 40}ms"
+>
   <div class="card-media">
     <img
       use:fallbackCover

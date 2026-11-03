@@ -138,7 +138,7 @@
     // 2. Preload upcoming work in sequence
     preloadCover(works[(index + 1) % works.length]);
     // 3. On desktop, preload previous work in 3D deck
-    if (typeof window !== 'undefined' && window.innerWidth >= 768 && works.length > 2) {
+    if (typeof window !== 'undefined' && window.innerWidth > 768 && works.length > 2) {
       preloadCover(works[(index - 1 + works.length) % works.length]);
     }
   }
@@ -354,8 +354,8 @@
                 src={prevCover}
                 alt={decodeHtmlEntities(prevWork.title)}
                 class="deck-img"
-                loading="eager"
-                decoding="sync"
+                loading="lazy"
+                decoding="async"
                 use:fallbackCover
               />
               <div class="deck-shadow-veil"></div>
@@ -373,6 +373,7 @@
               <a
                 href="/obra/{currentWork.slug}"
                 class="active-card-inner"
+                data-sveltekit-preload-data="tap"
                 tabindex="-1"
                 aria-label={`Ler obra em destaque: ${decodeHtmlEntities(currentWork.title)}`}
               >

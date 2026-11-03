@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /api/action
+Disallow: /api/upload
+Disallow: /ler/
+
+Sitemap: https://projectnox.org/sitemap.xml

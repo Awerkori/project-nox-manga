@@ -1,6 +1,6 @@
 <script lang="ts">
   import { avatarCropStyle } from '$lib/avatar';
-  import { getFrameConfig } from '$lib/cosmetics-catalog';
+  import { getFrameConfig } from '$lib/frame-config';
   type AvatarUser = {
     id?: string | null;
     avatar_id?: string | null;

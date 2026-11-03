@@ -60,6 +60,33 @@ beforeEach(() => {
 });
 
 describe('account actions', () => {
+  it.each([
+    { code: 'email_not_confirmed' },
+    { status: 400, message: 'Email not confirmed' }
+  ])('preserves unconfirmed-account handling for provider error variants', async (error) => {
+    mocks.authenticateWithYugabyte.mockResolvedValueOnce({ success: false, error });
+    expect(await actions.default(event())).toMatchObject({ status: 400, data: { unconfirmed: true } });
+    expect(mocks.claimInvite).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['entrar', {}],
+    ['cadastrar', { username: 'reader_qa' }],
+    ['recuperar', {}],
+    ['entrar', { intent: 'resend_confirmation' }]
+  ])('blocks rate-limited %s requests before querying the database', async (mode, extra) => {
+    const e = event(mode, { email: 'reader@example.invalid', password: 'long-password', ...extra });
+    e.request.headers = new Headers({ 'cf-connecting-ip': '203.0.113.8' });
+    e.platform = { env: {
+      AUTH_SECRET: TEST_SECRET,
+      AUTH_ORIGIN_RATE_LIMIT: { limit: vi.fn().mockResolvedValue({ success: false }) },
+      AUTH_IDENTITY_RATE_LIMIT: { limit: vi.fn().mockResolvedValue({ success: true }) }
+    } };
+    expect(await actions.default(e)).toMatchObject({ status: 429 });
+    expect(mocks.authenticateWithYugabyte).not.toHaveBeenCalled();
+    expect(mocks.registerWithYugabyte).not.toHaveBeenCalled();
+    expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+    expect(mocks.sendBrevoEmail).not.toHaveBeenCalled();
+  });
   it.each(['entrar', 'cadastrar', 'recuperar'])(
     'rejects invalid email for %s before calling Auth',
     async (mode) => {

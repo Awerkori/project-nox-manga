@@ -13,8 +13,10 @@ interface LkgEntry<T> {
 }
 
 const lkgStore = new Map<string, LkgEntry<any>>();
-const activeLkgFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
-const MAX_FLIGHT_AGE_MS = 4_000;
+const activeLkgFlights = new Map<string, { promise: Promise<any>; startedAt: number; supersede: () => void }>();
+// A connection may take 5s and its query another 8s. Do not duplicate that
+// normal bounded operation after 4s, but allow recovery from a stuck flight.
+const MAX_FLIGHT_AGE_MS = 15_000;
 
 export function setLkg<T>(key: string, data: T): void {
   if (data !== null && data !== undefined) {
@@ -26,6 +28,14 @@ export function invalidateYugabyteLkgPrefix(prefix: string): void {
   for (const key of lkgStore.keys()) {
     if (key.startsWith(prefix)) {
       lkgStore.delete(key);
+    }
+  }
+  // A read started before a write must not restore invalidated data later.
+  // New readers should start a fresh flight instead of joining the old one.
+  for (const [key, flight] of activeLkgFlights) {
+    if (key.startsWith(prefix)) {
+      flight.supersede();
+      activeLkgFlights.delete(key);
     }
   }
 }
@@ -59,12 +69,16 @@ export async function withYugabyteLkg<T>(
     if (inFlight && Date.now() - inFlight.startedAt < MAX_FLIGHT_AGE_MS) {
       return inFlight.promise as Promise<T>;
     }
+    inFlight?.supersede();
   }
   const start = performance.now();
+  let superseded = false;
   const run = (async (): Promise<T> => {
     try {
-      const data = await fetcher();
-      setLkg(op, data);
+      const data = await Promise.resolve().then(fetcher);
+      // A flight replaced after the maximum age may still finish later. Its
+      // older result must not overwrite a newer successful response.
+      if (!superseded) setLkg(op, data);
       return data;
     } catch (err: any) {
       const dur = Math.round(performance.now() - start);
@@ -87,7 +101,7 @@ export async function withYugabyteLkg<T>(
   })();
 
   if (cacheTtlMs > 0 && !isTestEnv) {
-    activeLkgFlights.set(op, { promise: run, startedAt: Date.now() });
+    activeLkgFlights.set(op, { promise: run, startedAt: Date.now(), supersede: () => { superseded = true; } });
   }
   return run;
 }
@@ -295,7 +309,9 @@ function getSharedPool(connStr: string): Pool {
 /**
  * Execute raw SQL query against authoritative YugabyteDB.
  * Strategy 1: Hyperdrive native connection via platform.env.HYPERDRIVE (sub-millisecond connection in worker)
- * Strategy 2: High-speed internal Cloudflare Worker Gateway fallback (if secret is present in environment)
+ * Strategy 2: Internal Cloudflare Worker Gateway when Hyperdrive is not configured.
+ * Once a query is attempted, its outcome may be unknown: do not replay it through
+ * another connection, since this helper is also used for writes.
  */
 export async function executeYugabyteSql<T = any>(
   query: string,
@@ -304,11 +320,7 @@ export async function executeYugabyteSql<T = any>(
 ): Promise<SqlResponse<T>> {
   const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
   if (activeSession) {
-    try {
-      return await activeSession.query<T>(query, params);
-    } catch (hdErr: any) {
-      console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
-    }
+    return activeSession.query<T>(query, params);
   }
 
   // Strategy 1: Hyperdrive native pooled connection if available
@@ -316,55 +328,47 @@ export async function executeYugabyteSql<T = any>(
   if (hyperdrive?.connectionString) {
     const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node);
     if (isNode) {
+      const pool = getSharedPool(hyperdrive.connectionString);
+      const queryStart = performance.now();
+      const res = await pool.query(query, params);
+      const queryDur = Math.round(performance.now() - queryStart);
+      if (queryDur > 500) {
+        console.warn(`[YUGABYTE_SLOW_QUERY] query=${queryDur}ms`);
+      }
+      return {
+        rows: res.rows || [],
+        rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
+      };
+    } else {
+      const connectStart = performance.now();
+      const client = new Client({
+        connectionString: hyperdrive.connectionString,
+        connectionTimeoutMillis: 5000,
+        query_timeout: 8000
+      });
       try {
-        const pool = getSharedPool(hyperdrive.connectionString);
+        await client.connect();
+        const connectDur = Math.round(performance.now() - connectStart);
         const queryStart = performance.now();
-        const res = await pool.query(query, params);
+        const res = await client.query(query, params);
         const queryDur = Math.round(performance.now() - queryStart);
         if (queryDur > 500) {
-          console.warn(`[YUGABYTE_SLOW_QUERY] query=${queryDur}ms`);
+          console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
         }
         return {
           rows: res.rows || [],
           rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
         };
-      } catch (hdErr: any) {
-        console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
-      }
-    } else {
-      const connectStart = performance.now();
-      try {
-        const client = new Client({
-          connectionString: hyperdrive.connectionString,
-          connectionTimeoutMillis: 5000,
-          query_timeout: 8000
-        });
-        await client.connect();
-        const connectDur = Math.round(performance.now() - connectStart);
-        try {
-          const queryStart = performance.now();
-          const res = await client.query(query, params);
-          const queryDur = Math.round(performance.now() - queryStart);
-          if (queryDur > 500) {
-            console.warn(`[YUGABYTE_SLOW_QUERY] connect=${connectDur}ms query=${queryDur}ms`);
-          }
-          return {
-            rows: res.rows || [],
-            rowCount: res.rowCount ?? (res.rows ? res.rows.length : 0)
-          };
-        } finally {
-          await client.end().catch(() => {});
-        }
-      } catch (hdErr: any) {
-        console.warn('[YUGABYTE_HYPERDRIVE_FALLBACK]', hdErr?.message || hdErr);
+      } finally {
+        await client.end().catch(() => {});
       }
     }
   }
 
-  // Strategy 2: Internal Cloudflare Worker Gateway fallback (ONLY if secret token is configured)
+  // Strategy 2: Gateway only when no Hyperdrive binding is available.
   const token = platformEnv?.NOX_STORAGE_BRIDGE_TOKEN || (typeof process !== 'undefined' ? process.env?.NOX_STORAGE_BRIDGE_TOKEN : '');
   if (!token) {
-    throw new Error('Hyperdrive failed and NOX_STORAGE_BRIDGE_TOKEN is not configured for fallback');
+    throw new Error('Hyperdrive is unavailable and NOX_STORAGE_BRIDGE_TOKEN is not configured');
   }
 
   const gatewayUrl = platformEnv?.NOX_IMPORTER_GATEWAY_URL || DEFAULT_GATEWAY_URL;
@@ -747,13 +751,19 @@ export interface PaginatedReleasesResponse {
   pageSize: number;
 }
 
-let cachedReleasesCount: { timestamp: number; count: number } | null = null;
+// Counts are public and depend only on the normalized kind, not on page size or
+// page number. Reuse them across pagination and filters for the same period as
+// the existing unfiltered count cache. Bound the map because kind is user input.
+const cachedReleasesCounts = new Map<string, { timestamp: number; count: number }>();
 const RELEASES_COUNT_TTL_MS = 120_000;
+const MAX_RELEASES_COUNT_KEYS = 16;
 
 export async function fetchReleasesWorksCountFromYugabyte(platformEnv?: any, kind?: string | null): Promise<number> {
   const isAll = !kind || kind.toUpperCase() === 'ALL';
-  if (isAll && cachedReleasesCount && Date.now() - cachedReleasesCount.timestamp < RELEASES_COUNT_TTL_MS) {
-    return cachedReleasesCount.count;
+  const cacheKey = isAll ? '' : kind!.toUpperCase();
+  const cachedCount = cachedReleasesCounts.get(cacheKey);
+  if (cachedCount && Date.now() - cachedCount.timestamp < RELEASES_COUNT_TTL_MS) {
+    return cachedCount.count;
   }
   const params: any[] = [];
   let kindClause = '';
@@ -767,8 +777,12 @@ export async function fetchReleasesWorksCountFromYugabyte(platformEnv?: any, kin
     platformEnv
   );
   const count = parseInt(res.rows[0]?.count || '0', 10);
-  if (isAll && count > 0) {
-    cachedReleasesCount = { timestamp: Date.now(), count };
+  if (count > 0) {
+    if (!cachedReleasesCounts.has(cacheKey) && cachedReleasesCounts.size >= MAX_RELEASES_COUNT_KEYS) {
+      const oldest = cachedReleasesCounts.keys().next().value;
+      if (oldest !== undefined) cachedReleasesCounts.delete(oldest);
+    }
+    cachedReleasesCounts.set(cacheKey, { timestamp: Date.now(), count });
   }
   return count || 9430;
 }
@@ -1171,11 +1185,54 @@ export async function fetchPublishedWorksCountFromYugabyte(platformEnv?: any): P
 
 let cachedAllTags: { timestamp: number; tags: YugabyteTag[] } | null = null;
 const ALL_TAGS_TTL_MS = 600_000;
-const CATALOG_TAGS_CACHE_URL = 'https://edge-cache.project-nox.internal/catalog-filter-tags-v1';
-const CATALOG_TAGS_EDGE_TTL_S = 6 * 60 * 60;
+const CATALOG_TAGS_CACHE_URL = 'https://edge-cache.project-nox.internal/catalog-filter-tags-v2';
+// A fresh edge hit may also enter the five-minute LKG cache below. Limiting
+// edge entries to five minutes keeps the combined lifetime within the existing
+// ten-minute in-memory freshness window.
+const CATALOG_TAGS_EDGE_TTL_MS = 300_000;
+const CATALOG_TAGS_EDGE_TTL_S = CATALOG_TAGS_EDGE_TTL_MS / 1000;
 const CATALOG_TAG_MIN_WORKS = 10;
 
+async function readCatalogTagsEdge(): Promise<YugabyteTag[] | null> {
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (!cache) return null;
+    const response = await cache.match(CATALOG_TAGS_CACHE_URL);
+    if (!response) return null;
+    const entry = await response.json();
+    const age = Date.now() - entry?.timestamp;
+    if (!Number.isFinite(age) || age < 0 || age >= CATALOG_TAGS_EDGE_TTL_MS ||
+        !Array.isArray(entry?.tags) || entry.tags.length === 0 ||
+        !entry.tags.every((tag: any) => typeof tag?.id === 'string' &&
+          typeof tag?.name === 'string' && typeof tag?.slug === 'string' && typeof tag?.kind === 'string')) {
+      return null;
+    }
+    cachedAllTags = { timestamp: entry.timestamp, tags: entry.tags };
+    return entry.tags;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheCatalogTags(tags: YugabyteTag[]): Promise<void> {
+  const timestamp = Date.now();
+  cachedAllTags = { timestamp, tags };
+  try {
+    const cache = (globalThis as any).caches?.default;
+    await cache?.put(
+      CATALOG_TAGS_CACHE_URL,
+      new Response(JSON.stringify({ timestamp, tags }), {
+        headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${CATALOG_TAGS_EDGE_TTL_S}` }
+      })
+    );
+  } catch {
+    /* edge cache is best-effort */
+  }
+}
+
 async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[]> {
+  const edgeTags = await readCatalogTagsEdge();
+  if (edgeTags) return edgeTags;
   try {
     const res = await executeYugabyteSql<YugabyteTag>(
       `SELECT id, name, slug, kind FROM catalog_filter_tags ORDER BY name ASC;`,
@@ -1183,7 +1240,7 @@ async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[
       platformEnv
     );
     if (res.rows.length > 0) {
-      cachedAllTags = { timestamp: Date.now(), tags: res.rows };
+      await cacheCatalogTags(res.rows);
       return res.rows;
     }
   } catch {
@@ -1199,18 +1256,7 @@ async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[
     platformEnv
   );
   if (res.rows.length > 0) {
-    cachedAllTags = { timestamp: Date.now(), tags: res.rows };
-    try {
-      const cache = (globalThis as any).caches?.default;
-      await cache?.put(
-        CATALOG_TAGS_CACHE_URL,
-        new Response(JSON.stringify(res.rows), {
-          headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${CATALOG_TAGS_EDGE_TTL_S}` }
-        })
-      );
-    } catch {
-      /* edge cache is best-effort */
-    }
+    await cacheCatalogTags(res.rows);
   }
   return res.rows;
 }

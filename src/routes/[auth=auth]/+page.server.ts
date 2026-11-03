@@ -12,6 +12,7 @@ import {
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { sendBrevoEmail } from '$lib/server/brevo';
 import { invalidateUserSession } from '$lib/server/session-cache';
+import { checkAuthRateLimit } from '$lib/server/auth-rate-limit';
 
 const DEFAULT_SITE_ORIGIN = 'https://projectnox.org';
 
@@ -26,11 +27,8 @@ function isUnconfirmedEmailError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const details = error as { code?: unknown; status?: unknown; message?: unknown };
   if (details.code === 'email_not_confirmed') return true;
-  return (
-    details.status === 400 &&
-    typeof details.message === 'string' &&
-    /^email not confirmed$/i.test(details.message.trim())
-  );
+  return details.status === 400 && typeof details.message === 'string' &&
+    /^email not confirmed$/i.test(details.message.trim());
 }
 
 export const load = ({ params, url }) => ({
@@ -48,6 +46,14 @@ export const actions = {
       password = String(f.get('password') || ''),
       intent = String(f.get('intent') || '');
     const redirectOrigin = authOrigin(url);
+
+    const rateDecision = await checkAuthRateLimit(request, platform?.env, mode, email);
+    if (rateDecision === 'limited') {
+      return fail(429, { message: 'Muitas tentativas. Aguarde um pouco e tente novamente.' });
+    }
+    if (rateDecision === 'unavailable') {
+      return fail(503, { message: 'Não foi possível verificar a solicitação. Tente novamente mais tarde.' });
+    }
 
     if ((mode === 'cadastrar' || mode === 'entrar') && intent === 'resend_confirmation') {
       if (!z.email().safeParse(email).success) {
@@ -138,7 +144,7 @@ export const actions = {
         setAuthCookie(cookies, ybResult.session, isSecure);
         locals.user = ybResult.session.user as any;
         locals.role = ybResult.session.user.role || 'USER';
-      } else if (ybResult.error?.unconfirmed) {
+      } else if (ybResult.error?.unconfirmed || isUnconfirmedEmailError(ybResult.error)) {
         return fail(400, {
           message: 'Verifique seu e-mail para continuar.',
           unconfirmed: true,
@@ -228,7 +234,6 @@ export const actions = {
       });
     }
     if (mode === 'recuperar') {
-      let emailDispatched = false;
       try {
         const userRes = await executeYugabyteSql(
           `SELECT id, email, encrypted_password, updated_at FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1;`,
@@ -261,18 +266,12 @@ export const actions = {
               <p style="color: #8a859b; font-size: 13px; line-height: 1.5;">Se você não solicitou a recuperação, pode ignorar esta mensagem com segurança. O link expira em 1 hora.</p>
             </div>
           `;
-          const brevoResult = await sendBrevoEmail({
+          await sendBrevoEmail({
             toEmail: targetUser.email,
             subject: '[Project Nox] Recuperação de Senha',
             htmlContent: emailHtml,
             tags: ['password-recovery']
           });
-          if (brevoResult.success) {
-            emailDispatched = true;
-          }
-        } else {
-          // Prevent email enumeration
-          emailDispatched = true;
         }
       } catch (ybRecErr) {
         console.warn('[AUTH_RECOVERY_YUGABYTE_WARN]', ybRecErr);
@@ -346,7 +345,9 @@ export const actions = {
         };
         const isSecure = url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(url.hostname);
         setAuthCookie(cookies, freshSession, isSecure);
-      } catch {}
+      } catch {
+        // Password update remains authoritative if session refresh fails.
+      }
 
       // Disparar notificação de segurança e e-mail transacional de senha alterada
       try {

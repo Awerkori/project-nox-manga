@@ -8,9 +8,8 @@ import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import { invalidateObraAuxCache } from '$lib/server/obra-cache';
 import { invalidateAdminCatalogCaches, invalidateAdminStaffCache } from '$lib/server/admin-cache';
-import { fetchWorkFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
-import { readerChapter } from '$lib/server/reader-editorial';
-import type { Json } from '$lib/database.types';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { checkCommentPostLimit } from '$lib/server/comment-rate-limit';
 export const POST = async ({ request, locals, platform }: any) => {
   member(locals);
   const text = await request.text();
@@ -34,6 +33,17 @@ export const POST = async ({ request, locals, platform }: any) => {
   }
   if (body.scope === 'editor' && !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     error(403, 'Esta ação é exclusiva da equipe editorial.');
+  }
+
+  // Deny excess comment posts before resolving a chapter or opening a SQL
+  // connection. The binding is shared at the Cloudflare location, but its
+  // counters are approximate and do not enforce a global 30-second interval.
+  if (body.scope === 'member' && body.action === 'comment') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    if (!String(body.data?.body || '').trim()) error(400, 'Conteúdo do comentário obrigatório');
+    const decision = await checkCommentPostLimit(platform?.env, locals.user.id);
+    if (decision === 'limited') error(429, 'Muitos comentários. Aguarde antes de tentar novamente.');
+    if (decision === 'unavailable') error(503, 'Comentários temporariamente indisponíveis. Tente novamente.');
   }
 
   // Resolve target work_id from chapter via YugabyteDB if not directly supplied
@@ -226,7 +236,7 @@ export const POST = async ({ request, locals, platform }: any) => {
 
     const userId = locals.user.id;
     let isLiked = false;
-    let xpAward = null;
+    const xpAward = null;
 
     const delRes = await executeYugabyteSql(
       `DELETE FROM likes WHERE user_id = $1 AND work_id = $2 RETURNING 1;`,
@@ -763,7 +773,9 @@ export const POST = async ({ request, locals, platform }: any) => {
         );
         if (wRes.rows[0]?.slug) workSlug = wRes.rows[0].slug;
         if (wRes.rows[0]?.title) workTitle = wRes.rows[0].title;
-      } catch {}
+      } catch {
+        // Continue with the default work labels when enrichment is unavailable.
+      }
     }
 
     if (chapterId) {
@@ -781,7 +793,9 @@ export const POST = async ({ request, locals, platform }: any) => {
         if (displayNumber) chapterNumber = ` #${displayNumber}`;
         if (chap?.slug) workSlug = chap.slug;
         if (chap?.title) workTitle = chap.title;
-      } catch {}
+      } catch {
+        // Continue with the default chapter labels when enrichment is unavailable.
+      }
     }
 
     const hash = commentId ? `#comment-${commentId}` : '';

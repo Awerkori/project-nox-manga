@@ -1,7 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import { WORK_FIELDS } from '$lib/server/db';
 import { structuredDataScript, workStructuredData } from '$lib/seo';
-import { safeDbQuery, withTimeout } from '$lib/server/resilience';
 import { fetchFullWorkPageFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
 import { getWorkRating } from '$lib/server/ratings';
 import { getObraAuxCache, setObraAuxCache, getOrFetchObraAux } from '$lib/server/obra-cache';
@@ -13,12 +11,8 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const isTargetUuid = isUuid(params.slug);
 
   let visitorId = locals.user?.id;
-  let hadExistingVisitorId = Boolean(visitorId);
   if (!visitorId) {
     visitorId = cookies?.get?.('nox-vid');
-    if (visitorId) {
-      hadExistingVisitorId = true;
-    }
   }
 
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
@@ -98,7 +92,9 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       try {
         const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env);
         if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
-      } catch {}
+      } catch {
+        // Age status is a non-critical personalization read.
+      }
     }
     if (ageStatus === 'MINOR') {
       error(403, 'Conteúdo restrito: esta obra é destinada exclusivamente a maiores de 18 anos.');

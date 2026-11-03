@@ -20,7 +20,7 @@
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import XpProgressionToast from '$lib/components/XpProgressionToast.svelte';
   import { getNameColorInfo } from '$lib/name-colors';
-  import { registerDynamicFrame } from '$lib/cosmetics-catalog';
+  import { registerDynamicFrame } from '$lib/frame-config';
   import { page } from '$app/state';
 
   let { data, children } = $props();

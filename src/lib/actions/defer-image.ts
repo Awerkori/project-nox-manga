@@ -3,19 +3,52 @@ type DeferredImageOptions = {
   rootMargin?: string;
 };
 
+// A page can contain dozens of covers with the same visibility threshold.
+// Share an observer for each margin instead of allocating one per image.
+type ObserverGroup = {
+  observer: IntersectionObserver;
+  callbacks: Map<Element, () => void>;
+};
+const observerGroups = new Map<string, ObserverGroup>();
+
+function observeCover(node: HTMLImageElement, margin: string, onVisible: () => void): () => void {
+  let group = observerGroups.get(margin);
+  if (!group) {
+    const callbacks = new Map<Element, () => void>();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) callbacks.get(entry.target)?.();
+      }
+    }, { rootMargin: margin, threshold: 0.01 });
+    group = { observer, callbacks };
+    observerGroups.set(margin, group);
+  }
+  const selected = group;
+  selected.callbacks.set(node, onVisible);
+  selected.observer.observe(node);
+  return () => {
+    selected.observer.unobserve(node);
+    selected.callbacks.delete(node);
+    if (selected.callbacks.size === 0 && observerGroups.get(margin) === selected) {
+      selected.observer.disconnect();
+      observerGroups.delete(margin);
+    }
+  };
+}
+
 /**
  * Native lazy loading uses a very large browser-dependent distance and was
  * starting dozens of Telegram-backed cover requests on a single view. This
  * action only assigns src near the viewport, preserving the first-view budget.
  */
 export function deferImage(node: HTMLImageElement, initial: DeferredImageOptions) {
-  let observer: IntersectionObserver | null = null;
+  let unobserve: (() => void) | null = null;
   let options = initial;
   let loaded = Boolean(node.getAttribute('src'));
 
   const stop = () => {
-    observer?.disconnect();
-    observer = null;
+    unobserve?.();
+    unobserve = null;
   };
 
   const load = () => {
@@ -32,20 +65,21 @@ export function deferImage(node: HTMLImageElement, initial: DeferredImageOptions
       load();
       return;
     }
-    observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) load();
-      },
-      { rootMargin: options.rootMargin || '500px 0px', threshold: 0.01 }
-    );
-    observer.observe(node);
+    unobserve = observeCover(node, options.rootMargin || '500px 0px', load);
   };
 
   observe();
   return {
     update(next: DeferredImageOptions) {
+      const previousSrc = options.src;
       options = next;
-      if (!loaded) observe();
+      if (!loaded) {
+        observe();
+      } else if (next.src && next.src !== previousSrc) {
+        // A keyed card can receive an updated cover after it was displayed.
+        // Keep the already-visible card current without observing it again.
+        node.src = next.src;
+      }
     },
     destroy: stop
   };

@@ -25,6 +25,11 @@
   "placement": {
     "mode": "off"
   },
+  "ratelimits": [
+    { "name": "AUTH_ORIGIN_RATE_LIMIT", "namespace_id": "2147034101", "simple": { "limit": 40, "period": 60 } },
+    { "name": "AUTH_IDENTITY_RATE_LIMIT", "namespace_id": "2147034102", "simple": { "limit": 6, "period": 60 } },
+    { "name": "COMMENT_POST_RATE_LIMITER", "namespace_id": "2147034103", "simple": { "limit": 2, "period": 60 } }
+  ],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

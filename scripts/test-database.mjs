@@ -1,7 +1,8 @@
 import { PGlite } from '@electric-sql/pglite';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
+import { unaccent } from '@electric-sql/pglite/contrib/unaccent';
 import { readFileSync, readdirSync } from 'node:fs';
-const db = new PGlite({ extensions: { pg_trgm } });
+const db = new PGlite({ extensions: { pg_trgm, unaccent } });
 try {
   await db.exec(`create role anon; create role authenticated; create role service_role bypassrls;
  create schema auth; create schema storage;
