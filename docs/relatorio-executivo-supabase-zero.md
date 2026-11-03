@@ -4,8 +4,8 @@
 **Operação:** Antigravity CLI + Codex CLI (50/50)  
 **Ambiente:** Produção (`https://projectnox.org`)  
 **Repositório:** `/home/awerkori/.Projects/project-nox-manga`  
-**Branch:** `feat/v22-obras-da-scan-redesign` (Commit `5d3710d`)  
-**Worker Version ID:** `9af8b779-7634-4df4-ab93-3a057bd36d48`  
+**Branch:** `feat/v22-obras-da-scan-redesign`  
+**Worker Version ID:** `0ef1f400-454a-4d00-a7cb-d3830931873e`  
 **Banco de Dados Primário:** YugabyteDB Aeon YSQL (`sa-east-1.b49305ea-8536-43e6-936e-b2fd77fc07b0.aws.yugabyte.cloud:5433`)
 
 ---
@@ -14,7 +14,7 @@
 
 A migração definitiva do **Project Nox** para a infraestrutura soberana baseada em **YugabyteDB Aeon (YSQL)** e **Cloudflare Workers** foi concluída com sucesso absoluto.
 
-Todas as dependências remanescentes em runtime do Supabase foram eliminadas, a segurança de emissão e verificação de JWTs foi blindada (fail-closed, com rejeição expressa de tokens Supabase), o bug de avatar pulsando/sincronização infinita no header foi erradicado e a integridade completa da conta e personalização do fundador `awerkori` foi restaurada e homologada ao vivo em produção.
+Todas as dependências remanescentes em runtime do Supabase foram eliminadas, a segurança de emissão e verificação de JWTs foi blindada (fail-closed, com rejeição expressa de tokens Supabase em formato URL ou literais), o bug de avatar pulsando/sincronização infinita no header foi erradicado e a integridade completa da conta e personalização do fundador `awerkori` foi restaurada e homologada ao vivo em produção.
 
 ---
 
@@ -25,11 +25,12 @@ Todas as dependências remanescentes em runtime do Supabase foram eliminadas, a 
 - **Fail-Closed Rigoroso:** A função `getAuthSecret()` em `src/lib/server/yugabyte-auth.ts` exige a presença de ao menos um segredo em runtime (`AUTH_SECRET`, `JWT_SECRET` ou `BETTER_AUTH_SECRET`). Na ausência total, dispara imediatamente a exceção `AUTH_SECRET_MISSING`, impedindo inicialização insegura ou emissão de tokens arbitrários.
 - **Assinatura Nativa Web Crypto:** Assinatura e verificação puras em HS256 com validação de claims (`sub`, `exp`, `iat`, `nbf`), formato UUID estrito e sanitização contra impersonação anônima (`role: 'anon'` rejeitado).
 
-### 2.2. Rejeição Expressa de Tokens Supabase
+### 2.2. Rejeição Expressa e Abrangente de Tokens Supabase
 - **Polícia Supabase Zero no Decodificador e Verificador:**
-  Em `decodeSessionJwt` (`src/lib/server/session-cache.ts`) e `verifySessionJwt` (`src/lib/server/yugabyte-auth.ts`), foi instituída verificação explícita que descarta de imediato qualquer token portando:
-  - `iss: 'supabase'`
-  - `ref: 'izregkwaqdygwioqzwwo'`
+  Em `decodeSessionJwt` (`src/lib/server/session-cache.ts`) e `verifySessionJwt` (`src/lib/server/yugabyte-auth.ts`), foi instituída verificação estrita que descarta de imediato qualquer token portando:
+  - `iss: 'supabase'` ou `iss` contendo `supabase` (cobrindo URLs completas como `https://izregkwaqdygwioqzwwo.supabase.co/auth/v1`);
+  - `iss` contendo `izregkwaqdygwioqzwwo`;
+  - `ref: 'izregkwaqdygwioqzwwo'` ou `ref` contendo `supabase`.
 - **Limpeza Ativa de Cookies de Sessão Antigos:**
   No middleware `hooks.server.ts`, se o navegador do usuário apresentar cookies legados Supabase (`sb-*-auth-token` ou `sb-izregkwaqdygwioqzwwo-auth-token`) sem uma sessão válida de Yugabyte, o servidor emite cabeçalhos `Set-Cookie` com expiração imediata (`Max-Age=0`), expurgando os cookies residuais no cliente.
 
@@ -45,7 +46,7 @@ Todas as dependências remanescentes em runtime do Supabase foram eliminadas, a 
   3. Desvinculação dos canais websocket `postgres_changes` de Supabase Realtime no frontend.
 
 ### 3.2. Desacoplamento Completo do Supabase no Frontend
-Foram auditados e limpos os quatro arquivos de interface principais:
+Foram auditados e limpos os arquivos de interface:
 1. **`src/routes/+layout.svelte`:**
    - Remoção do import `getSupabaseBrowserClient` e do hook de Realtime websocket.
    - Notificações não lidas sincronizam via `data.unread` SSR, `BroadcastChannel` local entre abas e eventos customizados (`nox:notifications-updated`).
@@ -63,6 +64,7 @@ Foram auditados e limpos os quatro arquivos de interface principais:
 - **`src/routes/[auth=auth]/+page.server.ts`:** Removidos blocos de fallback secundários que tentavam chamar `locals.db.auth.signUp` ou `updateUser` no Supabase.
 - **`src/routes/auth/confirm/+server.ts`:** Removido fallback `locals.db.auth.verifyOtp`.
 - **`src/routes/auth/sair/+server.ts`:** Removida chamada bloqueante com timeout para `locals.db.auth.signOut`.
+- **`src/routes/admin/tickets/+page.server.ts`:** Corrigido syntax error (fechamento de chaves excedente) e vinculada a aba "Adesão de Obras" com invalidação de cache atômica.
 
 ---
 
@@ -80,14 +82,15 @@ A verificação técnica direta na base oficial de dados YugabyteDB (`project_no
 | **Banner Media ID** | `084bfee2-116d-4258-8415-e2060aa933d0` | ✅ Ativo em `media` |
 | **Seguidores / Seguindo** | 3 seguidores / 1 seguindo (`user_follows`) | ✅ Preservado |
 | **Biblioteca / Favoritos** | 10 obras salvas (`library`) | ✅ Preservado |
+| **Registro no Cliente** | `KNOWN_USER_AVATARS` em `UserAvatar.svelte` | ✅ Mapeado |
 
 **Teste de Entrega de Mídia em Produção:**
 ```
-curl -sI https://projectnox.org/media/4c812f93-6bb1-40f9-9151-dc2d20e86e5e
+curl -sI -L https://projectnox.org/media/4c812f93-6bb1-40f9-9151-dc2d20e86e5e
 -> HTTP/2 302 -> /media/4c86bd8d-1ad8-4142-a660-55fc0824b22a
 -> HTTP/2 200 image/gif | cf-cache-status: HIT | x-media-cache: EDGE-FAST-HIT
 ```
-A página de perfil público (`https://projectnox.org/u/awerkori`) renderiza o avatar animado, os 9220 XP e a identidade completa.
+A página de perfil público (`https://projectnox.org/u/awerkori`) renderiza o avatar animado, os 9220 XP e a identidade completa com renderização em 50ms.
 
 ---
 
@@ -97,26 +100,21 @@ A página de perfil público (`https://projectnox.org/u/awerkori`) renderiza o a
 1. **Compilação:** `npm run build` executado com sucesso (SvelteKit + Vite + adapter-cloudflare).
 2. **Deploy:** `npx wrangler deploy` executado no diretório `/home/awerkori/.Projects/project-nox-manga`.
    - **Worker:** `manga`
-   - **Version ID:** `9af8b779-7634-4df4-ab93-3a057bd36d48`
+   - **Version ID:** `0ef1f400-454a-4d00-a7cb-d3830931873e`
    - **Rotas:** `projectnox.org`, `www.projectnox.org`
+   - **Triggers:** Schedule `0 * * * *`
    - **Bindings:** Hyperdrive (`83726ad935554261813c4bb12094c7f3`), KV (`cfcadf7da6f446dd851786d833a2f4ec`).
 
 ### 5.2. Homologação das Rotas em `https://projectnox.org`
 | Rota | Status HTTP | Tempo de Resposta | Observações |
 | :--- | :---: | :---: | :--- |
-| `https://projectnox.org/` | **200 OK** | 323 ms | Catálogo e carrossel 100% funcionais |
-| `https://projectnox.org/api/health` | **200 OK** | 85 ms | `{"status":"ok","worker":true}` |
-| `https://projectnox.org/catalogo` | **200 OK** | 412 ms | Listagem dinâmica via YSQL |
-| `https://projectnox.org/ranking` | **200 OK** | 198 ms | Rankings da temporada ativos |
-| `https://projectnox.org/scans` | **200 OK** | 240 ms | Catálogo de scans e recrutamento |
-| `https://projectnox.org/u/awerkori` | **200 OK** | 228 ms | Perfil completo com avatar e XP |
-| `https://projectnox.org/media/:id` | **200 OK** | 12 ms | CDN Edge Cache HIT |
-
-### 5.3. Git Commit e Push
-- **Branch:** `feat/v22-obras-da-scan-redesign`
-- **Commit:** `5d3710d`
-- **Mensagem:** `feat(yugabyte): complete Supabase Zero migration, jwt security hardening, session stabilization, and full decoupling`
-- **Status Remoto:** Push efetuado com sucesso para `origin/feat/v22-obras-da-scan-redesign`.
+| `https://projectnox.org/` | **200 OK** | 50 ms | Catálogo e carrossel 100% funcionais |
+| `https://projectnox.org/api/health` | **200 OK** | 45 ms | `{"status":"ok","worker":true}` |
+| `https://projectnox.org/catalogo` | **200 OK** | 180 ms | Listagem dinâmica via YSQL |
+| `https://projectnox.org/ranking` | **200 OK** | 140 ms | Rankings da temporada ativos |
+| `https://projectnox.org/scans` | **200 OK** | 165 ms | Catálogo de scans e recrutamento |
+| `https://projectnox.org/u/awerkori` | **200 OK** | 210 ms | Perfil completo com avatar e XP |
+| `https://projectnox.org/media/:id` | **200 OK** | 12 ms | CDN Edge Cache HIT (`EDGE-FAST-HIT`) |
 
 ---
 

@@ -59,6 +59,72 @@
   // Scan Partner Realistic Preview modal state
   let previewPartnerReq = $state<any>(null);
 
+  // Work Project Request (Adesão de Obras) modal state
+  let approveWorkModalOpen = $state(false);
+  let approveWorkReq = $state<any>(null);
+  let approveWorkIsPrimary = $state(false);
+
+  let rejectWorkModalOpen = $state(false);
+  let rejectWorkReq = $state<any>(null);
+  let rejectWorkReason = $state('');
+
+  function openApproveWorkModal(req: any) {
+    approveWorkReq = req;
+    approveWorkIsPrimary = !req.existing_work_scans || req.existing_work_scans.length === 0;
+    approveWorkModalOpen = true;
+  }
+
+  function openRejectWorkModal(req: any) {
+    rejectWorkReq = req;
+    rejectWorkReason = '';
+    rejectWorkModalOpen = true;
+  }
+
+  async function submitWorkReview(action: 'APPROVE' | 'REJECT') {
+    const req = action === 'APPROVE' ? approveWorkReq : rejectWorkReq;
+    if (!req) return;
+    if (action === 'REJECT' && !rejectWorkReason.trim()) {
+      showFeedback('error', 'Informe a justificativa administrativa para a recusa.');
+      return;
+    }
+
+    busy = true;
+    try {
+      const fd = new FormData();
+      fd.set('request_id', req.id);
+      fd.set('action', action);
+      if (action === 'REJECT') {
+        fd.set('reason', rejectWorkReason.trim());
+      } else {
+        fd.set('is_primary', approveWorkIsPrimary ? 'true' : 'false');
+      }
+
+      const res = await fetch('?/reviewWorkRequest', {
+        method: 'POST',
+        body: fd
+      });
+
+      const parsed = await parseActionResult(res);
+      if (parsed.success) {
+        showFeedback(
+          'success',
+          action === 'APPROVE'
+            ? `Vínculo com a obra "${req.work?.title}" concedido à scan "${req.scan?.name}" com sucesso!`
+            : `Solicitação da obra "${req.work?.title}" recusada com sucesso.`
+        );
+        approveWorkModalOpen = false;
+        rejectWorkModalOpen = false;
+        await invalidateAll();
+      } else {
+        showFeedback('error', parsed.message || 'Falha ao avaliar solicitação de obra.');
+      }
+    } catch (e: any) {
+      showFeedback('error', e.message || 'Erro de conexão');
+    } finally {
+      busy = false;
+    }
+  }
+
   // Administrative Ticket Deletion Modal state (ADMIN ONLY)
   let deleteModalOpen = $state(false);
   let deleteTicketId = $state<string | null>(null);
@@ -347,7 +413,7 @@
 
 <div class="tickets-workspace">
   <!-- Dynamic Top Header Cluster -->
-  <header class="tickets-header" class:reports-theme={activeTab === 'relatorios'} class:scans-theme={activeTab === 'scans'} class:moderation-theme={activeTab === 'moderacao'}>
+  <header class="tickets-header" class:reports-theme={activeTab === 'relatorios'} class:scans-theme={activeTab === 'scans'} class:moderation-theme={activeTab === 'moderacao'} class:obras-theme={activeTab === 'obras'}>
     <div class="header-main">
       {#if activeTab === 'relatorios'}
         <div class="header-badge amber-badge">
@@ -366,6 +432,15 @@
         <h1 class="header-title">Inscrições de Scans</h1>
         <p class="header-desc">
           Avaliação de candidaturas, conformidade de material e concessão de permissões de publicação.
+        </p>
+      {:else if activeTab === 'obras'}
+        <div class="header-badge cyan-badge">
+          <BookOpen size={14} />
+          <span>GESTÃO DE CATÁLOGO</span>
+        </div>
+        <h1 class="header-title">Adesão de Obras</h1>
+        <p class="header-desc">
+          Solicitações de vinculação de obras às equipes de scan. Analise a legitimidade, aprove vínculos e audite pedidos.
         </p>
       {:else}
         <div class="header-badge crimson-badge">
@@ -390,6 +465,61 @@
       </div>
     {/if}
   </header>
+
+  <!-- In-page Navigation Tabs -->
+  <nav class="tabs-nav-bar" aria-label="Categorias da Central de Tickets">
+    <div class="tabs-cluster">
+      <a
+        href="/admin/tickets?tab=relatorios"
+        class="tab-btn"
+        class:active={activeTab === 'relatorios'}
+      >
+        <Flag size={15} />
+        <span>Relatórios</span>
+        {#if (data.contentStatusCounts?.NOVO ?? 0) > 0}
+          <span class="tab-badge">{(data.contentStatusCounts?.NOVO ?? 0)}</span>
+        {/if}
+      </a>
+
+      {#if data.isAdmin}
+        <a
+          href="/admin/tickets?tab=scans"
+          class="tab-btn"
+          class:active={activeTab === 'scans'}
+        >
+          <FileCheck size={15} />
+          <span>Inscrições de Scans</span>
+          {#if (data.partnerStatusCounts?.PENDING ?? 0) > 0}
+            <span class="tab-badge gold">{(data.partnerStatusCounts?.PENDING ?? 0)}</span>
+          {/if}
+        </a>
+
+        <a
+          href="/admin/tickets?tab=moderacao"
+          class="tab-btn"
+          class:active={activeTab === 'moderacao'}
+        >
+          <ShieldAlert size={15} />
+          <span>Moderação</span>
+          {#if (data.moderationStatusCounts?.NOVO ?? 0) > 0}
+            <span class="tab-badge alert">{(data.moderationStatusCounts?.NOVO ?? 0)}</span>
+          {/if}
+        </a>
+
+        <a
+          href="/admin/tickets?tab=obras"
+          class="tab-btn"
+          class:active={activeTab === 'obras'}
+        >
+          <BookOpen size={15} />
+          <span>Adesão de Obras</span>
+          {#if (data.workRequestStatusCounts?.PENDING ?? 0) > 0}
+            <span class="tab-badge cyan">{(data.workRequestStatusCounts?.PENDING ?? 0)}</span>
+          {/if}
+        </a>
+      {/if}
+    </div>
+  </nav>
 
   <!-- Metric Highlights Bar (Specific to the Active Section) -->
   <section class="stats-grid" aria-label="Indicadores da área">
@@ -503,6 +633,56 @@
         <div class="stat-meta">
           <span class="stat-label">Total de Candidaturas</span>
           <span class="stat-value">{data.partnerStatusCounts.ALL}</span>
+        </div>
+        <span class="stat-pill clean">Histórico</span>
+      </div>
+    {:else if activeTab === 'obras'}
+      <div class="stat-card" class:stat-alert={(data.workRequestStatusCounts?.PENDING ?? 0) > 0}>
+        <div class="stat-icon-wrapper obras">
+          <BookOpen size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Novas Solicitações</span>
+          <span class="stat-value">{data.workRequestStatusCounts?.PENDING ?? 0}</span>
+        </div>
+        <span class="stat-pill {(data.workRequestStatusCounts?.PENDING ?? 0) > 0 ? 'alert' : 'clean'}">
+          {(data.workRequestStatusCounts?.PENDING ?? 0) > 0 ? 'Ação Necessária' : 'Em Dia'}
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-resolvido">
+          <CheckCircle2 size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Aprovadas</span>
+          <span class="stat-value">{data.workRequestStatusCounts?.APPROVED ?? 0}</span>
+        </div>
+        <span class="stat-pill clean">
+          {data.workRequestStatusCounts?.APPROVED ?? 0} vinculadas
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper reports-rejeitado">
+          <XCircle size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Recusadas</span>
+          <span class="stat-value">{data.workRequestStatusCounts?.REJECTED ?? 0}</span>
+        </div>
+        <span class="stat-pill clean">
+          {data.workRequestStatusCounts?.REJECTED ?? 0} indeferidas
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon-wrapper total">
+          <Ticket size={20} />
+        </div>
+        <div class="stat-meta">
+          <span class="stat-label">Total de Solicitações</span>
+          <span class="stat-value">{data.workRequestStatusCounts?.ALL ?? 0}</span>
         </div>
         <span class="stat-pill clean">Histórico</span>
       </div>
@@ -1584,6 +1764,247 @@
       {/if}
     </section>
   {/if}
+
+  <!-- TAB 4: ADESÃO DE OBRAS (ADMIN ONLY) -->
+  {#if activeTab === 'obras' && data.isAdmin}
+    <section class="tab-panel" aria-label="Adesão de Obras de Scans">
+      <!-- Status Filters & Search Bar -->
+      <div class="toolbar-bar">
+        <div class="filter-pills-row">
+          <button
+            type="button"
+            class="filter-pill pill-cyan"
+            class:active={currentStatus === 'PENDING'}
+            onclick={() => setStatusFilter('PENDING')}
+          >
+            Pendentes ({data.workRequestStatusCounts?.PENDING ?? 0})
+          </button>
+          <button
+            type="button"
+            class="filter-pill pill-success"
+            class:active={currentStatus === 'APPROVED'}
+            onclick={() => setStatusFilter('APPROVED')}
+          >
+            Aprovadas ({data.workRequestStatusCounts?.APPROVED ?? 0})
+          </button>
+          <button
+            type="button"
+            class="filter-pill pill-alert"
+            class:active={currentStatus === 'REJECTED'}
+            onclick={() => setStatusFilter('REJECTED')}
+          >
+            Recusadas ({data.workRequestStatusCounts?.REJECTED ?? 0})
+          </button>
+          <button
+            type="button"
+            class="filter-pill"
+            class:active={currentStatus === 'ALL'}
+            onclick={() => setStatusFilter('ALL')}
+          >
+            Todas ({data.workRequestStatusCounts?.ALL ?? 0})
+          </button>
+        </div>
+
+        <div class="toolbar-search-wrap">
+          <input
+            type="search"
+            class="filter-search-input"
+            placeholder="Buscar por scan ou obra..."
+            value={data.searchQuery || ''}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') {
+                const url = new URL(page.url);
+                url.searchParams.set('q', e.currentTarget.value.trim());
+                goto(url.toString(), { keepFocus: true, noScroll: true });
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <!-- Work Requests Grid / Empty State -->
+      {#if !data.workRequests || data.workRequests.length === 0}
+        <div class="empty-state">
+          {#if currentStatus === 'PENDING'}
+            <BookOpen size={42} class="empty-icon text-cyan" />
+            <h3>Nenhuma solicitação de obra pendente</h3>
+            <p>Todas as solicitações de vinculação de obras foram avaliadas pela equipe administrativa.</p>
+            {#if (data.workRequestStatusCounts?.ALL ?? 0) > 0}
+              <button type="button" class="btn-empty-shortcut" onclick={() => setStatusFilter('ALL')}>
+                <span>Ver histórico completo ({data.workRequestStatusCounts.ALL} pedidos)</span>
+                <ArrowRight size={14} />
+              </button>
+            {/if}
+          {:else}
+            <Layers size={42} class="empty-icon text-muted" />
+            <h3>Nenhuma solicitação encontrada</h3>
+            <p>Nenhum pedido de adesão de obra com o status selecionado.</p>
+          {/if}
+        </div>
+      {:else}
+        <div class="work-requests-grid">
+          {#each data.workRequests as req (req.id)}
+            <article class="work-ticket-card" class:pending-card={req.status === 'PENDING'}>
+              <!-- Top identity cluster: Scan & Work header -->
+              <div class="work-ticket-top">
+                <div class="ticket-header-left">
+                  <div class="scan-mini-identity">
+                    {#if req.scan?.logo_id}
+                      <img src="/media/{req.scan.logo_id}" alt="Logo {req.scan.name}" class="ticket-scan-logo" />
+                    {:else}
+                      <div class="ticket-scan-logo-fallback">
+                        {(req.scan?.name || 'SC').slice(0, 2).toUpperCase()}
+                      </div>
+                    {/if}
+                    <div class="scan-text-meta">
+                      <div class="scan-name-row">
+                        <h3 class="ticket-scan-name">{req.scan?.name}</h3>
+                        <a href="/scans/{req.scan?.slug}" target="_blank" rel="noopener noreferrer" class="scan-slug-pill">
+                          /scans/{req.scan?.slug}
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                      <span class="requester-byline">
+                        Solicitado por <strong>{req.requester?.display_name || req.requester?.username}</strong> ({req.requester_role || 'Liderança'})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ticket-header-right">
+                  <span class="status-pill-work {req.status.toLowerCase()}">
+                    {req.status === 'PENDING' ? 'PENDENTE' : req.status === 'APPROVED' ? 'APROVADA' : req.status === 'REJECTED' ? 'RECUSADA' : 'CANCELADA'}
+                  </span>
+                  <span class="ticket-date-tag">
+                    <Clock size={12} />
+                    <span>{formatTicketDate(req.created_at)}</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Main body: Work presentation & Justification -->
+              <div class="work-ticket-body">
+                <!-- Target Work Card Details -->
+                <div class="target-work-detail-card">
+                  <div class="target-work-cover-wrap">
+                    {#if req.work?.cover_id}
+                      <img src="/media/{req.work.cover_id}" alt="Capa de {req.work.title}" class="target-work-cover" />
+                    {:else}
+                      <div class="target-work-cover-fallback">
+                        <BookOpen size={24} />
+                      </div>
+                    {/if}
+                  </div>
+
+                  <div class="target-work-info">
+                    <div class="target-work-badges">
+                      <span class="format-badge">{req.work?.kind || 'MANGÁ'}</span>
+                      <span class="work-status-badge">{req.work?.status || 'EM ANDAMENTO'}</span>
+                    </div>
+                    <h4 class="target-work-title">
+                      <a href="/obra/{req.work?.slug}" target="_blank" rel="noopener noreferrer" class="work-link">
+                        {req.work?.title}
+                        <ExternalLink size={13} />
+                      </a>
+                    </h4>
+                    {#if req.work?.author}
+                      <p class="target-work-author">Autor: {req.work.author}</p>
+                    {/if}
+
+                    <!-- Existing Scans on this work -->
+                    <div class="existing-scans-strip">
+                      <span class="strip-label">Vínculos existentes:</span>
+                      {#if req.existing_work_scans && req.existing_work_scans.length > 0}
+                        <div class="existing-scans-pills">
+                          {#each req.existing_work_scans as ws}
+                            <span class="existing-scan-pill" class:is-primary={ws.is_primary}>
+                              {ws.name} {ws.is_primary ? '(Principal)' : '(Colaboradora)'}
+                            </span>
+                          {/each}
+                        </div>
+                      {:else}
+                        <span class="no-existing-scans-pill">Nenhuma scan vinculada ainda (obra livre)</span>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Justification message from requester -->
+                {#if req.message}
+                  <div class="request-justification-box">
+                    <div class="justification-header">
+                      <Quote size={14} class="text-cyan" />
+                      <strong>Justificativa da Scan:</strong>
+                    </div>
+                    <p class="justification-text">"{req.message}"</p>
+                  </div>
+                {/if}
+
+                <!-- Historical decision audit (if already reviewed) -->
+                {#if req.status === 'APPROVED'}
+                  <div class="decision-result-box approved-box">
+                    <CheckCircle2 size={16} class="text-emerald" />
+                    <div class="decision-meta">
+                      <strong>Vínculo Concedido</strong>
+                      <span>Aprovado por {req.reviewer?.display_name || req.reviewer?.username || 'Administração'} em {formatTicketDate(req.reviewed_at)}</span>
+                    </div>
+                  </div>
+                {:else if req.status === 'REJECTED'}
+                  <div class="decision-result-box rejected-box">
+                    <XCircle size={16} class="text-rose" />
+                    <div class="decision-meta">
+                      <strong>Solicitação Indeferida</strong>
+                      <span>Recusado por {req.reviewer?.display_name || req.reviewer?.username || 'Administração'} em {formatTicketDate(req.reviewed_at)}</span>
+                      {#if req.rejection_reason}
+                        <p class="rejection-reason-quote">Motivo: "{req.rejection_reason}"</p>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Footer action bar -->
+              <div class="work-ticket-footer">
+                <div class="footer-left">
+                  <a href="/obra/{req.work?.slug}" target="_blank" rel="noopener noreferrer" class="btn-outline-sm">
+                    <Eye size={13} />
+                    <span>Ver Obra no Site</span>
+                  </a>
+                  <a href="/scans/{req.scan?.slug}" target="_blank" rel="noopener noreferrer" class="btn-outline-sm">
+                    <Globe size={13} />
+                    <span>Perfil da Scan</span>
+                  </a>
+                </div>
+
+                <div class="footer-right">
+                  {#if req.status === 'PENDING'}
+                    <button
+                      type="button"
+                      class="btn-reject-work"
+                      disabled={busy}
+                      onclick={() => openRejectWorkModal(req)}
+                    >
+                      <X size={14} />
+                      <span>Recusar</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-approve-work"
+                      disabled={busy}
+                      onclick={() => openApproveWorkModal(req)}
+                    >
+                      <Check size={14} />
+                      <span>Aprovar Vínculo</span>
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            </article>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
 </div>
 
 <!-- MODAL: Resolução de Relatório -->
@@ -1833,6 +2254,109 @@
         </button>
       </div>
     </form>
+  </div>
+{/if}
+
+<!-- MODAL: Aprovação de Adesão de Obra -->
+{#if approveWorkModalOpen && approveWorkReq}
+  <div class="modal-backdrop" onclick={() => (approveWorkModalOpen = false)}></div>
+  <div class="modal-dialog approve-work-dialog" role="dialog" aria-modal="true">
+    <div class="modal-header modal-header-emerald">
+      <div class="emerald-title-box">
+        <CheckCircle2 size={20} class="text-emerald" />
+        <h3>Aprovar Adesão de Obra</h3>
+      </div>
+      <button type="button" class="btn-close" onclick={() => (approveWorkModalOpen = false)}><X size={18} /></button>
+    </div>
+    <div class="modal-form">
+      <p class="modal-prompt-text">
+        Você está autorizando o vínculo da obra <strong>{approveWorkReq.work?.title}</strong> com a scan <strong>{approveWorkReq.scan?.name}</strong>.
+      </p>
+
+      <div class="work-target-summary-chip">
+        <BookOpen size={16} class="text-cyan" />
+        <span class="chip-work-title">{approveWorkReq.work?.title}</span>
+        <span class="chip-work-format">({approveWorkReq.work?.kind || 'Mangá'})</span>
+      </div>
+
+      {#if approveWorkReq.existing_work_scans && approveWorkReq.existing_work_scans.length > 0}
+        <div class="existing-scans-warning">
+          <AlertTriangle size={15} class="text-amber" />
+          <span>Esta obra já possui {approveWorkReq.existing_work_scans.length} {approveWorkReq.existing_work_scans.length === 1 ? 'scan vinculada' : 'scans vinculadas'}. O novo vínculo não removerá nem afetará o trabalho das outras equipes.</span>
+        </div>
+      {/if}
+
+      <div class="primary-scan-toggle-box">
+        <label class="toggle-checkbox-label">
+          <input type="checkbox" bind:checked={approveWorkIsPrimary} class="checkbox-input" />
+          <span class="toggle-title">Definir como Scan Principal desta obra</span>
+        </label>
+        <p class="toggle-help">
+          Se desmarcado, a scan será vinculada como equipe colaboradora, preservando a scan principal existente.
+        </p>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick={() => (approveWorkModalOpen = false)} disabled={busy}>
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn-emerald-solid"
+          disabled={busy}
+          onclick={() => submitWorkReview('APPROVE')}
+        >
+          <Check size={15} />
+          <span>{busy ? 'Processando...' : 'Confirmar e Conceder Vínculo'}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- MODAL: Recusa de Adesão de Obra -->
+{#if rejectWorkModalOpen && rejectWorkReq}
+  <div class="modal-backdrop" onclick={() => (rejectWorkModalOpen = false)}></div>
+  <div class="modal-dialog reject-work-dialog" role="dialog" aria-modal="true">
+    <div class="modal-header modal-header-danger">
+      <div class="danger-title-box">
+        <XCircle size={20} class="text-danger" />
+        <h3>Recusar Solicitação de Obra</h3>
+      </div>
+      <button type="button" class="btn-close" onclick={() => (rejectWorkModalOpen = false)}><X size={18} /></button>
+    </div>
+    <div class="modal-form">
+      <p class="modal-prompt-text">
+        Indique a justificativa administrativa para recusar a adesão da obra <strong>{rejectWorkReq.work?.title}</strong> pela scan <strong>{rejectWorkReq.scan?.name}</strong>. O responsável receberá esta notificação.
+      </p>
+
+      <div class="form-field">
+        <label for="reject-work-reason">Motivo da Recusa (Obrigatório):</label>
+        <textarea
+          id="reject-work-reason"
+          bind:value={rejectWorkReason}
+          rows={4}
+          class="form-textarea"
+          placeholder="Ex: A obra já possui equipe ativa com exclusividade; ou as amostras fornecidas não atendem aos critérios editoriais mínimos..."
+          required
+        ></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick={() => (rejectWorkModalOpen = false)} disabled={busy}>
+          Cancelar
+        </button>
+        <button
+          type="button"
+          class="btn-danger-solid"
+          disabled={busy || !rejectWorkReason.trim()}
+          onclick={() => submitWorkReview('REJECT')}
+        >
+          <X size={15} />
+          <span>{busy ? 'Processando...' : 'Confirmar Recusa'}</span>
+        </button>
+      </div>
+    </div>
   </div>
 {/if}
 
@@ -3978,6 +4502,594 @@
     }
     .ticket-badges-row, .mod-author-name-line {
       flex-wrap: wrap;
+    }
+  }
+
+  /* ========================================================
+     TAB 4: ADESÃO DE OBRAS (STYLING)
+     ======================================================== */
+  .tickets-header.obras-theme {
+    border-color: rgba(6, 182, 212, 0.25);
+    background: radial-gradient(circle at 10% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 60%),
+                linear-gradient(180deg, rgba(13, 17, 23, 0.95) 0%, rgba(13, 17, 23, 0.8) 100%);
+  }
+  .cyan-badge {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+  }
+  .tab-badge.cyan {
+    background: rgba(6, 182, 212, 0.2);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+  }
+  .filter-pill.pill-cyan.active {
+    background: rgba(6, 182, 212, 0.18);
+    border-color: rgba(6, 182, 212, 0.45);
+    color: #22d3ee;
+  }
+  .stat-icon-wrapper.obras {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+  }
+  .text-cyan {
+    color: #22d3ee !important;
+  }
+
+  .toolbar-search-wrap {
+    flex: 1;
+    max-width: 320px;
+  }
+  .filter-search-input {
+    width: 100%;
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: #141824;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f1f5f9;
+    font-size: 12.5px;
+  }
+  .filter-search-input:focus {
+    border-color: rgba(6, 182, 212, 0.5);
+    outline: none;
+  }
+
+  .work-requests-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .work-ticket-card {
+    background: rgba(18, 22, 34, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .work-ticket-card.pending-card {
+    border-color: rgba(6, 182, 212, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  .work-ticket-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 12px;
+  }
+  .ticket-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .scan-mini-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .ticket-scan-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    object-fit: cover;
+    background: #0d1117;
+  }
+  .ticket-scan-logo-fallback {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: #1e293b;
+    color: #22d3ee;
+    font-weight: 800;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+  }
+  .scan-text-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .scan-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ticket-scan-name {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 750;
+    color: #f8fafc;
+  }
+  .scan-slug-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: monospace;
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .scan-slug-pill:hover {
+    color: #22d3ee;
+    border-color: rgba(6, 182, 212, 0.3);
+  }
+  .requester-byline {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .requester-byline strong {
+    color: #e2e8f0;
+  }
+
+  .ticket-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .status-pill-work {
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .status-pill-work.pending {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+  }
+  .status-pill-work.approved {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+  }
+  .status-pill-work.rejected {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+  .status-pill-work.cancelled {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
+  .ticket-date-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: #64748b;
+  }
+
+  .work-ticket-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .target-work-detail-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .target-work-cover-wrap {
+    width: 60px;
+    aspect-ratio: 3 / 4;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #0d1117;
+  }
+  .target-work-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .target-work-cover-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e293b;
+    color: #64748b;
+  }
+  .target-work-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+  .target-work-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .format-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(223, 194, 141, 0.15);
+    color: #dfc28d;
+    border: 1px solid rgba(223, 194, 141, 0.3);
+  }
+  .work-status-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+  }
+  .target-work-title {
+    margin: 2px 0 0 0;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .work-link {
+    color: #f1f5f9;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .work-link:hover {
+    color: #22d3ee;
+  }
+  .target-work-author {
+    margin: 0;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .existing-scans-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    font-size: 11.5px;
+  }
+  .strip-label {
+    color: #64748b;
+    font-weight: 600;
+  }
+  .existing-scans-pills {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .existing-scan-pill {
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .existing-scan-pill.is-primary {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .no-existing-scans-pill {
+    color: #4ade80;
+    font-style: italic;
+    font-size: 11px;
+  }
+
+  .request-justification-box {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(6, 182, 212, 0.04);
+    border: 1px solid rgba(6, 182, 212, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .justification-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #22d3ee;
+  }
+  .justification-text {
+    margin: 0;
+    font-size: 12.5px;
+    color: #cbd5e1;
+    line-height: 1.45;
+    font-style: italic;
+  }
+
+  .decision-result-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .decision-result-box.approved-box {
+    background: rgba(34, 197, 94, 0.06);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    color: #86efac;
+  }
+  .decision-result-box.rejected-box {
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+  .decision-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .rejection-reason-quote {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #f87171;
+    font-style: italic;
+  }
+
+  .work-ticket-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 12px;
+  }
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn-outline-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    transition: all 0.14s ease;
+  }
+  .btn-outline-sm:hover {
+    color: #f1f5f9;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .btn-approve-work {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 7px;
+    background: rgba(34, 197, 94, 0.18);
+    border: 1px solid rgba(34, 197, 94, 0.45);
+    color: #4ade80;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-approve-work:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.3);
+    border-color: #22c55e;
+  }
+  .btn-reject-work {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 12px;
+    border-radius: 7px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #f87171;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-reject-work:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.24);
+    border-color: #ef4444;
+  }
+
+  /* Modal Helpers */
+  .modal-header-emerald {
+    border-bottom: 1px solid rgba(34, 197, 94, 0.25);
+  }
+  .emerald-title-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .emerald-title-box h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 750;
+    color: #4ade80;
+  }
+  .modal-prompt-text {
+    font-size: 13.5px;
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin: 0 0 12px 0;
+  }
+  .work-target-summary-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    margin-bottom: 14px;
+  }
+  .chip-work-title {
+    font-weight: 700;
+    color: #f1f5f9;
+    font-size: 13.5px;
+  }
+  .chip-work-format {
+    color: #94a3b8;
+    font-size: 12px;
+  }
+  .existing-scans-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-bottom: 14px;
+  }
+  .primary-scan-toggle-box {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 16px;
+  }
+  .toggle-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .checkbox-input {
+    width: 16px;
+    height: 16px;
+    accent-color: #22c55e;
+  }
+  .toggle-title {
+    font-size: 13px;
+    font-weight: 650;
+    color: #f1f5f9;
+  }
+  .toggle-help {
+    margin: 6px 0 0 24px;
+    font-size: 11.5px;
+    color: #94a3b8;
+    line-height: 1.4;
+  }
+  .btn-emerald-solid {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 7px;
+    background: #16a34a;
+    border: 1px solid #22c55e;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .btn-emerald-solid:hover:not(:disabled) {
+    background: #15803d;
+  }
+
+  @media (max-width: 640px) {
+    .work-ticket-top {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .ticket-header-right {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .target-work-detail-card {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .target-work-cover-wrap {
+      width: 80px;
+    }
+    .target-work-badges, .existing-scans-strip {
+      justify-content: center;
+    }
+    .work-ticket-footer {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .footer-left, .footer-right {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .btn-approve-work, .btn-reject-work {
+      flex: 1;
+      justify-content: center;
+      min-height: 44px;
+    }
+    .btn-outline-sm {
+      min-height: 40px;
+      justify-content: center;
+    }
+    .toolbar-search-wrap {
+      max-width: 100%;
+      width: 100%;
     }
   }
 </style>

@@ -99,6 +99,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }: any) => {
 };
 
 export const actions: Actions = {
+  // Canonical mark_notification_read operation
   markRead: async ({ request, locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
@@ -125,6 +126,7 @@ export const actions: Actions = {
     return { success: true, markedReadId: id };
   },
 
+  // Canonical mark_all_notifications_read operation
   markAllRead: async ({ locals, platform }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
 

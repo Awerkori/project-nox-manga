@@ -13,7 +13,7 @@ export const load = async ({ locals, platform }: any) => {
   const cacheKey = isAdmin ? 'admin' : 'editorial';
 
   return withSingleFlightCache(adminLayoutCache, adminLayoutFlights, cacheKey, ADMIN_LAYOUT_COUNTS_TTL_MS, async () => {
-    const [reportsRes, scansRes, modRes] = await Promise.all([
+    const [reportsRes, scansRes, modRes, workReqsRes] = await Promise.all([
       executeYugabyteSql(
         `SELECT count(*)::int AS cnt
          FROM public.reports
@@ -42,18 +42,30 @@ export const load = async ({ locals, platform }: any) => {
             [],
             platform?.env
           ).catch(() => ({ rows: [{ cnt: 0 }] }))
+        : Promise.resolve({ rows: [{ cnt: 0 }] }),
+
+      isAdmin
+        ? executeYugabyteSql(
+            `SELECT count(*)::int AS cnt
+             FROM public.scan_project_requests
+             WHERE status = 'PENDING';`,
+            [],
+            platform?.env
+          ).catch(() => ({ rows: [{ cnt: 0 }] }))
         : Promise.resolve({ rows: [{ cnt: 0 }] })
     ]);
 
     const pendingReportsCount = Number(reportsRes?.rows[0]?.cnt) || 0;
     const pendingScansCount = Number(scansRes?.rows[0]?.cnt) || 0;
     const pendingModerationCount = Number(modRes?.rows[0]?.cnt) || 0;
-    const totalTicketsCount = pendingReportsCount + (isAdmin ? pendingScansCount + pendingModerationCount : 0);
+    const pendingWorkRequestsCount = Number(workReqsRes?.rows[0]?.cnt) || 0;
+    const totalTicketsCount = pendingReportsCount + (isAdmin ? pendingScansCount + pendingModerationCount + pendingWorkRequestsCount : 0);
 
     return {
       pendingReportsCount,
       pendingScansCount,
       pendingModerationCount,
+      pendingWorkRequestsCount,
       totalTicketsCount
     };
   });

@@ -21,8 +21,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
   const isAdmin = locals.role === 'ADMIN';
   const requestedTab = url.searchParams.get('tab') || 'relatorios';
 
-  // Strict permission guard: non-admin users cannot access 'scans' or 'moderacao'
-  if (!isAdmin && (requestedTab === 'scans' || requestedTab === 'moderacao')) {
+  // Strict permission guard: non-admin users cannot access 'scans', 'moderacao' or 'obras'
+  if (!isAdmin && (requestedTab === 'scans' || requestedTab === 'moderacao' || requestedTab === 'obras')) {
     throw redirect(303, '/admin/tickets?tab=relatorios');
   }
 
@@ -30,10 +30,12 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
     ? 'scans'
     : (requestedTab === 'moderacao' && isAdmin)
     ? 'moderacao'
+    : (requestedTab === 'obras' && isAdmin)
+    ? 'obras'
     : 'relatorios';
 
   const requestedStatus = url.searchParams.get('status');
-  const defaultStatus = activeTab === 'scans' ? 'PENDING' : 'NOVO';
+  const defaultStatus = (activeTab === 'scans' || activeTab === 'obras') ? 'PENDING' : 'NOVO';
   const statusFilter = requestedStatus || defaultStatus;
   const typeFilter = url.searchParams.get('type') || 'ALL';
   const searchQuery = (url.searchParams.get('q') || '').trim().toLowerCase();
@@ -152,14 +154,91 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         rawModeration = res.rows;
       }
 
-      // 4. Overall counts for badges and stats
-      const [allReportsRes, allScansRes] = await Promise.all([
+      // 4. Scan Work Requests Query (ADMIN ONLY — only fetched when tab === 'obras')
+      let rawWorkRequests: any[] = [];
+      if (isAdmin && activeTab === 'obras') {
+        let query = `
+          SELECT 
+            r.id, r.scan_id, r.work_id, r.user_id, r.message, r.status,
+            r.reviewed_by, r.reviewed_at, r.rejection_reason, r.created_at,
+            jsonb_build_object(
+              'id', s.id,
+              'name', s.name,
+              'slug', s.slug,
+              'logo_id', s.logo_id,
+              'is_official', s.is_official
+            ) AS scan,
+            jsonb_build_object(
+              'id', w.id,
+              'title', w.title,
+              'slug', w.slug,
+              'cover_id', w.cover_id,
+              'kind', w.kind,
+              'status', w.status,
+              'author', w.author
+            ) AS work,
+            jsonb_build_object(
+              'id', m.id,
+              'username', m.username,
+              'display_name', m.display_name,
+              'avatar_id', m.avatar_id,
+              'avatar_crop', m.avatar_crop
+            ) AS requester,
+            (
+              SELECT sm.role FROM public.scan_members sm
+              WHERE sm.scan_id = r.scan_id AND sm.user_id = r.user_id
+              LIMIT 1
+            ) AS requester_role,
+            CASE WHEN rev.id IS NOT NULL THEN jsonb_build_object(
+              'id', rev.id,
+              'username', rev.username,
+              'display_name', rev.display_name,
+              'avatar_id', rev.avatar_id,
+              'avatar_crop', rev.avatar_crop
+            ) ELSE NULL END AS reviewer,
+            COALESCE((
+              SELECT jsonb_agg(jsonb_build_object(
+                'id', es.id,
+                'name', es.name,
+                'slug', es.slug,
+                'is_primary', ews.is_primary,
+                'status', ews.status
+              ))
+              FROM public.work_scans ews
+              JOIN public.scans es ON es.id = ews.scan_id
+              WHERE ews.work_id = r.work_id
+            ), '[]'::jsonb) AS existing_work_scans
+          FROM public.scan_project_requests r
+          JOIN public.scans s ON s.id = r.scan_id
+          JOIN public.works w ON w.id = r.work_id
+          JOIN public.members m ON m.id = r.user_id
+          LEFT JOIN public.members rev ON rev.id = r.reviewed_by
+          WHERE 1=1
+        `;
+        const params: any[] = [];
+        if (statusFilter !== 'ALL') {
+          params.push(statusFilter);
+          query += ` AND r.status = $${params.length}`;
+        }
+        if (searchQuery) {
+          params.push(`%${searchQuery}%`);
+          query += ` AND (s.name ILIKE $${params.length} OR w.title ILIKE $${params.length} OR m.username ILIKE $${params.length} OR m.display_name ILIKE $${params.length})`;
+        }
+        query += ` ORDER BY r.created_at DESC LIMIT 100;`;
+        const res = await executeYugabyteSql(query, params, platform?.env).catch(() => ({ rows: [] }));
+        rawWorkRequests = res.rows || [];
+      }
+
+      // 5. Overall counts for badges and stats
+      const [allReportsRes, allScansRes, allWorkRequestsRes] = await Promise.all([
         executeYugabyteSql(`SELECT id, status, target_type, assigned_to FROM public.reports WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })),
-        isAdmin ? executeYugabyteSql(`SELECT id, status, assigned_to FROM public.scan_partner_requests WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
+        isAdmin ? executeYugabyteSql(`SELECT id, status, assigned_to FROM public.scan_partner_requests WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] }),
+        isAdmin ? executeYugabyteSql(`SELECT id, status FROM public.scan_project_requests;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
       ]);
 
       const allReportsMeta = allReportsRes.rows || [];
       const allScansMeta = allScansRes.rows || [];
+      const allWorkRequestsMeta = allWorkRequestsRes.rows || [];
 
       // Categorize counts
       const contentReportsList = allReportsMeta.filter((r: any) => !['COMMENT', 'USER'].includes(r.target_type));
@@ -187,6 +266,14 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         RESOLVIDO: moderationReportsList.filter((r: any) => r.status === 'RESOLVIDO').length,
         REJEITADO: moderationReportsList.filter((r: any) => r.status === 'REJEITADO').length,
         ALL: moderationReportsList.length
+      };
+
+      const workRequestStatusCounts = {
+        PENDING: allWorkRequestsMeta.filter((s: any) => s.status === 'PENDING').length,
+        APPROVED: allWorkRequestsMeta.filter((s: any) => s.status === 'APPROVED').length,
+        REJECTED: allWorkRequestsMeta.filter((s: any) => s.status === 'REJECTED').length,
+        CANCELLED: allWorkRequestsMeta.filter((s: any) => s.status === 'CANCELLED').length,
+        ALL: allWorkRequestsMeta.length
       };
 
       // Enrich Content Reports with specific Work, Chapter, and Page context
@@ -416,7 +503,8 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       const pendingReportsCount = contentStatusCounts.NOVO + contentStatusCounts.EM_ANALISE;
       const pendingScansCount = partnerStatusCounts.PENDING;
       const pendingModerationCount = moderationStatusCounts.NOVO + moderationStatusCounts.EM_ANALISE;
-      const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount) : 0);
+      const pendingWorkRequestsCount = workRequestStatusCounts.PENDING;
+      const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount + pendingWorkRequestsCount) : 0);
 
       return {
         isAdmin,
@@ -431,11 +519,14 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         partnerStatusCounts,
         moderationReports: enrichedModeration,
         moderationStatusCounts,
+        workRequests: rawWorkRequests,
+        workRequestStatusCounts,
         ticketStats: {
           totalTicketsCount,
           pendingReportsCount,
           pendingScansCount,
-          pendingModerationCount
+          pendingModerationCount,
+          pendingWorkRequestsCount
         }
       };
     }
@@ -1094,6 +1185,177 @@ export const actions: Actions = {
 
       invalidateAdminTicketsCache();
       return { success: true, action: 'delete', ticketId };
+    }
+  },
+
+  reviewWorkRequest: async ({ request, locals, platform }) => {
+    if (!locals.user || locals.role !== 'ADMIN') {
+      return fail(403, { message: 'Acesso negado. Apenas Administradores Globais autorizados.' });
+    }
+
+    const formData = await request.formData();
+    const requestId = (formData.get('request_id') as string)?.trim();
+    const actionType = (formData.get('action') as string)?.trim();
+    const reason = (formData.get('reason') as string)?.trim() || null;
+    const isPrimary = formData.get('is_primary') === 'true';
+
+    if (!requestId || !['APPROVE', 'REJECT'].includes(actionType)) {
+      return fail(400, { message: 'Dados de avaliação da solicitação inválidos.' });
+    }
+
+    if (actionType === 'REJECT' && !reason) {
+      return fail(400, { message: 'A justificativa administrativa é obrigatória para rejeitar a solicitação.' });
+    }
+
+    // 1. Fetch current request state
+    const reqRes = await executeYugabyteSql<any>(
+      `SELECT r.*, w.title as work_title, s.name as scan_name
+       FROM public.scan_project_requests r
+       JOIN public.works w ON w.id = r.work_id
+       JOIN public.scans s ON s.id = r.scan_id
+       WHERE r.id = $1`,
+      [requestId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
+
+    const targetReq = reqRes.rows[0];
+    if (!targetReq) {
+      return fail(404, { message: 'Solicitação de obra não encontrada.' });
+    }
+
+    if (targetReq.status !== 'PENDING') {
+      return fail(400, {
+        message: `Esta solicitação já foi finalizada anteriormente (Status atual: ${targetReq.status}).`
+      });
+    }
+
+    try {
+      if (actionType === 'APPROVE') {
+        // Atomic approval: update request status
+        await executeYugabyteSql(
+          `UPDATE public.scan_project_requests
+           SET status = 'APPROVED', reviewed_by = $2, reviewed_at = now()
+           WHERE id = $1;`,
+          [requestId, locals.user.id],
+          platform?.env
+        );
+
+        // If marked as primary, ensure other scans for this work are not primary
+        if (isPrimary) {
+          await executeYugabyteSql(
+            `UPDATE public.work_scans SET is_primary = false WHERE work_id = $1;`,
+            [targetReq.work_id],
+            platform?.env
+          ).catch(() => {});
+        }
+
+        // Insert or update link in work_scans
+        await executeYugabyteSql(
+          `INSERT INTO public.work_scans (work_id, scan_id, is_primary, status)
+           VALUES ($1, $2, $3, 'ACTIVE')
+           ON CONFLICT (work_id, scan_id) DO UPDATE
+           SET status = 'ACTIVE', is_primary = EXCLUDED.is_primary;`,
+          [targetReq.work_id, targetReq.scan_id, isPrimary],
+          platform?.env
+        );
+
+        // Audit log
+        try {
+          await executeYugabyteSql(
+            `INSERT INTO public.audit_log (actor_id, action, target_id, metadata)
+             VALUES ($1, 'scan_project_request_approve', $2, $3::jsonb);`,
+            [
+              locals.user.id,
+              requestId,
+              JSON.stringify({
+                work_id: targetReq.work_id,
+                scan_id: targetReq.scan_id,
+                is_primary: isPrimary
+              })
+            ],
+            platform?.env
+          );
+        } catch {}
+
+        // Send approval notification
+        try {
+          await createNotification({
+            recipientUserId: targetReq.user_id,
+            type: 'SYSTEM',
+            title: 'Obra vinculada com sucesso!',
+            body: `Sua solicitação para vincular a obra "${targetReq.work_title}" à scan "${targetReq.scan_name}" foi aprovada pela administração.`,
+            deepLink: '/scan?tab=obras'
+          }, platform);
+        } catch (e: any) {
+          console.warn('Failed to send work approval notification:', e?.message);
+        }
+
+        invalidateAdminTicketsCache();
+        invalidateAdminScansCache();
+        invalidateScansDirectoryCache();
+
+        return {
+          success: true,
+          action: 'APPROVE',
+          requestId,
+          workTitle: targetReq.work_title,
+          scanName: targetReq.scan_name
+        };
+      } else {
+        // Atomic rejection: update request status with reason
+        await executeYugabyteSql(
+          `UPDATE public.scan_project_requests
+           SET status = 'REJECTED', reviewed_by = $2, reviewed_at = now(), rejection_reason = $3
+           WHERE id = $1;`,
+          [requestId, locals.user.id, reason],
+          platform?.env
+        );
+
+        // Audit log
+        try {
+          await executeYugabyteSql(
+            `INSERT INTO public.audit_log (actor_id, action, target_id, metadata)
+             VALUES ($1, 'scan_project_request_reject', $2, $3::jsonb);`,
+            [
+              locals.user.id,
+              requestId,
+              JSON.stringify({
+                work_id: targetReq.work_id,
+                scan_id: targetReq.scan_id,
+                reason
+              })
+            ],
+            platform?.env
+          );
+        } catch {}
+
+        // Send rejection notification with reason
+        try {
+          await createNotification({
+            recipientUserId: targetReq.user_id,
+            type: 'SYSTEM',
+            title: 'Solicitação de obra recusada',
+            body: `Sua solicitação para vincular a obra "${targetReq.work_title}" à scan "${targetReq.scan_name}" foi recusada pela administração. Motivo: ${reason}`,
+            deepLink: '/scan?tab=obras'
+          }, platform);
+        } catch (e: any) {
+          console.warn('Failed to send work rejection notification:', e?.message);
+        }
+
+        invalidateAdminTicketsCache();
+        invalidateAdminScansCache();
+
+        return {
+          success: true,
+          action: 'REJECT',
+          requestId,
+          workTitle: targetReq.work_title,
+          scanName: targetReq.scan_name
+        };
+      }
+    } catch (err: any) {
+      console.error('Error reviewing work request:', err);
+      return fail(500, { message: err?.message || 'Falha ao processar avaliação do pedido de obra.' });
     }
   }
 };

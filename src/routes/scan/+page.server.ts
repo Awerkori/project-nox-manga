@@ -1,7 +1,8 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { dispatchScanMentions } from '$lib/server/scan-mentions';
 import { createScanNotification } from '$lib/server/scan-notifications';
-import { processPendingEmailOutbox } from '$lib/server/notifications';
+import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
+import { invalidateAdminTicketsCache } from '$lib/server/admin-cache';
 import { withTimeout } from '$lib/server/resilience';
 import { executeYugabyteSql, withYugabyteLkg, withYugabyteReadSession } from '$lib/server/yugabyte';
 import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
@@ -720,7 +721,8 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
            'kind', work.kind,
            'views_total', work.views_total,
            'updated_at', work.updated_at,
-           'published', work.published
+           'published', work.published,
+           'chapters_count', (SELECT count(*)::int FROM public.chapters WHERE work_id = work.id)
          ) AS works
        FROM public.work_scans work_scan
        JOIN public.works work ON work.id = work_scan.work_id
@@ -1766,16 +1768,93 @@ export const actions: Actions = {
     const message = (formData.get('message') as string)?.trim() || '';
 
     if (!scanId || !workId) {
-      return fail(400, { message: 'Obra é obrigatória.' });
+      return fail(400, { message: 'Identificadores da scan e da obra são obrigatórios.' });
     }
 
-    await executeYugabyteSql(
-      `INSERT INTO public.scan_project_requests (scan_id, work_id, user_id, message)
-       SELECT $1, $2, $3, $4
-       WHERE EXISTS (SELECT 1 FROM public.scan_members WHERE scan_id = $1 AND user_id = $3)`,
-      [scanId, workId, locals.user.id, message], platform?.env
+    // 1. Strict Server-Side RBAC Guard: only scan OWNER, scan ADMIN, or global site ADMIN
+    const isGlobalAdmin = locals.role === 'ADMIN';
+    if (!isGlobalAdmin) {
+      const permRes = await executeYugabyteSql<{ role: string }>(
+        `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
+        [scanId, locals.user.id],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+
+      const userScanRole = permRes.rows[0]?.role;
+      if (!userScanRole || !['OWNER', 'ADMIN'].includes(userScanRole)) {
+        return fail(403, {
+          message: 'Apenas o Dono ou Administradores da scan possuem permissão para solicitar obras do catálogo.'
+        });
+      }
+    }
+
+    // 2. Verify work exists in catalog
+    const workRes = await executeYugabyteSql<{ id: string; title: string; slug: string }>(
+      `SELECT id, title, slug FROM public.works WHERE id = $1`,
+      [workId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
+
+    const targetWork = workRes.rows[0];
+    if (!targetWork) {
+      return fail(404, { message: 'Obra solicitada não foi encontrada no catálogo.' });
+    }
+
+    // 3. Prevent duplicate requests: check if work is already linked
+    const linkedRes = await executeYugabyteSql(
+      `SELECT 1 FROM public.work_scans WHERE scan_id = $1 AND work_id = $2`,
+      [scanId, workId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
+
+    if (linkedRes.rows.length > 0) {
+      return fail(409, { message: `A obra "${targetWork.title}" já está vinculada à sua scan.` });
+    }
+
+    // 4. Prevent duplicate requests: check if there is an active pending request
+    const pendingRes = await executeYugabyteSql(
+      `SELECT id FROM public.scan_project_requests WHERE scan_id = $1 AND work_id = $2 AND status = 'PENDING'`,
+      [scanId, workId],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
+
+    if (pendingRes.rows.length > 0) {
+      return fail(409, {
+        message: `Já existe uma solicitação pendente para a obra "${targetWork.title}". Aguarde a análise da equipe.`
+      });
+    }
+
+    // 5. Atomic insert of the request in YugabyteDB
+    const insertRes = await executeYugabyteSql(
+      `INSERT INTO public.scan_project_requests (scan_id, work_id, user_id, message, status)
+       VALUES ($1, $2, $3, $4, 'PENDING')
+       RETURNING id, created_at;`,
+      [scanId, workId, locals.user.id, message],
+      platform?.env
     );
-    return { success: true, projectRequested: true };
+
+    // 6. Invalidate tickets cache for real-time visibility in admin panel
+    invalidateAdminTicketsCache();
+
+    // 7. Dispatch confirmation notification to the requester
+    try {
+      await createNotification({
+        recipientUserId: locals.user.id,
+        type: 'SYSTEM',
+        title: 'Solicitação de Obra Enviada',
+        body: `Sua solicitação de vinculação da obra "${targetWork.title}" foi enviada com sucesso e está aguardando análise na Central de Tickets.`,
+        deepLink: '/scan?tab=obras'
+      }, platform);
+    } catch (e: any) {
+      console.warn('Failed to send request confirmation notification:', e?.message);
+    }
+
+    return {
+      success: true,
+      projectRequested: true,
+      requestId: insertRes.rows[0]?.id,
+      workTitle: targetWork.title
+    };
   },
 
   cancelProjectRequest: async ({ request, locals, platform }) => {
@@ -1783,12 +1862,36 @@ export const actions: Actions = {
     const formData = await request.formData();
     const requestId = formData.get('request_id') as string;
 
+    if (!requestId) {
+      return fail(400, { message: 'ID da solicitação é obrigatório.' });
+    }
+
+    // Can cancel if is requester OR is scan leader OR is site admin
     const result = await executeYugabyteSql(
-      `DELETE FROM public.scan_project_requests request
-       WHERE request.id = $1 AND request.user_id = $2`,
-      [requestId, locals.user.id], platform?.env
+      `UPDATE public.scan_project_requests
+       SET status = 'CANCELLED'
+       WHERE id = $1
+         AND status = 'PENDING'
+         AND (
+           user_id = $2
+           OR EXISTS (
+             SELECT 1 FROM public.scan_members sm
+             WHERE sm.scan_id = scan_project_requests.scan_id
+               AND sm.user_id = $2
+               AND sm.role IN ('OWNER', 'ADMIN')
+           )
+           OR $3::boolean
+         )
+       RETURNING id;`,
+      [requestId, locals.user.id, locals.role === 'ADMIN'],
+      platform?.env
     );
-    if (result.rowCount === 0) return fail(404, { message: 'Solicitação inexistente ou sem permissão.' });
+
+    if (result.rowCount === 0) {
+      return fail(404, { message: 'Solicitação inexistente, já processada ou sem permissão para cancelamento.' });
+    }
+
+    invalidateAdminTicketsCache();
     return { success: true, projectRequestCancelled: true };
   },
 

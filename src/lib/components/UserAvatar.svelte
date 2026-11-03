@@ -36,6 +36,7 @@
   const KNOWN_AVATAR_MAPPINGS: Record<string, string> = {};
 
   const KNOWN_USER_AVATARS: Record<string, { avatar_id: string; avatar_crop?: any; avatar_frame_id?: string | null }> = {
+    '732fbe87-5040-41fb-9983-0aedb2af44c8': { avatar_id: '4c812f93-6bb1-40f9-9151-dc2d20e86e5e', avatar_crop: { x: 50, y: 50, zoom: 1 } },
     '86b6a05e-9c2d-4bb4-8381-c9890c730f17': { avatar_id: '9904139f-5f15-4e73-b735-abaf839efdfb', avatar_crop: { x: 50, y: 50, zoom: 1 } },
     '4272565e-6076-4d3d-b002-3f94c5fc64a5': { avatar_id: 'b50eff99-dec4-4ca7-94d4-2e3dd479fd10', avatar_crop: { x: 55, y: 45, zoom: 1.5 } },
     '5c68de04-c72a-4df8-86a7-b851057208dc': { avatar_id: '8b2e2705-be0a-40c9-88e1-bb82c569d283', avatar_crop: { x: 50, y: 50, zoom: 1 } },

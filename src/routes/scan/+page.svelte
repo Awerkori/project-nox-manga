@@ -432,14 +432,93 @@
   );
 
   let showProjectModal = $state(false);
-  $effect(() => {
-    if (showProjectModal) {
-      ensureModuleLoaded('catalog_works');
-    }
-  });
   let selectedWorkId = $state('');
+  let selectedWork = $state<any | null>(null);
+  let projectSearchQuery = $state('');
+  let projectSearchResults = $state<any[]>([]);
+  let projectIsSearching = $state(false);
+  let projectSearchError = $state<string | null>(null);
+  let projectHasSearched = $state(false);
   let projectMessage = $state('');
   let projectSubmitting = $state(false);
+  let projectSearchAbortController: AbortController | null = null;
+  let projectSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleProjectSearchInput(value: string) {
+    projectSearchQuery = value;
+    if (projectSearchDebounceTimer) clearTimeout(projectSearchDebounceTimer);
+
+    if (projectSearchAbortController) {
+      projectSearchAbortController.abort();
+      projectSearchAbortController = null;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length < 1) {
+      projectSearchResults = [];
+      projectIsSearching = false;
+      projectSearchError = null;
+      projectHasSearched = false;
+      return;
+    }
+
+    projectIsSearching = true;
+    projectSearchError = null;
+
+    projectSearchDebounceTimer = setTimeout(async () => {
+      const controller = new AbortController();
+      projectSearchAbortController = controller;
+
+      try {
+        const scanId = data.currentScan?.id || '';
+        const res = await fetch(
+          `/api/scan/works/search?scan_id=${encodeURIComponent(scanId)}&q=${encodeURIComponent(trimmed)}&limit=10`,
+          { signal: controller.signal }
+        );
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Erro ao buscar obras.');
+        }
+
+        const resData = await res.json();
+        projectSearchResults = resData.results || [];
+        projectHasSearched = true;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        projectSearchError = err.message || 'Erro de conexão na busca.';
+      } finally {
+        projectIsSearching = false;
+      }
+    }, 280);
+  }
+
+  function selectProjectWork(w: any) {
+    if (w.link_status !== 'AVAILABLE') return;
+    selectedWork = w;
+    selectedWorkId = w.id;
+  }
+
+  function clearSelectedProjectWork() {
+    selectedWork = null;
+    selectedWorkId = '';
+  }
+
+  function closeProjectModal() {
+    showProjectModal = false;
+    selectedWork = null;
+    selectedWorkId = '';
+    projectSearchQuery = '';
+    projectSearchResults = [];
+    projectIsSearching = false;
+    projectSearchError = null;
+    projectHasSearched = false;
+    projectMessage = '';
+    if (projectSearchAbortController) {
+      projectSearchAbortController.abort();
+      projectSearchAbortController = null;
+    }
+  }
 
   let transferTarget = $state<any>(null);
   let transferSubmitting = $state(false);
@@ -2539,51 +2618,188 @@
   {/if}
 
   {#if showProjectModal}
-    <div class="modal-backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={(event) => dismissBackdrop(event, () => (showProjectModal = false))} onkeydown={(event) => dismissOnEscape(event, () => (showProjectModal = false))}>
-      <div class="modal-card mini-modal">
+    <div
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(event) => dismissBackdrop(event, closeProjectModal)}
+      onkeydown={(event) => dismissOnEscape(event, closeProjectModal)}
+    >
+      <div class="modal-card project-search-modal">
         <div class="modal-header">
-          <h2 class="modal-title">Solicitar Obra do Catálogo</h2>
-          <button class="btn-close-modal" onclick={() => (showProjectModal = false)}><X size={18} /></button>
+          <div class="modal-title-wrap">
+            <BookOpen size={18} class="text-cyan" />
+            <h2 class="modal-title">Solicitar Obra do Catálogo</h2>
+          </div>
+          <button type="button" class="btn-close-modal" onclick={closeProjectModal}><X size={18} /></button>
         </div>
+
+        <p class="modal-subtitle">
+          Encontre uma obra do catálogo do Project Nox e solicite sua vinculação à sua scan.
+        </p>
+
         <form
           method="POST"
           action="?/requestProject"
           use:enhance={() => {
             projectSubmitting = true;
-            return async ({ update }) => {
+            return async ({ update, result }) => {
               projectSubmitting = false;
-              showProjectModal = false;
+              if (result.type === 'success') {
+                closeProjectModal();
+              }
               await update();
             };
           }}
           class="modal-form"
         >
           <input type="hidden" name="scan_id" value={data.currentScan?.id} />
+          <input type="hidden" name="work_id" value={selectedWorkId} />
+
+          <!-- Smart Search Section -->
           <div class="form-field">
-            <label for="proj-work">Selecione a Obra Desejada:</label>
-            <select id="proj-work" name="work_id" bind:value={selectedWorkId} required class="form-select">
-              <option value="" disabled>Escolha uma obra...</option>
-              {#each (catalogWorks.length ? catalogWorks : (data.catalogWorks || [])) as w (w.id)}
-                <option value={w.id}>{w.title}</option>
-              {/each}
-            </select>
+            <label for="proj-search-input" class="form-label">
+              <span>Pesquisar obra</span>
+              <span class="required-star">*</span>
+            </label>
+
+            {#if !selectedWork}
+              <div class="search-input-wrap">
+                <Search size={16} class="search-icon text-muted" />
+                <input
+                  id="proj-search-input"
+                  type="search"
+                  class="smart-search-input"
+                  placeholder="Digite o título ou nome alternativo da obra..."
+                  value={projectSearchQuery}
+                  oninput={(e) => handleProjectSearchInput(e.currentTarget.value)}
+                  autocomplete="off"
+                />
+                {#if projectIsSearching}
+                  <span class="search-spinner-pill">Buscando...</span>
+                {/if}
+              </div>
+
+              <!-- Search Feedback & Results List -->
+              {#if projectSearchError}
+                <div class="search-feedback-box error">
+                  <span>{projectSearchError}</span>
+                </div>
+              {:else if projectIsSearching}
+                <div class="search-feedback-box loading">
+                  <span>Pesquisando no catálogo...</span>
+                </div>
+              {:else if projectHasSearched && projectSearchResults.length === 0}
+                <div class="search-feedback-box empty">
+                  <span>Nenhuma obra encontrada para "{projectSearchQuery}". Verifique o título ou tente um nome alternativo.</span>
+                </div>
+              {:else if projectSearchResults.length > 0}
+                <div class="search-results-list" role="listbox">
+                  {#each projectSearchResults as w (w.id)}
+                    <button
+                      type="button"
+                      class="search-result-item"
+                      class:is-linked={w.link_status === 'LINKED'}
+                      class:is-pending={w.link_status === 'PENDING'}
+                      disabled={w.link_status !== 'AVAILABLE'}
+                      onclick={() => selectProjectWork(w)}
+                    >
+                      <div class="result-cover-box">
+                        {#if w.cover_id}
+                          <img src="/media/{w.cover_id}" alt="Capa de {w.title}" class="result-cover-img" />
+                        {:else}
+                          <div class="result-cover-fallback">
+                            <BookOpen size={16} />
+                          </div>
+                        {/if}
+                      </div>
+
+                      <div class="result-info-box">
+                        <div class="result-top-line">
+                          <strong class="result-title">{w.title}</strong>
+                          <span class="result-badge {w.link_status.toLowerCase()}">
+                            {w.link_label}
+                          </span>
+                        </div>
+
+                        {#if w.aliases && w.aliases.length > 0}
+                          <span class="result-aliases">Alt: {w.aliases.slice(0, 2).join(', ')}</span>
+                        {/if}
+
+                        <div class="result-meta-line">
+                          <span class="result-kind">{w.kind || 'Mangá'}</span>
+                          <span class="result-dot">•</span>
+                          <span class="result-caps">{w.chapters_count} caps no catálogo</span>
+                          {#if w.author}
+                            <span class="result-dot">•</span>
+                            <span class="result-author">{w.author}</span>
+                          {/if}
+                        </div>
+                      </div>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            {:else}
+              <!-- Selected Work Highlight Card -->
+              <div class="selected-work-highlight">
+                <div class="selected-work-left">
+                  <div class="selected-work-cover-box">
+                    {#if selectedWork.cover_id}
+                      <img src="/media/{selectedWork.cover_id}" alt="Capa de {selectedWork.title}" class="selected-work-cover" />
+                    {:else}
+                      <div class="result-cover-fallback">
+                        <BookOpen size={18} />
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="selected-work-details">
+                    <span class="selected-work-label text-emerald">
+                      <CheckCircle2 size={13} /> Obra selecionada para solicitação
+                    </span>
+                    <strong class="selected-work-title">{selectedWork.title}</strong>
+                    <div class="selected-work-meta">
+                      <span>{selectedWork.kind || 'Mangá'}</span>
+                      <span>•</span>
+                      <span>{selectedWork.chapters_count} caps no catálogo</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="button" class="btn-change-work" onclick={clearSelectedProjectWork} title="Escolher outra obra">
+                  Trocar obra
+                </button>
+              </div>
+            {/if}
           </div>
+
+          <!-- Message / Justification Section -->
           <div class="form-field">
-            <label for="proj-msg">Mensagem / Justificativa (Opcional):</label>
+            <label for="proj-msg" class="form-label">
+              <span>Mensagem / Justificativa (Opcional)</span>
+            </label>
             <textarea
               id="proj-msg"
               name="message"
               rows={3}
               bind:value={projectMessage}
-              placeholder="Ex: Nossa equipe já traduz essa obra há 2 anos e gostaríamos de vincular nossos lançamentos..."
+              placeholder="Ex: Nossa equipe já trabalha nesta obra em outro site e gostaríamos de associar nossa scan à obra no Project Nox para disponibilizar nossos lançamentos."
               class="form-textarea"
             ></textarea>
           </div>
+
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" onclick={() => (showProjectModal = false)}>Cancelar</button>
-            <button type="submit" class="btn-primary" disabled={projectSubmitting || !selectedWorkId}>
+            <button type="button" class="btn-secondary" onclick={closeProjectModal} disabled={projectSubmitting}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              disabled={projectSubmitting || !selectedWorkId}
+            >
               <Send size={15} />
-              <span>{projectSubmitting ? 'Enviando...' : 'Enviar Solicitação'}</span>
+              <span>{projectSubmitting ? 'Enviando...' : 'Enviar solicitação'}</span>
             </button>
           </div>
         </form>
@@ -4800,6 +5016,277 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  /* ========================================================
+     SMART WORK SEARCH MODAL (RODADA 22)
+     ======================================================== */
+  .project-search-modal {
+    max-width: 580px;
+    width: 94%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(6, 182, 212, 0.15);
+  }
+  .modal-subtitle {
+    margin: -0.75rem 0 1.25rem 0;
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.45;
+  }
+  .modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+  .smart-search-input {
+    width: 100%;
+    padding: 10px 14px 10px 38px;
+    border-radius: 9px;
+    background: #0f1420;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 13.5px;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+  .smart-search-input:focus {
+    border-color: rgba(6, 182, 212, 0.6);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+  }
+  .search-input-wrap .search-icon {
+    position: absolute;
+    left: 12px;
+    pointer-events: none;
+  }
+  .search-spinner-pill {
+    position: absolute;
+    right: 10px;
+    font-size: 11px;
+    color: #22d3ee;
+    background: rgba(6, 182, 212, 0.15);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .search-feedback-box {
+    margin-top: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .search-feedback-box.loading {
+    background: rgba(255, 255, 255, 0.04);
+    color: #94a3b8;
+  }
+  .search-feedback-box.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+  .search-feedback-box.empty {
+    background: rgba(255, 255, 255, 0.03);
+    color: #94a3b8;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+  }
+
+  .search-results-list {
+    margin-top: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-radius: 10px;
+    background: rgba(10, 14, 22, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 6px;
+  }
+  .search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.14s ease;
+    width: 100%;
+  }
+  .search-result-item:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(6, 182, 212, 0.3);
+  }
+  .search-result-item:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .result-cover-box {
+    width: 40px;
+    aspect-ratio: 3 / 4;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #090c13;
+  }
+  .result-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .result-cover-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e293b;
+    color: #64748b;
+  }
+  .result-info-box {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .result-top-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .result-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .result-badge.available {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+  .result-badge.linked {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  .result-badge.pending {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+  }
+  .result-aliases {
+    font-size: 11px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: #94a3b8;
+  }
+  .result-dot {
+    color: #475569;
+  }
+
+  .selected-work-highlight {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.35);
+  }
+  .selected-work-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .selected-work-cover-box {
+    width: 48px;
+    aspect-ratio: 3 / 4;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #090c13;
+  }
+  .selected-work-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .selected-work-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .selected-work-label {
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .selected-work-title {
+    font-size: 14px;
+    font-weight: 750;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .selected-work-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: #94a3b8;
+  }
+  .btn-change-work {
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    font-size: 11.5px;
+    font-weight: 650;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.14s ease;
+  }
+  .btn-change-work:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
   }
 
   .form-select {

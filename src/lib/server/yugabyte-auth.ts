@@ -135,7 +135,15 @@ export async function verifySessionJwt(token: string, secret: string): Promise<D
     }
 
     // Explicitly reject Supabase-issued tokens (Supabase Zero policy)
-    if ((payload as any).iss === 'supabase' || (payload as any).ref === 'izregkwaqdygwioqzwwo') {
+    const iss = typeof (payload as any).iss === 'string' ? (payload as any).iss.toLowerCase() : '';
+    const ref = typeof (payload as any).ref === 'string' ? (payload as any).ref.toLowerCase() : '';
+    if (
+      iss === 'supabase' ||
+      iss.includes('supabase') ||
+      iss.includes('izregkwaqdygwioqzwwo') ||
+      ref === 'izregkwaqdygwioqzwwo' ||
+      ref.includes('supabase')
+    ) {
       return null;
     }
 

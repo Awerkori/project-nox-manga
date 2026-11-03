@@ -449,6 +449,19 @@
                     <span class="nav-badge alert">{(data.pendingModerationCount ?? 0)}</span>
                   {/if}
                 </a>
+
+                <a
+                  href="/admin/tickets?tab=obras"
+                  class="nav-link"
+                  class:active={isActive('/admin/tickets', false, 'obras')}
+                  onclick={closeMobile}
+                >
+                  <BookOpen size={16} class="nav-icon" />
+                  <span>Adesão de Obras</span>
+                  {#if (data.pendingWorkRequestsCount ?? 0) > 0}
+                    <span class="nav-badge alert">{(data.pendingWorkRequestsCount ?? 0)}</span>
+                  {/if}
+                </a>
               {/if}
             </div>
           {/if}
