@@ -373,6 +373,7 @@
               <a
                 href="/obra/{currentWork.slug}"
                 class="active-card-inner"
+                data-sveltekit-preload-data="tap"
                 tabindex="-1"
                 aria-label={`Ler obra em destaque: ${decodeHtmlEntities(currentWork.title)}`}
               >
