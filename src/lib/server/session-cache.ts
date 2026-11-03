@@ -50,7 +50,7 @@ function decodeBase64Safe(str: string): string {
  */
 export function extractFullAuthCookie(cookies: Array<{ name: string; value: string }>): string | null {
   if (!Array.isArray(cookies) || cookies.length === 0) return null;
-  const authCookieRegex = /^sb-[a-zA-Z0-9_-]+-auth-token(?:\.\d+)?$/;
+  const authCookieRegex = /^(?:sb-[a-zA-Z0-9_-]+-auth-token|nox-auth-token)(?:\.\d+)?$/;
   const authCookies = cookies.filter((c) => authCookieRegex.test(c.name) && c.value);
   if (authCookies.length === 0) return null;
 
