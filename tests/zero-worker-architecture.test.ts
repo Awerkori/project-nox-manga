@@ -61,40 +61,16 @@ describe('Zero-Worker Architecture Verification Suite', () => {
     expect(wranglerConfig.triggers?.crons).toEqual(['0 * * * *']);
   });
 
-  it('routes member action through Supabase direct RPC when session exists in browser (Camada C)', async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: { ok: true, liked: true },
-      error: null
+  it('routes member action directly and securely to /api/action without legacy Supabase RPC', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, liked: true })
     });
-    mockGetSession.mockResolvedValueOnce({
-      data: { session: { user: { id: 'test-user-id' } } }
-    });
-
-    vi.stubGlobal('window', {});
-    const mockFetch = vi.fn();
     vi.stubGlobal('fetch', mockFetch);
 
     const { action } = await import('../src/lib/actions');
     const result = await action('member', 'like', { work_id: 'test-work' });
     expect(result).toEqual({ ok: true, liked: true });
-    expect(mockRpc).toHaveBeenCalledWith('member_action', {
-      p_action: 'like',
-      p_data: { work_id: 'test-work' }
-    });
-    expect(mockFetch).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
-  });
-
-  it('falls back to /api/action when direct RPC fails or in non-browser environment (Camada C)', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ ok: true, fallback: true })
-    });
-    vi.stubGlobal('fetch', mockFetch);
-
-    const { action } = await import('../src/lib/actions');
-    const result = await action('member', 'like', { work_id: 'test-work' });
-    expect(result.ok).toBe(true);
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/action',
       expect.objectContaining({
@@ -102,6 +78,7 @@ describe('Zero-Worker Architecture Verification Suite', () => {
         body: JSON.stringify({ scope: 'member', action: 'like', data: { work_id: 'test-work' } })
       })
     );
+    expect(mockRpc).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 

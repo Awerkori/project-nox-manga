@@ -1,5 +1,6 @@
 import { withTimeout } from './resilience';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { executeYugabyteSql } from './yugabyte';
 
 export interface DecodedJwt {
   sub: string;
@@ -101,7 +102,8 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
 export async function resolveSessionData(
   db: SupabaseClient<any>,
   decoded: DecodedJwt,
-  accessToken: string
+  accessToken: string,
+  platformEnv?: any
 ): Promise<CachedSession> {
   // Only the exact verified token may reuse a cached identity.
   const cacheKey = accessToken;
@@ -135,9 +137,24 @@ export async function resolveSessionData(
           'session_verify_user'
         );
         if (!verified?.data?.user || verified.error || verified.data.user.id !== decoded.sub) {
-          throw new Error('SESSION_NOT_VERIFIED');
+          const errMsg = String(verified?.error?.message || '');
+          const isQuotaOrDegraded = !verified || /exceed_cached_egress_quota|payment required|402|fetch failed|network|timeout/i.test(errMsg) || (verified?.error as any)?.status === 402;
+          if (isQuotaOrDegraded && decoded.sub && (!decoded.exp || decoded.exp * 1000 > now)) {
+            try {
+              const mem = await executeYugabyteSql(`SELECT id FROM members WHERE id = $1 LIMIT 1;`, [decoded.sub], platformEnv);
+              if (mem.rows[0]) {
+                identityVerified = true;
+              }
+            } catch {
+              // fallback
+            }
+          }
+          if (!identityVerified) {
+            throw new Error('SESSION_NOT_VERIFIED');
+          }
+        } else {
+          identityVerified = true;
         }
-        identityVerified = true;
         if (verifiedTokens.size > 1000) {
           const oldest = verifiedTokens.keys().next().value;
           if (oldest) verifiedTokens.delete(oldest);
@@ -149,34 +166,83 @@ export async function resolveSessionData(
       }
       const userId = decoded.sub;
 
-      // Run profile, role, scans and unread queries concurrently
-      const [profileRes, roleRes, userScansRes, ownedScansRes, unreadRes] = await withTimeout(
-        Promise.all([
-          db.from('members').select('*').eq('id', userId).maybeSingle(),
-          db.from('access_roles').select('role, suspended').eq('user_id', userId).maybeSingle(),
-          db
-            .from('scan_members')
-            .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
-            .eq('user_id', userId),
-          db
-            .from('scans')
-            .select('id, name, slug, logo_id, status')
-            .eq('owner_id', userId)
-            .eq('status', 'ACTIVE'),
-          db
-            .from('notifications')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .is('read_at', null)
-        ]),
-        2000,
-        [{ data: null }, { data: null }, { data: [] }, { data: [] }, { count: 0 }] as any,
-        'session_resolver_batch'
-      );
+      // Run profile, role, scans and unread queries from authoritative YugabyteDB
+      let profileData: any = null;
+      let roleData: any = null;
+      let userScansList: any[] = [];
+      let unreadCount = 0;
+
+      try {
+        const [ybProfile, ybRole, ybScans, ybUnread] = await Promise.all([
+          executeYugabyteSql(`SELECT * FROM members WHERE id = $1 LIMIT 1;`, [userId], platformEnv),
+          executeYugabyteSql(`SELECT role, suspended FROM access_roles WHERE user_id = $1 LIMIT 1;`, [userId], platformEnv),
+          executeYugabyteSql(
+            `SELECT sm.role, sm.scan_id, s.id, s.name, s.slug, s.logo_id, s.status
+             FROM scan_members sm
+             JOIN scans s ON s.id = sm.scan_id
+             WHERE sm.user_id = $1 AND s.status = 'ACTIVE';`,
+            [userId],
+            platformEnv
+          ),
+          executeYugabyteSql(`SELECT count(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL;`, [userId], platformEnv)
+        ]);
+
+        if (ybProfile.rows[0]) {
+          profileData = ybProfile.rows[0];
+          roleData = ybRole.rows[0] || null;
+          userScansList = ybScans.rows || [];
+          unreadCount = parseInt(ybUnread.rows[0]?.count || '0', 10);
+        }
+      } catch {
+        // Fallback to db.from if YugabyteDB is degraded
+      }
+
+      if (!profileData && db?.from) {
+        const [profileRes, roleRes, userScansRes, ownedScansRes, unreadRes] = await withTimeout(
+          Promise.all([
+            db.from('members').select('*').eq('id', userId).maybeSingle(),
+            db.from('access_roles').select('role, suspended').eq('user_id', userId).maybeSingle(),
+            db
+              .from('scan_members')
+              .select('role, scan_id, scans!inner(id, name, slug, logo_id, status)')
+              .eq('user_id', userId),
+            db
+              .from('scans')
+              .select('id, name, slug, logo_id, status')
+              .eq('owner_id', userId)
+              .eq('status', 'ACTIVE'),
+            db
+              .from('notifications')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', userId)
+              .is('read_at', null)
+          ]),
+          2000,
+          [{ data: null }, { data: null }, { data: [] }, { data: [] }, { count: 0 }] as any,
+          'session_resolver_batch'
+        );
+
+        profileData = profileRes?.data || null;
+        roleData = roleRes?.data || null;
+        unreadCount = unreadRes?.count || 0;
+
+        if (Array.isArray(ownedScansRes?.data)) {
+          for (const s of ownedScansRes.data) {
+            userScansList.push({ ...s, role: 'OWNER' });
+          }
+        }
+        if (Array.isArray(userScansRes?.data)) {
+          for (const m of userScansRes.data) {
+            if (m.scans) {
+              userScansList.push({ ...m.scans, role: m.role });
+            }
+          }
+        }
+      }
 
       let effectiveRole = null;
-      if (roleRes?.data && !roleRes.data.suspended) {
-        effectiveRole = roleRes.data.role;
+      if (roleData && !roleData.suspended) {
+        effectiveRole = roleData.role;
       }
 
       // Guarantee platform owner role when DB is degraded or role not explicitly set in table (UUID-based RBAC, never email)
@@ -187,37 +253,19 @@ export async function resolveSessionData(
 
       // Build consolidated user scans preserving official OWNER / ADMIN / MEMBER model
       const scansMap = new Map<string, any>();
-
-      // First add owned scans as OWNER
-      if (Array.isArray(ownedScansRes?.data)) {
-        for (const s of ownedScansRes.data) {
-          scansMap.set(s.id, {
-            id: s.id,
-            name: s.name,
-            slug: s.slug,
-            logo_id: s.logo_id,
-            status: s.status,
-            role: 'OWNER'
+      for (const m of userScansList) {
+        const scanId = m.id || m.scan_id;
+        if (scanId) {
+          const existing = scansMap.get(scanId);
+          const finalRole = existing?.role === 'OWNER' ? 'OWNER' : m.role;
+          scansMap.set(scanId, {
+            id: scanId,
+            name: m.name,
+            slug: m.slug,
+            logo_id: m.logo_id,
+            status: m.status,
+            role: finalRole
           });
-        }
-      }
-
-      // Merge with scan_members
-      if (Array.isArray(userScansRes?.data)) {
-        for (const m of userScansRes.data) {
-          if (m.scans) {
-            const existing = scansMap.get(m.scans.id);
-            // OWNER has highest precedence
-            const finalRole = existing?.role === 'OWNER' ? 'OWNER' : m.role;
-            scansMap.set(m.scans.id, {
-              id: m.scans.id,
-              name: m.scans.name,
-              slug: m.scans.slug,
-              logo_id: m.scans.logo_id,
-              status: m.scans.status,
-              role: finalRole
-            });
-          }
         }
       }
 
@@ -236,7 +284,7 @@ export async function resolveSessionData(
       const consolidatedUserScans = Array.from(scansMap.values());
 
       const profile =
-        profileRes?.data || {
+        profileData || {
           id: userId,
           display_name: decoded.user_metadata?.display_name || (decoded.email ? decoded.email.split('@')[0] : 'Leitor'),
           username: decoded.user_metadata?.username || (decoded.email ? decoded.email.split('@')[0] : 'leitor'),
@@ -255,7 +303,7 @@ export async function resolveSessionData(
         role: effectiveRole,
         profile,
         userScans: consolidatedUserScans,
-        unread: unreadRes?.count || 0,
+        unread: unreadCount,
         cachedAt: now,
         tokenExp: decoded.exp
       };

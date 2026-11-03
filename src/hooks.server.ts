@@ -78,7 +78,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     if (jwt && isNotExpired) {
       try {
-        sessionData = await resolveSessionData(event.locals.db, jwt, accessToken);
+        sessionData = await resolveSessionData(event.locals.db, jwt, accessToken, event.platform?.env);
         user = sessionData.user;
         role = sessionData.role;
         authState = 'AUTHENTICATED';
@@ -102,7 +102,7 @@ export const handle: Handle = async ({ event, resolve }) => {
           user = authResult.data.user;
           authState = 'AUTHENTICATED';
           const refreshed = await event.locals.db.auth.getSession();
-          sessionData = await resolveSessionData(event.locals.db, { sub: user.id, email: user.email, exp: nowSec + 3600 }, refreshed.data.session?.access_token || accessToken || '');
+          sessionData = await resolveSessionData(event.locals.db, { sub: user.id, email: user.email, exp: nowSec + 3600 }, refreshed.data.session?.access_token || accessToken || '', event.platform?.env);
           role = sessionData.role;
           event.locals.sessionCache = sessionData;
         } else {

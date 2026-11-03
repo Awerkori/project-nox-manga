@@ -1,25 +1,35 @@
 import { withTimeout } from '$lib/server/resilience';
 import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics-catalog';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
 const SHOP_CACHE_TTL_MS = 120_000;
 
-export const load = async ({ locals, setHeaders }) => {
+export const load = async ({ locals, setHeaders, platform }: any) => {
   let items: any[];
   if (cachedShopItems && Date.now() - cachedShopItems.timestamp < SHOP_CACHE_TTL_MS) {
     items = cachedShopItems.data;
   } else {
-    const res = await withTimeout(
-      locals.db
-        .from('shop_items')
-        .select('*')
-        .order('order_index', { ascending: true }),
-      3000,
-      { data: [] } as any,
-      'shop_items'
-    );
-
-    const dbItems = res?.data || [];
+    let dbItems: any[] = [];
+    try {
+      const ybRes = await executeYugabyteSql(
+        `SELECT * FROM shop_items ORDER BY order_index ASC;`,
+        [],
+        platform?.env
+      );
+      dbItems = ybRes.rows || [];
+    } catch {
+      const res = await withTimeout(
+        locals.db
+          .from('shop_items')
+          .select('*')
+          .order('order_index', { ascending: true }),
+        3000,
+        { data: [] } as any,
+        'shop_items'
+      );
+      dbItems = res?.data || [];
+    }
     const dbMap = new Map(dbItems.map((it: any) => [it.id, it]));
     const curatedMap = new Map(CURATED_COSMETIC_ITEMS.map((it) => [it.id, it]));
 
@@ -92,28 +102,45 @@ export const load = async ({ locals, setHeaders }) => {
     });
 
     const profile = locals.sessionCache?.profile;
-    const [invRes, profileRes] = await withTimeout(
-      Promise.all([
-        locals.db
-          .from('member_inventory')
-          .select('item_id')
-          .eq('user_id', locals.user.id),
-        locals.db
-          .from('members')
-          .select('id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
-          .eq('id', locals.user.id)
-          .maybeSingle()
-      ]),
-      1200,
-      [{ data: [] }, { data: profile || null }] as any,
-      'shop_user_data'
-    );
+    let p = profile;
 
-    userInventory = (invRes?.data || []).map((r: any) => r.item_id);
-    const p = profileRes?.data || profile;
+    try {
+      const [invRes, memRes] = await Promise.all([
+        executeYugabyteSql(`SELECT item_id FROM member_inventory WHERE user_id = $1;`, [locals.user.id], platform?.env),
+        executeYugabyteSql(
+          `SELECT id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id
+           FROM members WHERE id = $1 LIMIT 1;`,
+          [locals.user.id],
+          platform?.env
+        )
+      ]);
+      userInventory = (invRes.rows || []).map((r: any) => r.item_id);
+      if (memRes.rows[0]) {
+        p = memRes.rows[0];
+      }
+    } catch {
+      const [invRes, profileRes] = await withTimeout(
+        Promise.all([
+          locals.db
+            .from('member_inventory')
+            .select('item_id')
+            .eq('user_id', locals.user.id),
+          locals.db
+            .from('members')
+            .select('id, username, display_name, avatar_id, avatar_crop, banner_id, equipped_banner_id, xp, avatar_frame_id, name_color, equipped_title_id')
+            .eq('id', locals.user.id)
+            .maybeSingle()
+        ]),
+        1200,
+        [{ data: [] }, { data: profile || null }] as any,
+        'shop_user_data'
+      );
+      userInventory = (invRes?.data || []).map((r: any) => r.item_id);
+      p = profileRes?.data || profile;
+    }
     if (p) {
-      if (profileRes?.data && locals.sessionCache?.profile) {
-        locals.sessionCache.profile.xp = profileRes.data.xp;
+      if (locals.sessionCache?.profile && typeof p.xp === 'number') {
+        locals.sessionCache.profile.xp = p.xp;
       }
       userProfile = {
         id: p.id,
