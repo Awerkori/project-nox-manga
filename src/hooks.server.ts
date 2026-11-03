@@ -8,7 +8,7 @@ import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
 import { building } from '$app/environment';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
-import { setAuthCookie, signSessionJwt, getAuthSecret, type AuthSession } from '$lib/server/yugabyte-auth';
+import { setAuthCookie, clearAllAuthCookies, signSessionJwt, getAuthSecret, type AuthSession } from '$lib/server/yugabyte-auth';
 
 async function handleRequest(event: any, resolve: any, reqStart: number) {
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method)) {
