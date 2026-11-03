@@ -1171,11 +1171,54 @@ export async function fetchPublishedWorksCountFromYugabyte(platformEnv?: any): P
 
 let cachedAllTags: { timestamp: number; tags: YugabyteTag[] } | null = null;
 const ALL_TAGS_TTL_MS = 600_000;
-const CATALOG_TAGS_CACHE_URL = 'https://edge-cache.project-nox.internal/catalog-filter-tags-v1';
-const CATALOG_TAGS_EDGE_TTL_S = 6 * 60 * 60;
+const CATALOG_TAGS_CACHE_URL = 'https://edge-cache.project-nox.internal/catalog-filter-tags-v2';
+// A fresh edge hit may also enter the five-minute LKG cache below. Limiting
+// edge entries to five minutes keeps the combined lifetime within the existing
+// ten-minute in-memory freshness window.
+const CATALOG_TAGS_EDGE_TTL_MS = 300_000;
+const CATALOG_TAGS_EDGE_TTL_S = CATALOG_TAGS_EDGE_TTL_MS / 1000;
 const CATALOG_TAG_MIN_WORKS = 10;
 
+async function readCatalogTagsEdge(): Promise<YugabyteTag[] | null> {
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (!cache) return null;
+    const response = await cache.match(CATALOG_TAGS_CACHE_URL);
+    if (!response) return null;
+    const entry = await response.json();
+    const age = Date.now() - entry?.timestamp;
+    if (!Number.isFinite(age) || age < 0 || age >= CATALOG_TAGS_EDGE_TTL_MS ||
+        !Array.isArray(entry?.tags) || entry.tags.length === 0 ||
+        !entry.tags.every((tag: any) => typeof tag?.id === 'string' &&
+          typeof tag?.name === 'string' && typeof tag?.slug === 'string' && typeof tag?.kind === 'string')) {
+      return null;
+    }
+    cachedAllTags = { timestamp: entry.timestamp, tags: entry.tags };
+    return entry.tags;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheCatalogTags(tags: YugabyteTag[]): Promise<void> {
+  const timestamp = Date.now();
+  cachedAllTags = { timestamp, tags };
+  try {
+    const cache = (globalThis as any).caches?.default;
+    await cache?.put(
+      CATALOG_TAGS_CACHE_URL,
+      new Response(JSON.stringify({ timestamp, tags }), {
+        headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${CATALOG_TAGS_EDGE_TTL_S}` }
+      })
+    );
+  } catch {
+    /* edge cache is best-effort */
+  }
+}
+
 async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[]> {
+  const edgeTags = await readCatalogTagsEdge();
+  if (edgeTags) return edgeTags;
   try {
     const res = await executeYugabyteSql<YugabyteTag>(
       `SELECT id, name, slug, kind FROM catalog_filter_tags ORDER BY name ASC;`,
@@ -1183,7 +1226,7 @@ async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[
       platformEnv
     );
     if (res.rows.length > 0) {
-      cachedAllTags = { timestamp: Date.now(), tags: res.rows };
+      await cacheCatalogTags(res.rows);
       return res.rows;
     }
   } catch {
@@ -1199,18 +1242,7 @@ async function computeCatalogFilterTags(platformEnv?: any): Promise<YugabyteTag[
     platformEnv
   );
   if (res.rows.length > 0) {
-    cachedAllTags = { timestamp: Date.now(), tags: res.rows };
-    try {
-      const cache = (globalThis as any).caches?.default;
-      await cache?.put(
-        CATALOG_TAGS_CACHE_URL,
-        new Response(JSON.stringify(res.rows), {
-          headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${CATALOG_TAGS_EDGE_TTL_S}` }
-        })
-      );
-    } catch {
-      /* edge cache is best-effort */
-    }
+    await cacheCatalogTags(res.rows);
   }
   return res.rows;
 }
