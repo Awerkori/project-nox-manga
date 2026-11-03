@@ -30,6 +30,14 @@ export function invalidateYugabyteLkgPrefix(prefix: string): void {
       lkgStore.delete(key);
     }
   }
+  // A read started before a write must not restore invalidated data later.
+  // New readers should start a fresh flight instead of joining the old one.
+  for (const [key, flight] of activeLkgFlights) {
+    if (key.startsWith(prefix)) {
+      flight.supersede();
+      activeLkgFlights.delete(key);
+    }
+  }
 }
 
 export function getLkg<T>(key: string, maxAgeMs = 120_000): { data: T; ageSec: number } | null {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { withYugabyteLkg } from '../src/lib/server/yugabyte';
+import { invalidateYugabyteLkgPrefix, withYugabyteLkg } from '../src/lib/server/yugabyte';
 
 describe('public Yugabyte request deduplication', () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
@@ -50,5 +50,22 @@ describe('public Yugabyte request deduplication', () => {
     await expect(withYugabyteLkg('failed-public-flight-test', fetcher, 'fallback', 1_000)).resolves.toBe('recovered');
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(warning).toHaveBeenCalledOnce();
+  });
+
+  it('does not repopulate invalidated data from a read started before a write', async () => {
+    vi.stubEnv('VITEST', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    let resolveOld!: (value: string) => void;
+    const fetcher = vi.fn()
+      .mockImplementationOnce(() => new Promise<string>((done) => { resolveOld = done; }))
+      .mockResolvedValueOnce('updated');
+    const first = withYugabyteLkg('invalidate-flight-test', fetcher, 'fallback', 60_000);
+    await Promise.resolve();
+    invalidateYugabyteLkgPrefix('invalidate-flight-');
+    await expect(withYugabyteLkg('invalidate-flight-test', fetcher, 'fallback', 60_000)).resolves.toBe('updated');
+    resolveOld('old');
+    await expect(first).resolves.toBe('old');
+    await expect(withYugabyteLkg('invalidate-flight-test', fetcher, 'fallback', 60_000)).resolves.toBe('updated');
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
