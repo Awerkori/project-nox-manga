@@ -62,40 +62,47 @@ export interface NotificationResult {
 // In-memory cache for user emails to avoid spamming auth.admin.listUsers
 const emailCache = new Map<string, { email: string; name: string; expires: number }>();
 
-async function resolveUserContact(userId: string): Promise<{ email: string | null; name: string }> {
+async function resolveUserContact(userId: string, platformEnv?: any): Promise<{ email: string | null; name: string }> {
   const cached = emailCache.get(userId);
   if (cached && cached.expires > Date.now()) {
     return { email: cached.email, name: cached.name };
   }
 
-  const db = privileged();
-
-  // 1. Get display name from public.members
-  let name = 'Membro';
-  try {
-    const { data: m } = await db
-      .from('members')
-      .select('username, display_name')
-      .eq('id', userId)
-      .maybeSingle();
-    if (m) {
-      name = m.display_name || m.username || 'Membro';
-    }
-  } catch (err) {
-    console.warn('[NOTIF] Erro ao buscar dados do membro:', err);
-  }
-
-  // 2. Get email from auth.users via admin client
   let email: string | null = null;
+  let name = 'Membro';
+
   try {
-    const { data: authUser } = await db.auth.admin.getUserById(userId);
-    if (authUser?.user?.email) {
-      email = authUser.user.email;
-      emailCache.set(userId, { email, name, expires: Date.now() + 1000 * 60 * 15 }); // 15 mins cache
+    const res = await executeYugabyteSql<{ email: string | null; name: string | null }>(
+      `SELECT u.email, COALESCE(m.display_name, m.username, u.name, 'Membro') AS name
+       FROM public."user" u
+       LEFT JOIN public.members m ON m.id::text = u.id
+       WHERE u.id = $1
+       LIMIT 1;`,
+      [userId],
+      platformEnv
+    );
+    if (res.rows[0]) {
+      email = res.rows[0].email || null;
+      name = res.rows[0].name || 'Membro';
+      if (email) {
+        emailCache.set(userId, { email, name, expires: Date.now() + 1000 * 60 * 15 });
+        return { email, name };
+      }
     }
   } catch (err) {
-    console.warn('[NOTIF] Erro ao buscar e-mail no auth admin:', err);
+    // Non-fatal Yugabyte lookup
   }
+
+  try {
+    const memRes = await executeYugabyteSql<{ display_name: string | null; username: string | null }>(
+      `SELECT display_name, username FROM public.members WHERE id = $1 LIMIT 1;`,
+      [userId],
+      platformEnv
+    );
+    if (memRes.rows[0]) {
+      name = memRes.rows[0].display_name || memRes.rows[0].username || 'Membro';
+    }
+  } catch {}
 
   return { email, name };
 }
@@ -141,56 +148,53 @@ export async function createNotification(
     return { notificationId: null, emailQueued: false, skippedSelf: true };
   }
 
-  const db = privileged();
-
   // 2. Chave determinística de deduplicação
   const cleanDedupeKey = dedupeKey || `${type}:${recipientUserId}:${entityId || deepLink || Date.now()}`;
 
-  // 3. Persistir em public.notifications
-  const notifInsertPayload = {
-    user_id: recipientUserId,
-    actor_user_id: actorUserId,
-    kind: type.toLowerCase(),
-    type: type,
-    title: title,
-    body: body,
-    href: deepLink,
-    dedupe_key: cleanDedupeKey,
-    priority: priority,
-    scan_id: scanId,
-    context: context,
-    entity_type: entityType,
-    entity_id: entityId
-  };
-
+  // 3. Persistir em public.notifications via YugabyteDB
   let notificationId: string | null = null;
-  const { data: insertedNotif, error: notifErr } = await db
-    .from('notifications')
-    .insert(notifInsertPayload)
-    .select('id')
-    .maybeSingle();
+  try {
+    const notifRes = await executeYugabyteSql<{ id: string }>(
+      `INSERT INTO public.notifications (
+         id, user_id, actor_user_id, kind, type, title, body, href, dedupe_key, priority, scan_id, context, entity_type, entity_id, created_at
+       ) VALUES (
+         gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()
+       )
+       ON CONFLICT (user_id, dedupe_key) DO NOTHING
+       RETURNING id;`,
+      [
+        recipientUserId,
+        actorUserId,
+        type.toLowerCase(),
+        type,
+        title,
+        body,
+        deepLink,
+        cleanDedupeKey,
+        priority,
+        scanId,
+        context || null,
+        entityType || null,
+        entityId || null
+      ],
+      platform?.env
+    );
 
-  if (notifErr) {
-    if (notifErr.code === '23505') {
-      // Violação de unique(user_id, dedupe_key) - já foi notificado!
-      return { notificationId: null, emailQueued: false, deduped: true };
+    if (notifRes.rows[0]?.id) {
+      notificationId = notifRes.rows[0].id;
+    } else {
+      // Deduped: fetch existing notification ID
+      const existRes = await executeYugabyteSql<{ id: string }>(
+        `SELECT id FROM public.notifications WHERE user_id = $1 AND dedupe_key = $2 LIMIT 1;`,
+        [recipientUserId, cleanDedupeKey],
+        platform?.env
+      ).catch(() => ({ rows: [] }));
+      if (existRes.rows[0]?.id) {
+        return { notificationId: existRes.rows[0].id, emailQueued: false, deduped: true };
+      }
     }
-    console.error('[NOTIF] Erro ao inserir public.notifications:', notifErr);
-  } else if (insertedNotif) {
-    notificationId = insertedNotif.id;
-  }
-
-  // Se não inseriu nem obteve ID, tentar recuperar ID existente pelo dedupeKey
-  if (!notificationId) {
-    const { data: existing } = await db
-      .from('notifications')
-      .select('id')
-      .eq('user_id', recipientUserId)
-      .eq('dedupe_key', cleanDedupeKey)
-      .maybeSingle();
-    if (existing) {
-      notificationId = existing.id;
-    }
+  } catch (err: any) {
+    console.warn('[NOTIF] Erro ao persistir notification em YugabyteDB:', err?.message);
   }
 
   // 4. Sincronizar com scan_notifications se houver scan_id
@@ -200,16 +204,14 @@ export async function createNotification(
       : 'SYSTEM';
 
     try {
-      await db.from('scan_notifications').insert({
-        scan_id: scanId,
-        user_id: recipientUserId,
-        type: scanType,
-        title: title,
-        body: body,
-        deep_link: deepLink
-      });
+      await executeYugabyteSql(
+        `INSERT INTO public.scan_notifications (id, scan_id, user_id, type, title, body, deep_link, created_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW());`,
+        [scanId, recipientUserId, scanType, title, body, deepLink],
+        platform?.env
+      );
     } catch (e: any) {
-      console.warn('[NOTIF] Aviso ao sincronizar scan_notifications:', e?.message);
+      console.warn('[NOTIF] Aviso ao sincronizar scan_notifications em YugabyteDB:', e?.message);
     }
   }
 
@@ -218,13 +220,13 @@ export async function createNotification(
   let outboxId: string | undefined = undefined;
 
   if (!skipEmail && notificationId) {
-    const { email: recipientEmail, name: recipientName } = await resolveUserContact(recipientUserId);
+    const { email: recipientEmail, name: recipientName } = await resolveUserContact(recipientUserId, platform?.env);
 
     if (recipientEmail) {
       // Obter nome do actor para personalização
       let actorName: string | undefined = undefined;
       if (actorUserId) {
-        const contact = await resolveUserContact(actorUserId);
+        const contact = await resolveUserContact(actorUserId, platform?.env);
         actorName = contact.name;
       }
 
@@ -252,32 +254,36 @@ export async function createNotification(
 
       const emailIdempotencyKey = `email:${notificationId}`;
 
-      const { data: outboxItem, error: outboxErr } = await db
-        .from('scan_email_outbox')
-        .insert({
-          scan_id: scanId,
-          recipient_user_id: recipientUserId,
-          recipient_email: recipientEmail,
-          subject: subject || title || 'Notificação Project Nox',
-          html_body: html,
-          status: 'PENDING',
-          delivery_status: 'QUEUED',
-          priority: outboxPriority,
-          idempotency_key: emailIdempotencyKey,
-          notification_id: notificationId,
-          attempts: 0
-        })
-        .select('id')
-        .maybeSingle();
+      try {
+        const outboxRes = await executeYugabyteSql<{ id: string }>(
+          `INSERT INTO public.scan_email_outbox (
+             id, scan_id, recipient_user_id, recipient_email, subject, html_body, status, delivery_status, priority, idempotency_key, notification_id, attempts, created_at, updated_at
+           ) VALUES (
+             gen_random_uuid(), $1, $2, $3, $4, $5, 'PENDING', 'QUEUED', $6, $7, $8, 0, NOW(), NOW()
+           )
+           ON CONFLICT (idempotency_key) DO NOTHING
+           RETURNING id;`,
+          [
+            scanId,
+            recipientUserId,
+            recipientEmail,
+            subject || title || 'Notificação Project Nox',
+            html,
+            outboxPriority,
+            emailIdempotencyKey,
+            notificationId
+          ],
+          platform?.env
+        );
 
-      if (!outboxErr && outboxItem) {
-        emailQueued = true;
-        outboxId = outboxItem.id;
-      } else if (outboxErr?.code === '23505') {
-        // Já existe outbox para esta notificação (derivada pelo trigger ou inserção prévia)
-        emailQueued = true;
-      } else if (outboxErr) {
-        console.error('[NOTIF] Erro ao inserir scan_email_outbox:', outboxErr);
+        if (outboxRes.rows[0]?.id) {
+          emailQueued = true;
+          outboxId = outboxRes.rows[0].id;
+        } else {
+          emailQueued = true;
+        }
+      } catch (outboxErr: any) {
+        console.warn('[NOTIF] Erro ao inserir scan_email_outbox em YugabyteDB:', outboxErr?.message);
       }
 
       // 6. Disparo imediato para o Brevo garantindo envio em tempo real

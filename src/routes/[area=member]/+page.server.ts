@@ -74,8 +74,10 @@ export const load = async ({ locals, params, url, platform }: any) => {
     ybSuccess = false;
   }
 
+
+
   const empty = { data: [], error: null, count: 0 };
-  if (!ybSuccess) {
+  if (!ybSuccess && locals.db) {
     let query = locals.db
       .from('library')
       .select(`*,works!inner(${WORK_FIELDS})`, { count: 'exact' })
@@ -145,11 +147,11 @@ export const load = async ({ locals, params, url, platform }: any) => {
         completedWorksCount = parseInt(perfRes.rows[0].completed_works || '0', 10);
         ybPerfilSuccess = true;
       }
-    } catch {
-      ybPerfilSuccess = false;
+    } catch (err) {
+      console.warn('[MEMBER_PROFILE_STATS_WARN]', err);
     }
 
-    if (!ybPerfilSuccess) {
+    if (!ybPerfilSuccess && locals.db) {
       const [completed, libraryTotal, completedWorks] = await Promise.all([
         locals.db
           .from('reading')
@@ -175,9 +177,21 @@ export const load = async ({ locals, params, url, platform }: any) => {
     }
   }
 
+  let unreadCount = 0;
+  if (params.area === 'notificacoes') {
+    try {
+      const unreadRes = await executeYugabyteSql<{ count: string }>(
+        `SELECT count(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL;`,
+        [locals.user.id],
+        platform?.env
+      );
+      unreadCount = parseInt(unreadRes.rows[0]?.count || '0', 10);
+    } catch {}
+  }
+
   const enrichedHistory =
     params.area === 'historico' && Array.isArray(historyData) && historyData.length > 0
-      ? await enrichReadingRowsWithCatalog(historyData, locals.db, platform?.env)
+      ? await enrichReadingRowsWithCatalog(historyData, null, platform?.env)
       : historyData;
 
   return {
@@ -185,6 +199,7 @@ export const load = async ({ locals, params, url, platform }: any) => {
     library: libraryData,
     history: enrichedHistory,
     notifications: notifData,
+    unread: unreadCount,
     tab,
     filter,
     page,

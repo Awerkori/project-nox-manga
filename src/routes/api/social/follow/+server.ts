@@ -1,8 +1,11 @@
 import { json, error } from '@sveltejs/kit';
-import { member } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const POST = async ({ request, locals }) => {
-  member(locals);
+export const POST = async ({ request, locals, platform }: any) => {
+  if (!locals.user?.id) {
+    error(401, 'Entre em uma conta confirmada para continuar.');
+  }
+  const currentUserId = locals.user.id;
   const body = await request.json().catch(() => ({}));
   const targetUserId = String(body.targetUserId || '').trim();
 
@@ -10,13 +13,36 @@ export const POST = async ({ request, locals }) => {
     error(400, 'Usuário alvo não fornecido.');
   }
 
-  const { data, error: rpcError } = await locals.db.rpc('toggle_follow_user', {
-    p_target_user_id: targetUserId
-  });
-
-  if (rpcError) {
-    error(400, rpcError.message);
+  if (targetUserId === currentUserId) {
+    error(400, 'Você não pode seguir a si mesmo.');
   }
 
-  return json(data);
+  try {
+    const existing = await executeYugabyteSql(
+      `SELECT 1 FROM public.user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1;`,
+      [currentUserId, targetUserId],
+      platform?.env
+    );
+
+    if (existing.rows && existing.rows.length > 0) {
+      await executeYugabyteSql(
+        `DELETE FROM public.user_follows WHERE follower_id = $1 AND following_id = $2;`,
+        [currentUserId, targetUserId],
+        platform?.env
+      );
+      return json({ following: false });
+    } else {
+      await executeYugabyteSql(
+        `INSERT INTO public.user_follows (follower_id, following_id, created_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (follower_id, following_id) DO NOTHING;`,
+        [currentUserId, targetUserId],
+        platform?.env
+      );
+      return json({ following: true });
+    }
+  } catch (err: any) {
+    console.error('[FOLLOW_ERROR]', err);
+    error(500, 'Erro ao atualizar seguidor.');
+  }
 };

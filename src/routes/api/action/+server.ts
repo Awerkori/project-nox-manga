@@ -279,7 +279,7 @@ export const POST = async ({ request, locals, platform }: any) => {
 
     await executeYugabyteSql(
       `INSERT INTO library (user_id, work_id, status, favorite, following, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+       VALUES ($1, $2, COALESCE($3, 'READING'), COALESCE($4, false), COALESCE($5, true), NOW())
        ON CONFLICT (user_id, work_id) DO UPDATE SET
          status = COALESCE(EXCLUDED.status, library.status),
          favorite = COALESCE(EXCLUDED.favorite, library.favorite),
@@ -287,7 +287,9 @@ export const POST = async ({ request, locals, platform }: any) => {
          updated_at = NOW();`,
       [locals.user.id, targetWorkId, status, favorite, following],
       platform?.env
-    ).catch(() => {});
+    ).catch((err: any) => {
+      console.warn('[ACTION_LIBRARY_WARN]', err?.message);
+    });
 
     invalidateObraAuxCache(targetWorkId);
     invalidateUserSession(locals.user.id);
@@ -295,10 +297,132 @@ export const POST = async ({ request, locals, platform }: any) => {
     return json({
       ok: true,
       work_id: targetWorkId,
-      status,
-      favorite,
-      following
+      status: status || 'READING',
+      favorite: favorite ?? false,
+      following: following ?? true
     });
+  }
+
+  // Handle 'preferences' action (age_status, blur_nsfw) directly on YugabyteDB
+  if (body.scope === 'member' && body.action === 'preferences') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const ageStatus = body.data?.age_status ? String(body.data.age_status) : null;
+    const blurNsfw = typeof body.data?.blur_nsfw === 'boolean' ? body.data.blur_nsfw : null;
+
+    await executeYugabyteSql(
+      `UPDATE members
+       SET age_status = COALESCE($1, age_status),
+           blur_nsfw = COALESCE($2, blur_nsfw)
+       WHERE id = $3;`,
+      [ageStatus, blurNsfw, locals.user.id],
+      platform?.env
+    ).catch((err: any) => {
+      console.warn('[ACTION_PREFERENCES_WARN]', err?.message);
+    });
+
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true, age_status: ageStatus, blur_nsfw: blurNsfw });
+  }
+
+  // Handle 'clear_history' action directly on YugabyteDB
+  if (body.scope === 'member' && body.action === 'clear_history') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+
+    await executeYugabyteSql(
+      `DELETE FROM reading WHERE user_id = $1;`,
+      [locals.user.id],
+      platform?.env
+    ).catch((err: any) => {
+      console.warn('[ACTION_CLEAR_HISTORY_WARN]', err?.message);
+    });
+
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true });
+  }
+
+  // Handle 'equip_title' action directly on YugabyteDB
+  if (body.scope === 'member' && body.action === 'equip_title') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const titleId = body.data?.title_id ? String(body.data.title_id) : null;
+
+    await executeYugabyteSql(
+      `UPDATE members SET equipped_title_id = $1 WHERE id = $2;`,
+      [titleId, locals.user.id],
+      platform?.env
+    ).catch((err: any) => {
+      console.warn('[ACTION_EQUIP_TITLE_WARN]', err?.message);
+    });
+
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true, title_id: titleId });
+  }
+
+  // Handle 'equip_badge' action directly on YugabyteDB
+  if (body.scope === 'member' && body.action === 'equip_badge') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const badgeId = body.data?.badge_id ? String(body.data.badge_id) : null;
+
+    await executeYugabyteSql(
+      `UPDATE members SET equipped_badge_id = $1 WHERE id = $2;`,
+      [badgeId, locals.user.id],
+      platform?.env
+    ).catch((err: any) => {
+      console.warn('[ACTION_EQUIP_BADGE_WARN]', err?.message);
+    });
+
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true, badge_id: badgeId });
+  }
+
+  // Handle 'comment_like' action directly on YugabyteDB
+  if (body.scope === 'member' && body.action === 'comment_like') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+    const commentId = String(body.data?.comment_id || body.data?.id || '').trim();
+    if (!commentId) error(400, 'comment_id obrigatório');
+
+    let liked = false;
+    const delRes = await executeYugabyteSql(
+      `DELETE FROM comment_likes WHERE user_id = $1 AND comment_id = $2 RETURNING 1;`,
+      [locals.user.id, commentId],
+      platform?.env
+    ).catch(() => ({ rowCount: 0 }));
+
+    if (delRes.rowCount > 0) {
+      liked = false;
+    } else {
+      await executeYugabyteSql(
+        `INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`,
+        [locals.user.id, commentId],
+        platform?.env
+      ).catch(() => {});
+      liked = true;
+    }
+
+    const countRes = await executeYugabyteSql<{ count: string }>(
+      `SELECT count(*)::int AS count FROM comment_likes WHERE comment_id = $1;`,
+      [commentId],
+      platform?.env
+    ).catch(() => ({ rows: [{ count: liked ? '1' : '0' }] }));
+
+    return json({
+      ok: true,
+      liked,
+      count: parseInt(countRes.rows[0]?.count || (liked ? '1' : '0'), 10)
+    });
+  }
+
+  // Handle 'notifications' action (mark all as read) directly on YugabyteDB
+  if (body.scope === 'member' && body.action === 'notifications') {
+    if (!locals.user?.id) error(401, 'Entre em sua conta');
+
+    const res = await executeYugabyteSql(
+      `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL;`,
+      [locals.user.id],
+      platform?.env
+    ).catch(() => ({ rowCount: 0 }));
+
+    invalidateUserSession(locals.user.id);
+    return json({ ok: true, markedCount: res.rowCount });
   }
 
   // Dedicated robust handler for reading progression and chapter completion
@@ -463,6 +587,84 @@ export const POST = async ({ request, locals, platform }: any) => {
     ).catch(() => ({ rows: [] }));
     if (!editRes.rows[0]) error(404, 'Comentário não encontrado ou sem permissão');
     data = editRes.rows[0];
+    problem = null;
+  } else if (body.scope === 'member' && body.action === 'comment_delete' && locals.user?.id) {
+    const cId = String(body.data?.id || body.data?.comment_id || '').trim();
+    if (!cId) error(400, 'id do comentário obrigatório');
+    const isStaff = ['ADMIN', 'EDITOR'].includes(locals.role || '');
+    const delRes = await executeYugabyteSql<{ id: string }>(
+      `UPDATE comments
+       SET removed = true, updated_at = NOW()
+       WHERE id = $1 AND (user_id = $2 OR $3 = true)
+       RETURNING id;`,
+      [cId, locals.user.id, isStaff],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
+    if (!delRes.rows[0]) error(403, 'Você não tem permissão para excluir este comentário ou ele não existe');
+    data = { ok: true, deleted_id: cId };
+    problem = null;
+  } else if (body.scope === 'member' && body.action === 'profile' && locals.user?.id) {
+    const displayName = body.data?.display_name ? String(body.data.display_name).trim() : null;
+    const bio = typeof body.data?.bio === 'string' ? String(body.data.bio).trim() : null;
+    const username = body.data?.username ? String(body.data.username).trim().toLowerCase() : null;
+
+    if (username && !/^[a-z0-9_-]{3,30}$/.test(username)) {
+      error(400, 'Nome de usuário inválido (3-30 caracteres, letras, números, hífen e underscore).');
+    }
+
+    if (displayName && (displayName.length < 2 || displayName.length > 50)) {
+      error(400, 'Nome de exibição deve ter entre 2 e 50 caracteres.');
+    }
+
+    await executeYugabyteSql(
+      `UPDATE members
+       SET display_name = COALESCE($1, display_name),
+           bio = COALESCE($2, bio),
+           username = COALESCE($3, username)
+       WHERE id = $4;`,
+      [displayName, bio, username, locals.user.id],
+      platform?.env
+    ).catch((err: any) => {
+      error(400, 'Erro ao atualizar perfil: ' + (err?.message || 'Falha no banco de dados'));
+    });
+
+    if (displayName) {
+      await executeYugabyteSql(
+        `UPDATE public."user" SET name = $1, "updatedAt" = NOW() WHERE id = $2;`,
+        [displayName, locals.user.id],
+        platform?.env
+      ).catch(() => {});
+    }
+
+    invalidateUserSession(locals.user.id);
+    data = { ok: true };
+    problem = null;
+  } else if (body.scope === 'member' && (body.action === 'equip' || body.action === 'equip_cosmetic') && locals.user?.id) {
+    const slot = String(body.data?.slot || '').trim().toLowerCase();
+    const itemId = body.data?.item_id || body.data?.value ? String(body.data?.item_id || body.data?.value).trim() : null;
+    const isUnequip = !itemId || itemId === 'none' || itemId === 'default';
+    const finalVal = isUnequip ? null : itemId;
+
+    const columnMap: Record<string, string> = {
+      frame: 'avatar_frame_id',
+      banner: 'equipped_banner_id',
+      comment_banner: 'equipped_comment_banner_id',
+      name_color: 'name_color'
+    };
+
+    const targetCol = columnMap[slot];
+    if (!targetCol) error(400, 'Slot de cosmético inválido');
+
+    await executeYugabyteSql(
+      `UPDATE members SET ${targetCol} = $1 WHERE id = $2;`,
+      [finalVal, locals.user.id],
+      platform?.env
+    ).catch((err: any) => {
+      error(400, 'Erro ao equipar cosmético: ' + (err?.message || 'Falha no banco de dados'));
+    });
+
+    invalidateUserSession(locals.user.id);
+    data = { ok: true, slot, equipped: !isUnequip, item_id: finalVal };
     problem = null;
   } else {
     try {

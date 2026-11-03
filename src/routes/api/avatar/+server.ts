@@ -41,6 +41,11 @@ export const POST = async ({ request, locals, platform }: { request: Request; lo
     if (ybRes && ybRes.rowCount > 0) {
       ybSuccess = true;
     }
+    await executeYugabyteSql(
+      `UPDATE public."user" SET image = $1, "updatedAt" = NOW() WHERE id = $2`,
+      [`/media/${image.id}`, userId],
+      platform?.env
+    ).catch(() => {});
   } catch (ybProblem) {
     console.warn('api_avatar_yugabyte_update_warning', ybProblem);
   }

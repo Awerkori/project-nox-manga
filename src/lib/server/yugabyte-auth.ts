@@ -39,15 +39,11 @@ export function getAuthSecrets(platformEnv?: any): string[] {
   add(platformEnv?.BETTER_AUTH_SECRET);
   add(platformEnv?.JWT_SECRET);
   add(platformEnv?.SUPABASE_JWT_SECRET);
-  add(platformEnv?.SUPABASE_SERVICE_ROLE_KEY);
-  add(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY);
   if (typeof process !== 'undefined' && process.env) {
     add(process.env.AUTH_SECRET);
     add(process.env.BETTER_AUTH_SECRET);
     add(process.env.JWT_SECRET);
     add(process.env.SUPABASE_JWT_SECRET);
-    add(process.env.SUPABASE_SERVICE_ROLE_KEY);
-    add(process.env.STAFF_SUPABASE_SERVICE_ROLE_KEY);
   }
   // Only allow test fallback secret in development / test environments (e.g. Vitest)
   const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST || process.env?.NODE_ENV === 'test');

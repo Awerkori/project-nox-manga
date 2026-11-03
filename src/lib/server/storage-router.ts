@@ -1,5 +1,4 @@
 import { env } from '$env/dynamic/private';
-import { privileged } from '$lib/server/db';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { telegramStorage, TelegramStorageError, type TelegramUploadReceipt } from '$lib/server/telegram';
 import { inspectImage } from '$lib/media-validation';
@@ -324,18 +323,25 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     releaseScanSlot = await acquireScanSlot(scanId);
   }
 
-  const db = privileged();
-
   try {
-    // 5. Select optimal shard via control plane RPC
-    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
-      p_pool_key: poolKey,
-      p_chapter_id: chapterId || null,
-      p_scan_id: scanId || null
-    });
+    // 5. Select optimal shard via control plane RPC in YugabyteDB
+    const shardQueryRes = await executeYugabyteSql<{
+      shard_id: string;
+      pool_id: string;
+      backend: string;
+      bot_reference: string;
+      channel_id: string;
+      display_name: string;
+      write_status: string;
+      is_overflow: boolean;
+    }>(
+      `SELECT * FROM public.select_optimal_storage_shard($1, $2, $3);`,
+      [poolKey, chapterId || null, scanId || null]
+    );
 
-    if (shardErr || !shardRows?.length) {
-      throw new Error(`Falha ao selecionar shard de armazenamento para o pool [${poolKey}]: ${shardErr?.message || 'Nenhum shard disponível'}`);
+    const shardRows = shardQueryRes.rows;
+    if (!shardRows?.length) {
+      throw new Error(`Falha ao selecionar shard de armazenamento para o pool [${poolKey}]: Nenhum shard disponível`);
     }
 
     const shard = shardRows[0];
@@ -345,47 +351,39 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     const isOverflow = Boolean(shard.is_overflow);
 
     // 6. Reserve media record (zero artificial hourly limit, clean in-flight debounce)
-    const { error: reserveErr } = await db.rpc('reserve_media', {
-      p_id: mediaId,
-      p_user: userId,
-      p_provider: 'telegram',
-      p_mime: info.mime,
-      p_width: info.width,
-      p_height: info.height,
-      p_bytes: bytes.byteLength,
-      p_sha256: hash,
-      p_purpose: purpose
-    });
-
-    if (reserveErr) {
-      throw new Error(reserveErr.message);
-    }
+    await executeYugabyteSql(
+      `SELECT public.reserve_media($1, $2, 'telegram', $3, $4, $5, $6, $7, $8);`,
+      [mediaId, userId, info.mime, info.width, info.height, bytes.byteLength, hash, purpose]
+    );
 
     // Set router metadata on media record
-    await db
-      .from('media')
-      .update({
-        storage_pool_id: shard.pool_id,
-        storage_shard_id: shardId,
-        bot_reference: botRef,
-        access_class: accessClass,
-        scan_id: scanId || null,
-        chapter_id: chapterId || null
-      })
-      .eq('id', mediaId);
+    await executeYugabyteSql(
+      `UPDATE public.media
+       SET storage_pool_id = $1,
+           storage_shard_id = $2,
+           bot_reference = $3,
+           access_class = $4,
+           scan_id = $5,
+           chapter_id = $6
+       WHERE id = $7;`,
+      [shard.pool_id, shardId, botRef, accessClass, scanId || null, chapterId || null, mediaId]
+    );
 
     // 7. Track upload start in control plane
-    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+    await executeYugabyteSql(
+      `SELECT public.record_shard_upload_start($1);`,
+      [shardId]
+    );
 
     // 8. Resolve Telegram bot client for this shard
     const botClient = resolveBotClient(botRef, channelId);
 
     // Sync database shard channel_id only if shard had no channel configured
     if (!channelId && botClient.chat && !shard.owner_scan_id) {
-      await db
-        .from('storage_shards')
-        .update({ channel_id: botClient.chat })
-        .eq('id', shardId);
+      await executeYugabyteSql(
+        `UPDATE public.storage_shards SET channel_id = $1 WHERE id = $2;`,
+        [botClient.chat, shardId]
+      );
     }
 
     const startTime = Date.now();
@@ -404,17 +402,16 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
       const retryAfter = isTg ? uploadErr.retryAfter : undefined;
 
       // Report failure to circuit breaker (marks COOLDOWN if 429)
-      await db.rpc('record_shard_upload_result', {
-        p_shard_id: shardId,
-        p_success: false,
-        p_latency_ms: elapsedMs,
-        p_bytes: 0,
-        p_error_code: statusCode || null,
-        p_retry_after: retryAfter || null
-      });
+      await executeYugabyteSql(
+        `SELECT public.record_shard_upload_result($1, false, $2, 0, $3, $4);`,
+        [shardId, elapsedMs, statusCode || null, retryAfter || null]
+      );
 
       // Cleanup reservation
-      await db.from('media').delete().eq('id', mediaId);
+      await executeYugabyteSql(
+        `DELETE FROM public.media WHERE id = $1;`,
+        [mediaId]
+      );
 
       if (isTg && statusCode === 429) {
         throw new RateLimitError(retryAfter && retryAfter > 0 ? retryAfter : 15);
@@ -426,25 +423,18 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
     const elapsedMs = Date.now() - startTime;
 
     // 9. Record success in circuit breaker & metrics
-    await db.rpc('record_shard_upload_result', {
-      p_shard_id: shardId,
-      p_success: true,
-      p_latency_ms: elapsedMs,
-      p_bytes: bytes.byteLength,
-      p_error_code: null,
-      p_retry_after: null
-    });
+    await executeYugabyteSql(
+      `SELECT public.record_shard_upload_result($1, true, $2, $3, null, null);`,
+      [shardId, elapsedMs, bytes.byteLength]
+    );
 
-    // 10. Commit media record & location entry
-    const { error: commitErr } = await db.rpc('commit_media_record', {
-      p_id: mediaId,
-      p_shard_id: shardId,
-      p_provider_key: receipt.fileId,
-      p_message_id: receipt.messageId,
-      p_unique_file_id: receipt.uniqueFileId
-    });
-
-    if (commitErr) {
+    // 10. Commit media record & location entry (p_message_id: receipt.messageId)
+    try {
+      await executeYugabyteSql(
+        `SELECT public.commit_media_record($1, $2, $3, $4, $5);`,
+        [mediaId, shardId, receipt.fileId, receipt.messageId || null, receipt.uniqueFileId || null]
+      );
+    } catch (commitErr) {
       // The provider upload and the metadata commit are separate systems. If
       // the commit fails, remove the just-created Telegram message when the
       // provider returned enough metadata to do so, then release the local
@@ -458,9 +448,9 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
           error: String((cleanupError as Error)?.message || 'unknown').slice(0, 160)
         });
       }
-      await db.from('media_locations').delete().eq('media_id', mediaId);
-      await db.from('media_records').delete().eq('id', mediaId);
-      await db.from('media').delete().eq('id', mediaId);
+      await executeYugabyteSql(`DELETE FROM public.media_locations WHERE media_id = $1;`, [mediaId]);
+      await executeYugabyteSql(`DELETE FROM public.media_records WHERE id = $1;`, [mediaId]);
+      await executeYugabyteSql(`DELETE FROM public.media WHERE id = $1;`, [mediaId]);
       throw new Error('Falha ao registrar o arquivo no catálogo de mídia.');
     }
 

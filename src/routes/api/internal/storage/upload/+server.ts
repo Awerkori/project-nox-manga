@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { privileged } from '$lib/server/db';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { TelegramStorageError } from '$lib/server/telegram';
 import { resolveBotClient, resolveStoragePoolForPurpose, KNOWN_MANGA_SHARDS } from '$lib/server/storage-router';
 import { inspectImage } from '$lib/media-validation';
@@ -78,7 +78,7 @@ export const GET: RequestHandler = async ({ request, getClientAddress, url }) =>
   });
 };
 
-export const POST: RequestHandler = async ({ request, getClientAddress, url }) => {
+export const POST: RequestHandler = async ({ request, getClientAddress, url, platform }: any) => {
   authenticate(request, getClientAddress, url);
 
   const id = url.searchParams.get('id') || crypto.randomUUID();
@@ -111,52 +111,61 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     error(400, (e as Error).message);
   }
 
-  let db: ReturnType<typeof privileged> | null = null;
-  if (env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      db = privileged();
-    } catch {
-      // Fall through to the provider upload path; missing control-plane
-      // configuration is handled by the fail-closed resolver below.
-    }
-  }
-
   let shardId: string | null = null;
   let botClient;
   let selectedShardDisplayName: string | undefined;
 
-  if (explicitShard || !db) {
+  const hasDb = Boolean(
+    platform?.env?.HYPERDRIVE ||
+    (typeof process !== 'undefined' && process.env?.DATABASE_URL)
+  );
+
+  if (explicitShard || !hasDb) {
     // Explicit shard requested or db unconfigured (e.g. diagnostic / unit tests)
     const target = explicitShard || 'MANGA_STORAGE_01';
     try {
       botClient = resolveBotClient(target);
     } catch (err1) {
-      try {
-        botClient = resolveBotClient('primary');
-      } catch (err2) {
-        console.warn('storage_resolve_failed', {
-          target,
-          err1: (err1 as Error).message,
-          err2: (err2 as Error).message
-        });
-        error(503, 'Armazenamento temporariamente indisponível');
+      if (!explicitShard && target !== 'MANGA_STORAGE_01') {
+        botClient = resolveBotClient('MANGA_STORAGE_01');
+      } else {
+        try {
+          botClient = resolveBotClient('primary');
+        } catch (err2) {
+          console.warn('storage_resolve_failed', {
+            target,
+            err1: (err1 as Error).message,
+            err2: (err2 as Error).message
+          });
+          error(503, 'Armazenamento temporariamente indisponível');
+        }
       }
     }
   } else {
-    // Dynamic routing through Storage Supremo control plane
+    // Dynamic routing through Storage Supremo control plane via YugabyteDB
     const poolKey = resolveStoragePoolForPurpose(purpose);
-    const { data: shardRows, error: shardErr } = await db.rpc('select_optimal_storage_shard', {
-      p_pool_key: poolKey,
-      p_chapter_id: chapterId || null,
-      p_scan_id: scanId || null
-    });
+    let shardRows: any[] = [];
+    try {
+      const qRes = await executeYugabyteSql<{
+        shard_id: string;
+        pool_id: string;
+        backend: string;
+        bot_reference: string;
+        channel_id: string;
+        display_name: string;
+        write_status: string;
+        is_overflow: boolean;
+      }>(
+        `SELECT * FROM public.select_optimal_storage_shard($1, $2, $3);`,
+        [poolKey, chapterId || null, scanId || null],
+        platform?.env
+      );
+      shardRows = qRes.rows || [];
+    } catch (err: any) {
+      console.warn('storage_router_selection_yugabyte_failed', err?.message);
+    }
 
-    if (shardErr || !shardRows?.length) {
-      console.warn('storage_router_selection_failed', {
-        poolKey,
-        chapterId,
-        error: shardErr?.message
-      });
+    if (!shardRows.length) {
       // Fallback: pick a known healthy manga shard from control plane definition
       const fallbackShard = KNOWN_MANGA_SHARDS['0383b872'] || Object.values(KNOWN_MANGA_SHARDS)[0];
       if (fallbackShard) {
@@ -181,8 +190,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
     }
   }
 
-  if (shardId && db) {
-    await db.rpc('record_shard_upload_start', { p_shard_id: shardId });
+  if (shardId) {
+    await executeYugabyteSql(
+      `SELECT public.record_shard_upload_start($1);`,
+      [shardId],
+      platform?.env
+    ).catch(() => {});
   }
 
   const startTime = Date.now();
@@ -196,13 +209,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
 
     const elapsedMs = Date.now() - startTime;
 
-    if (shardId && db) {
-      await db.rpc('record_shard_upload_result', {
-        p_shard_id: shardId,
-        p_success: true,
-        p_latency_ms: elapsedMs,
-        p_bytes: bytes.byteLength
-      });
+    if (shardId) {
+      await executeYugabyteSql(
+        `SELECT public.record_shard_upload_result($1, true, $2, $3, null, null);`,
+        [shardId, elapsedMs, bytes.byteLength],
+        platform?.env
+      ).catch(() => {});
     }
 
     const resultPayload: Record<string, any> = {
@@ -237,15 +249,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress, url }) =
       retryAfter
     });
 
-    if (shardId && db) {
-      await db.rpc('record_shard_upload_result', {
-        p_shard_id: shardId,
-        p_success: false,
-        p_latency_ms: elapsedMs,
-        p_bytes: 0,
-        p_error_code: statusCode || null,
-        p_retry_after: retryAfter || null
-      });
+    if (shardId) {
+      await executeYugabyteSql(
+        `SELECT public.record_shard_upload_result($1, false, $2, 0, $3, $4);`,
+        [shardId, elapsedMs, statusCode || null, retryAfter || null],
+        platform?.env
+      ).catch(() => {});
     }
 
     if (isTg && statusCode === 429) {

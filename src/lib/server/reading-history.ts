@@ -78,8 +78,7 @@ export async function enrichReadingRowsWithCatalog<T extends Record<string, any>
          FROM public.chapters c
          JOIN public.works w ON w.id = c.work_id
          WHERE c.id = ANY($1::uuid[])
-           AND c.published_at IS NOT NULL
-           AND w.published = true`,
+           AND (w.published = true OR w.published IS NULL)`,
         [chapterIds],
         env
       ),

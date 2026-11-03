@@ -250,26 +250,9 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
             )
           ]);
           return [{ data: libRes.rows[0] || null }, { data: readRes.rows || [] }];
-        } catch {
-          return withTimeout(
-            Promise.all([
-              locals.db
-                .from('library')
-                .select('*')
-                .eq('user_id', locals.user.id)
-                .eq('work_id', work.id)
-                .maybeSingle(),
-              locals.db
-                .from('reading')
-                .select('chapter_id,page,completed_at')
-                .eq('user_id', locals.user.id)
-                .eq('work_id', work.id)
-                .order('updated_at', { ascending: false })
-            ]),
-            1000,
-            [{ data: null }, { data: [] }] as any,
-            'obra_personal_data'
-          );
+        } catch (err) {
+          console.warn('[OBRA_PERSONAL_DATA_WARN]', err);
+          return [{ data: null }, { data: [] }];
         }
       })()
     : Promise.resolve([{ data: null }, { data: [] }]);

@@ -42,18 +42,16 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       }
       let userProgress = null;
       if (locals.user) {
-        const pRes = await withTimeout(
-          locals.db
-            .from('reading')
-            .select('page,completed_at')
-            .eq('user_id', locals.user.id)
-            .eq('chapter_id', params.id)
-            .maybeSingle(),
-          800,
-          { data: null } as any,
-          'reader_cached_progress'
-        );
-        userProgress = pRes?.data || null;
+        try {
+          const pRes = await executeYugabyteSql(
+            `SELECT page, completed_at FROM public.reading WHERE user_id = $1 AND chapter_id = $2 LIMIT 1;`,
+            [locals.user.id, params.id],
+            platform?.env
+          );
+          userProgress = pRes.rows[0] || null;
+        } catch {
+          userProgress = null;
+        }
       }
       const cachedComments = cached.comments || [];
 

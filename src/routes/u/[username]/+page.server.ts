@@ -29,39 +29,6 @@ export const load = async ({ locals, params, platform }: any) => {
   }
 
   if (!member) {
-    const { data: supaMember } = await locals.db
-      .from('members')
-      .select(`
-        id,
-        username,
-        display_name,
-        bio,
-        xp,
-        avatar_id,
-        banner_id,
-        equipped_banner_id,
-        avatar_frame_id,
-        name_color,
-        equipped_title_id,
-        equipped_badge_id,
-        featured_achievement_id,
-        privacy_show_achievements,
-        privacy_show_cosmetics,
-        privacy_show_favorites,
-        privacy_show_reading_history,
-        privacy_show_scans,
-        privacy_scan_mode,
-        admin_hide_scan_badges,
-        avatar_crop,
-        banner_crop,
-        created_at
-      `)
-      .eq('username', params.username)
-      .maybeSingle();
-    member = supaMember;
-  }
-
-  if (!member) {
     error(404, 'Perfil não encontrado');
   }
 
@@ -71,172 +38,134 @@ export const load = async ({ locals, params, platform }: any) => {
   const canViewFavorites = (member.privacy_show_favorites ?? true) || isSelf;
   const canViewReadingHistory = (member.privacy_show_reading_history ?? true) || isSelf;
 
+  // 1. Concurrently fetch all profile data from authoritative YugabyteDB
   const [
+    socialRes,
     statsRes,
-    followersCountRes,
-    followingCountRes,
-    achievementsRes,
-    inventoryRes,
-    isFollowingRes,
-    bannerRes,
     favoritesRes,
     readingRes,
-    scanRolesRes,
-    staffRoleRes,
-    scanMemberPositionsRes
+    achievementsRes,
+    inventoryRes,
+    scansRes,
+    cosmeticBannerRes
   ] = await Promise.all([
-    locals.db.rpc('member_public_profile_stats', { p_user: member.id }),
-    locals.db.from('user_follows').select('follower_id', { count: 'exact', head: true }).eq('following_id', member.id),
-    locals.db.from('user_follows').select('following_id', { count: 'exact', head: true }).eq('follower_id', member.id),
-    canViewAchievements
-      ? locals.db
-          .from('member_achievements')
-          .select(`
-            unlocked_at,
-            achievements!inner(
-              id,
-              title,
-              description,
-              icon,
-              badge_color,
-              category,
-              rarity,
-              xp_reward,
-              is_secret
-            )
-          `)
-          .eq('user_id', member.id)
-          .order('unlocked_at', { ascending: false })
-      : Promise.resolve({ data: [] }),
-    canViewCosmetics
-      ? locals.db
-          .from('member_inventory')
-          .select(`
-            item_id,
-            origin,
-            acquired_at,
-            shop_items(
-              id,
-              name,
-              description,
-              kind,
-              rarity,
-              is_animated,
-              style_data
-            )
-          `)
-          .eq('user_id', member.id)
-          .order('acquired_at', { ascending: false })
-      : Promise.resolve({ data: [] }),
-    locals.user && locals.user.id !== member.id
-      ? locals.db
-          .from('user_follows')
-          .select('follower_id')
-          .eq('follower_id', locals.user.id)
-          .eq('following_id', member.id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    member.equipped_banner_id
-      ? locals.db
-          .from('shop_items')
-          .select('id, style_data')
-          .eq('id', member.equipped_banner_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
+    executeYugabyteSql(
+      `SELECT 
+        (SELECT COUNT(*) FROM public.user_follows WHERE following_id = $1) AS followers_count,
+        (SELECT COUNT(*) FROM public.user_follows WHERE follower_id = $1) AS following_count,
+        (CASE WHEN $2::uuid IS NOT NULL THEN EXISTS(SELECT 1 FROM public.user_follows WHERE follower_id = $2 AND following_id = $1) ELSE false END) AS is_following;`,
+      [member.id, locals.user?.id || null],
+      platform?.env
+    ).catch(() => ({ rows: [] })),
+
+    executeYugabyteSql(
+      `SELECT
+        (SELECT COUNT(DISTINCT r.chapter_id) FROM public.reading r WHERE r.user_id = $1) AS chapters_read,
+        (SELECT COUNT(DISTINCT c.work_id) FROM public.reading r JOIN public.chapters c ON c.id = r.chapter_id WHERE r.user_id = $1) AS total_works,
+        (SELECT COUNT(DISTINCT c.work_id) FROM public.reading r JOIN public.chapters c ON c.id = r.chapter_id WHERE r.user_id = $1 AND r.completed_at IS NOT NULL) AS completed_works,
+        (SELECT COUNT(*) FROM public.library WHERE user_id = $1 AND favorite = true) AS favorites,
+        (SELECT COUNT(*) FROM public.achievements) AS achievements_total,
+        (SELECT COUNT(*) FROM public.member_inventory WHERE user_id = $1) AS cosmetics_count;`,
+      [member.id],
+      platform?.env
+    ).catch(() => ({ rows: [] })),
+
     canViewFavorites
-      ? locals.db
-          .from('library')
-          .select(`
-            favorite,
-            updated_at,
-            works!inner(
-              id,
-              slug,
-              title,
-              cover_id,
-              kind,
-              status,
-              year,
-              content_rating,
-              views_total
-            )
-          `)
-          .eq('user_id', member.id)
-          .eq('favorite', true)
-          .eq('works.published', true)
-          .order('updated_at', { ascending: false })
-          .limit(24)
-      : Promise.resolve({ data: [] }),
+      ? executeYugabyteSql(
+          `SELECT to_jsonb(w.*) AS works
+           FROM public.library l
+           JOIN public.works w ON w.id = l.work_id
+           WHERE l.user_id = $1 AND l.favorite = true AND w.published = true
+           ORDER BY l.updated_at DESC
+           LIMIT 24;`,
+          [member.id],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
+      : Promise.resolve({ rows: [] }),
+
     canViewReadingHistory
-      ? locals.db
-          .from('reading')
-          .select('chapter_id, work_id, page, max_page, completed_at, updated_at')
-          .eq('user_id', member.id)
-          .order('updated_at', { ascending: false })
-          .limit(80)
-      : Promise.resolve({ data: [] }),
-    locals.db
-      .from('scan_members')
-      .select(`
-        role,
-        is_public,
-        hidden_by_admin,
-        created_at,
-        scans!inner(
-          id,
-          name,
-          slug,
-          logo_id,
-          is_official,
-          status,
-          description,
-          display_preposition
-        )
-      `)
-      .eq('user_id', member.id)
-      .eq('scans.status', 'ACTIVE'),
-    locals.db
-      .from('access_roles')
-      .select('role')
-      .eq('user_id', member.id)
-      .eq('suspended', false)
-      .maybeSingle(),
-    locals.db
-      .from('scan_member_positions')
-      .select(`
-        scan_id,
-        is_primary,
-        is_public,
-        hidden_by_admin,
-        created_at,
-        scan_positions!inner(
-          id,
-          name,
-          icon
-        )
-      `)
-      .eq('user_id', member.id)
+      ? executeYugabyteSql(
+          `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at
+           FROM public.reading r
+           JOIN public.chapters c ON c.id = r.chapter_id
+           WHERE r.user_id = $1
+           ORDER BY r.updated_at DESC
+           LIMIT 80;`,
+          [member.id],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
+      : Promise.resolve({ rows: [] }),
+
+    canViewAchievements
+      ? executeYugabyteSql(
+          `SELECT ma.unlocked_at, to_jsonb(a.*) AS achievements
+           FROM public.member_achievements ma
+           JOIN public.achievements a ON a.id = ma.achievement_id
+           WHERE ma.user_id = $1
+           ORDER BY ma.unlocked_at DESC;`,
+          [member.id],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
+      : Promise.resolve({ rows: [] }),
+
+    canViewCosmetics
+      ? executeYugabyteSql(
+          `SELECT mi.item_id, mi.origin, mi.acquired_at, to_jsonb(si.*) AS shop_items
+           FROM public.member_inventory mi
+           LEFT JOIN public.shop_items si ON si.id = mi.item_id
+           WHERE mi.user_id = $1
+           ORDER BY mi.acquired_at DESC;`,
+          [member.id],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
+      : Promise.resolve({ rows: [] }),
+
+    executeYugabyteSql(
+      `SELECT 
+        (SELECT coalesce(json_agg(json_build_object(
+           'role', sm.role,
+           'is_public', sm.is_public,
+           'hidden_by_admin', sm.hidden_by_admin,
+           'created_at', sm.created_at,
+           'scans', to_jsonb(s.*)
+         )), '[]'::json)
+         FROM public.scan_members sm
+         JOIN public.scans s ON s.id = sm.scan_id
+         WHERE sm.user_id = $1 AND s.status = 'ACTIVE') AS scan_roles,
+        (SELECT role FROM public.access_roles WHERE user_id = $1 AND suspended = false LIMIT 1) AS staff_role,
+        (SELECT coalesce(json_agg(json_build_object(
+           'scan_id', smp.scan_id,
+           'is_primary', smp.is_primary,
+           'is_public', smp.is_public,
+           'hidden_by_admin', smp.hidden_by_admin,
+           'created_at', smp.created_at,
+           'id', sp.id,
+           'name', sp.name,
+           'icon', sp.icon
+         )), '[]'::json)
+         FROM public.scan_member_positions smp
+         JOIN public.scan_positions sp ON sp.id = smp.position_id
+         WHERE smp.user_id = $1) AS scan_positions;`,
+      [member.id],
+      platform?.env
+    ).catch(() => ({ rows: [] })),
+
+    member.equipped_banner_id
+      ? executeYugabyteSql(
+          `SELECT style_data FROM public.shop_items WHERE id = $1 LIMIT 1;`,
+          [member.equipped_banner_id],
+          platform?.env
+        ).catch(() => ({ rows: [] }))
+      : Promise.resolve({ rows: [] })
   ]);
 
-  // Format unlocked achievements
-  let rawAchievements = achievementsRes.data || [];
-  if (rawAchievements.length === 0 && canViewAchievements) {
-    try {
-      const ybAch = await executeYugabyteSql(
-        `SELECT ma.unlocked_at, row_to_json(a.*) AS achievements
-         FROM public.member_achievements ma
-         JOIN public.achievements a ON a.id = ma.achievement_id
-         WHERE ma.user_id = $1
-         ORDER BY ma.unlocked_at DESC;`,
-        [member.id],
-        platform?.env
-      );
-      if (ybAch.rows && ybAch.rows.length > 0) {
-        rawAchievements = ybAch.rows;
-      }
-    } catch {}
-  }
+  const socialRow = socialRes.rows[0] || {};
+  const followersCount = Number(socialRow.followers_count || 0);
+  const followingCount = Number(socialRow.following_count || 0);
+  const isFollowing = Boolean(socialRow.is_following);
 
+  // Format unlocked achievements
+  const rawAchievements = achievementsRes.rows || [];
   const achievements = rawAchievements.map((row: any) => ({
     unlocked_at: row.unlocked_at,
     ...row.achievements
@@ -276,24 +205,7 @@ export const load = async ({ locals, params, platform }: any) => {
   }
 
   // Format cosmetic items and deduplicate (canonical inventory + legacy items)
-  let rawInventory = inventoryRes.data || [];
-  if (rawInventory.length === 0 && canViewCosmetics) {
-    try {
-      const ybInv = await executeYugabyteSql(
-        `SELECT mi.item_id, mi.origin, mi.acquired_at, row_to_json(si.*) AS shop_items
-         FROM public.member_inventory mi
-         JOIN public.shop_items si ON si.id = mi.item_id
-         WHERE mi.user_id = $1
-         ORDER BY mi.acquired_at DESC;`,
-        [member.id],
-        platform?.env
-      );
-      if (ybInv.rows && ybInv.rows.length > 0) {
-        rawInventory = ybInv.rows;
-      }
-    } catch {}
-  }
-
+  const rawInventory = inventoryRes.rows || [];
   const cosmeticsMap = new Map<string, any>();
   for (const row of rawInventory) {
     const itemKey = row.item_id || row.shop_items?.id;
@@ -353,26 +265,31 @@ export const load = async ({ locals, params, platform }: any) => {
   ].filter((id): id is string => Boolean(id && typeof id === 'string' && !cosmeticsMap.has(id)));
 
   if (equippedLegacyIds.length > 0) {
-    const { data: legacyShopItems } = await locals.db
-      .from('shop_items')
-      .select('id, name, description, kind, rarity, is_animated, style_data')
-      .in('id', equippedLegacyIds);
+    try {
+      const ybLegacy = await executeYugabyteSql(
+        `SELECT id, name, description, kind, rarity, is_animated, style_data
+         FROM public.shop_items
+         WHERE id = ANY($1::text[]);`,
+        [equippedLegacyIds],
+        platform?.env
+      );
 
-    for (const item of legacyShopItems || []) {
-      if (!cosmeticsMap.has(item.id)) {
-        cosmeticsMap.set(item.id, {
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          kind: item.kind,
-          rarity: item.rarity || 'COMUM',
-          is_animated: item.is_animated,
-          style_data: item.style_data,
-          origin: 'LEGACY',
-          acquired_at: member.created_at
-        });
+      for (const item of ybLegacy.rows || []) {
+        if (!cosmeticsMap.has(item.id)) {
+          cosmeticsMap.set(item.id, {
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            kind: item.kind,
+            rarity: item.rarity || 'COMUM',
+            is_animated: item.is_animated,
+            style_data: item.style_data,
+            origin: 'LEGACY',
+            acquired_at: member.created_at
+          });
+        }
       }
-    }
+    } catch {}
   }
 
   // Check if equipped_title_id was from NOX_TITLES
@@ -414,59 +331,23 @@ export const load = async ({ locals, params, platform }: any) => {
 
   const cosmetics = Array.from(cosmeticsMap.values());
 
-  let rpcStats = statsRes.data?.[0];
-  if (!rpcStats) {
-    try {
-      const statsYb = await executeYugabyteSql(
-        `SELECT
-          (SELECT COUNT(DISTINCT chapter_id) FROM public.reading WHERE user_id = $1) AS chapters_read,
-          (SELECT COUNT(DISTINCT work_id) FROM public.reading WHERE user_id = $1) AS total_works,
-          (SELECT COUNT(DISTINCT work_id) FROM public.reading WHERE user_id = $1 AND completed_at IS NOT NULL) AS completed_works,
-          (SELECT COUNT(*) FROM public.library WHERE user_id = $1 AND favorite = true) AS favorites,
-          (SELECT COUNT(*) FROM public.achievements) AS achievements_total,
-          (SELECT COUNT(*) FROM public.member_inventory WHERE user_id = $1) AS cosmetics_count;`,
-        [member.id],
-        platform?.env
-      );
-      if (statsYb.rows && statsYb.rows[0]) {
-        rpcStats = statsYb.rows[0];
-      }
-    } catch {}
-  }
-
+  const rpcStats = statsRes.rows[0] || {};
   const profileStats = {
-    chapters_read: Number(rpcStats?.chapters_read ?? 0),
-    total_works: Number(rpcStats?.total_works ?? 0),
-    completed_works: Number(rpcStats?.completed_works ?? 0),
-    favorites: Number(rpcStats?.favorites ?? 0),
+    chapters_read: Number(rpcStats.chapters_read ?? 0),
+    total_works: Number(rpcStats.total_works ?? 0),
+    completed_works: Number(rpcStats.completed_works ?? 0),
+    favorites: Number(rpcStats.favorites ?? 0),
     achievements_unlocked: achievements.length,
-    achievements_total: Number(rpcStats?.achievements_total ?? 0),
-    cosmetics_count: Math.max(Number(rpcStats?.cosmetics_count ?? 0), cosmetics.length)
+    achievements_total: Number(rpcStats.achievements_total ?? 0),
+    cosmetics_count: Math.max(Number(rpcStats.cosmetics_count ?? 0), cosmetics.length)
   };
 
-  const favorites = (favoritesRes.data || []).map((r: any) => r.works).filter(Boolean);
+  const favorites = (favoritesRes.rows || []).map((r: any) => r.works).filter(Boolean);
 
-  let rawReading = readingRes.data || [];
-  if (rawReading.length === 0 && canViewReadingHistory) {
-    try {
-      const ybRead = await executeYugabyteSql(
-        `SELECT chapter_id, work_id, page, max_page, completed_at, updated_at
-         FROM public.reading
-         WHERE user_id = $1
-         ORDER BY updated_at DESC
-         LIMIT 80;`,
-        [member.id],
-        platform?.env
-      );
-      if (ybRead.rows && ybRead.rows.length > 0) {
-        rawReading = ybRead.rows;
-      }
-    } catch {}
-  }
-
+  const rawReading = readingRes.rows || [];
   const enrichedReadings =
     Array.isArray(rawReading) && rawReading.length > 0
-      ? await enrichReadingRowsWithCatalog(rawReading, locals.db, platform?.env)
+      ? await enrichReadingRowsWithCatalog(rawReading, null, platform?.env)
       : [];
 
   const readingMap = new Map<string, any>();
@@ -495,14 +376,10 @@ export const load = async ({ locals, params, platform }: any) => {
   }
   const recentReadings = Array.from(readingMap.values());
 
-  const scanPositions = (scanMemberPositionsRes.data || []).map((p: any) => ({
-    scan_id: p.scan_id,
-    is_primary: p.is_primary,
-    created_at: p.created_at,
-    id: p.scan_positions?.id,
-    name: p.scan_positions?.name,
-    icon: p.scan_positions?.icon
-  }));
+  const scansRow = scansRes.rows[0] || {};
+  const rawScanRoles = Array.isArray(scansRow.scan_roles) ? scansRow.scan_roles : [];
+  const staffRole = scansRow.staff_role || null;
+  const scanPositions = Array.isArray(scansRow.scan_positions) ? scansRow.scan_positions : [];
 
   const isViewerGlobalAdmin = ['ADMIN', 'EDITOR'].includes(locals.role || '');
   const canViewScanBadges = (
@@ -514,20 +391,19 @@ export const load = async ({ locals, params, platform }: any) => {
   );
 
   let scanRoles: any[] = [];
-
   if (canViewScanBadges) {
-    const rawScanRoles = (scanRolesRes.data || []).filter((r: any) => {
+    const filtered = rawScanRoles.filter((r: any) => {
       if (r.hidden_by_admin && !isViewerGlobalAdmin) return false;
       if (!r.is_public && !isSelf && !isViewerGlobalAdmin) return false;
       return true;
     });
 
-    const mapped = rawScanRoles.map((r: any) => {
-      const userPositions = scanPositions.filter((p: any) => p.scan_id === r.scans.id && (isViewerGlobalAdmin || (!p.hidden_by_admin && (p.is_public || isSelf))));
+    const mapped = filtered.map((r: any) => {
+      const userPositions = scanPositions.filter((p: any) => p.scan_id === r.scans?.id && (isViewerGlobalAdmin || (!p.hidden_by_admin && (p.is_public || isSelf))));
       const primaryPos = userPositions.find((p: any) => p.is_primary) || userPositions[0] || null;
-      const prep = r.scans.display_preposition || getScanPreposition(r.scans);
-      const badgeText = formatScanBadgeText(r.role, primaryPos?.name, r.scans.name);
-      const fullTitle = formatScanRoleTitle(r.role, primaryPos?.name, r.scans.name, prep);
+      const prep = r.scans?.display_preposition || getScanPreposition(r.scans);
+      const badgeText = formatScanBadgeText(r.role, primaryPos?.name, r.scans?.name);
+      const fullTitle = formatScanRoleTitle(r.role, primaryPos?.name, r.scans?.name, prep);
 
       return {
         role: r.role,
@@ -549,17 +425,17 @@ export const load = async ({ locals, params, platform }: any) => {
     }
   }
 
-  const isFollowing = !!isFollowingRes.data;
+  const cosmeticBanner = cosmeticBannerRes.rows[0]?.style_data || null;
 
   return {
     member: {
       ...member,
       frame_id: member.avatar_frame_id
     },
-    cosmetic_banner: (bannerRes.data?.style_data as any) || null,
+    cosmetic_banner: cosmeticBanner,
     stats: profileStats,
-    followersCount: followersCountRes.count ?? 0,
-    followingCount: followingCountRes.count ?? 0,
+    followersCount,
+    followingCount,
     achievements,
     rarityCounts,
     featuredAchievement,
@@ -575,7 +451,7 @@ export const load = async ({ locals, params, platform }: any) => {
     canViewFavorites,
     canViewReadingHistory,
     viewerAuthenticated: !!locals.user,
-    staffRole: staffRoleRes.data?.role || null
+    staffRole
   };
 };
 
