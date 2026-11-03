@@ -15,7 +15,7 @@ export async function safeDbQuery<T>(
   queryPromise: PromiseLike<{ data: T | null; error?: any }>,
   ms: number,
   operation: string,
-  dependency: string = 'SUPABASE'
+  dependency: string = 'DB'
 ): Promise<SafeQueryResult<T>> {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -70,7 +70,7 @@ export async function withTimeout<T>(
   ms: number,
   fallback: T,
   operation: string,
-  dependency: string = 'SUPABASE'
+  dependency: string = 'DB'
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<T>((resolve) => {

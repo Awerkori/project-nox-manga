@@ -119,16 +119,38 @@ async function buildHealthPayload(locals: App.Locals, platform?: App.Platform) {
     const hb = ysqlStats?.hb || null;
     const t = hb
       ? {
-          created_at: hb.observedAt || new Date().toISOString(),
+          created_at:
+            hb.observedAt ||
+            hb.telemetry?.created_at ||
+            hb.created_at ||
+            new Date().toISOString(),
           rss_mb: Math.round(
-            Number(hb.memoryPressure?.rssMiB ?? hb.liveness?.memoryMiB?.rss ?? 0),
+            Number(
+              hb.memoryPressure?.rssMiB ??
+                hb.liveness?.memoryMiB?.rss ??
+                hb.telemetry?.rss_mb ??
+                hb.rss_mb ??
+                0,
+            ),
           ),
           concurrency: Number(
-            hb.chapterAdmission?.capacity ?? hb.chapterWorkers ?? 20,
+            hb.chapterAdmission?.capacity ??
+              hb.chapterWorkers ??
+              hb.telemetry?.concurrency ??
+              hb.concurrency ??
+              20,
           ),
-          active_jobs: Number(hb.chapterAdmission?.active ?? 0),
+          active_jobs: Number(
+            hb.chapterAdmission?.active ??
+              hb.telemetry?.active_jobs ??
+              hb.active_jobs ??
+              0,
+          ),
           cycle_reason:
-            hb.adaptiveAdmission?.reason || 'Operação contínua Always-On',
+            hb.adaptiveAdmission?.reason ||
+            hb.telemetry?.cycle_reason ||
+            hb.cycle_reason ||
+            'Operação contínua Always-On',
         }
       : null;
 

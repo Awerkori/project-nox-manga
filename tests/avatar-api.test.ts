@@ -4,13 +4,15 @@ import { readFileSync } from 'node:fs';
 
 const mocks = vi.hoisted(() => ({
   storeImage: vi.fn(),
-  update: vi.fn(),
-  eq: vi.fn()
+  executeYugabyteSql: vi.fn()
 }));
 
 vi.mock('$lib/server/db', () => ({
-  member: () => 'member-1',
-  privileged: () => ({ from: () => ({ update: mocks.update }) })
+  member: () => 'member-1'
+}));
+
+vi.mock('$lib/server/yugabyte', () => ({
+  executeYugabyteSql: mocks.executeYugabyteSql
 }));
 
 vi.mock('$lib/server/media', () => ({
@@ -23,8 +25,7 @@ import { POST } from '../src/routes/api/avatar/+server';
 describe('avatar upload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.eq.mockResolvedValue({ error: null });
-    mocks.update.mockReturnValue({ eq: mocks.eq });
+    mocks.executeYugabyteSql.mockResolvedValue({ rowCount: 1, rows: [] });
     mocks.storeImage.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', mime: 'image/gif' });
   });
 
@@ -48,9 +49,10 @@ describe('avatar upload', () => {
     const storedBytes = Buffer.from(await storedFile.arrayBuffer());
     expect(storedFile.type).toBe('image/gif');
     expect(createHash('sha256').update(storedBytes).digest('hex')).toBe(originalHash);
-    expect(mocks.update).toHaveBeenCalledWith({
-      avatar_id: '11111111-1111-4111-8111-111111111111',
-      avatar_crop: { x: 0, y: 0, zoom: 1.75 }
-    });
+    expect(mocks.executeYugabyteSql).toHaveBeenCalledWith(
+      `UPDATE public.members SET avatar_id = $1, avatar_crop = $2 WHERE id = $3`,
+      ['11111111-1111-4111-8111-111111111111', JSON.stringify({ x: 0, y: 0, zoom: 1.75 }), 'member-1'],
+      undefined
+    );
   });
 });

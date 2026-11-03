@@ -666,6 +666,40 @@ export const POST = async ({ request, locals, platform }: any) => {
     invalidateUserSession(locals.user.id);
     data = { ok: true, slot, equipped: !isUnequip, item_id: finalVal };
     problem = null;
+  } else if (body.scope === 'owner') {
+    if (locals.role !== 'ADMIN') error(403, 'Esta ação é exclusiva dos administradores.');
+    const targetUserId = body.data?.user_id ? String(body.data.user_id) : (body.data?.id ? String(body.data.id) : null);
+    if (body.action === 'suspend_member' || body.action === 'suspend') {
+      const suspended = Boolean(body.data?.suspended);
+      await executeYugabyteSql(
+        `UPDATE public.access_roles SET suspended = $1 WHERE user_id = $2;`,
+        [suspended, targetUserId],
+        platform?.env
+      );
+      data = { ok: true };
+      problem = null;
+    } else if (body.action === 'set_role' || body.action === 'role') {
+      const role = String(body.data?.role);
+      await executeYugabyteSql(
+        `UPDATE public.access_roles SET role = $1 WHERE user_id = $2;`,
+        [role, targetUserId],
+        platform?.env
+      );
+      data = { ok: true };
+      problem = null;
+    } else {
+      try {
+        const res = await executeYugabyteSql(
+          `SELECT public.owner_action($1, $2::jsonb) AS result;`,
+          [body.action, JSON.stringify(body.data)],
+          platform?.env
+        );
+        data = res.rows[0]?.result || { ok: true };
+        problem = null;
+      } catch (err: any) {
+        problem = err;
+      }
+    }
   } else {
     try {
       if (isCanonicalChapterWrite) {

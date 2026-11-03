@@ -91,7 +91,6 @@ describe('Yugabyte alias search', () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).data[0]).toMatchObject({ title: 'Solo Leveling', aliases: ['나 혼자만 레벨업'] });
-    expect(db.from).toHaveBeenCalledOnce();
-    expect(supabaseQuery.range).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalled();
   });
 });

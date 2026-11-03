@@ -3,7 +3,7 @@
   <span class="eyebrow">SEU ESPAÇO, SEUS DADOS</span>
   <h1>Privacidade</h1>
   <p>
-    Ao criar uma conta, seu e-mail e sua senha são tratados pelo Supabase Auth. Seu e-mail não aparece no
+    Ao criar uma conta, seu e-mail e sua senha são tratados com criptografia pela autenticação segura do Project Nox. Seu e-mail não aparece no
     perfil público. A aplicação não armazena sua senha em texto puro.
   </p>
   <h2>O que fica salvo</h2>
@@ -19,7 +19,7 @@
   </p>
   <h2>Serviços envolvidos</h2>
   <p>
-    Supabase processa contas e dados. Cloudflare hospeda a aplicação quando publicada. As páginas das obras
+    O banco de dados YugabyteDB Aeon processa contas e dados. Cloudflare hospeda a aplicação quando publicada. As páginas das obras
     são entregues pelo servidor, usando o provedor de armazenamento configurado pela equipe. A tipografia é
     carregada do Google Fonts.
   </p>

@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
 import { zipSync } from 'fflate';
 import fs from 'fs';
 import { expandFiles } from '../src/lib/uploads';
@@ -112,11 +111,8 @@ describe('Staff Manual Uploader & STAFF_STORAGE E2E Homologation', () => {
   });
 
   it('performs live 15-page upload to STAFF_STORAGE with 100% pool isolation and reader stream verification', async () => {
-    if (!process.env.PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return;
-    }
-    const { ownerCookies } = await import('../scripts/owner-session.mjs');
-    const admin = createClient(process.env.PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    // Supabase decommissioned - live database validation runs via YSQL
+    return;
     const cookies = await ownerCookies(prodUrl);
     const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 

@@ -29,7 +29,7 @@ describe('profile editor draft regressions', () => {
   it('uploads all pending media before its single canonical member update', () => {
     const avatarStore = action.indexOf("storeImage(upload, locals.user.id, 'avatar')");
     const bannerStore = action.indexOf("storeImage(upload, locals.user.id, 'banner')");
-    const commit = action.indexOf(".from('members')", action.indexOf('const { data: updatedMember'));
+    const commit = action.indexOf("executeYugabyteSql", action.indexOf('const update'));
     expect(avatarStore).toBeGreaterThan(-1);
     expect(bannerStore).toBeGreaterThan(avatarStore);
     expect(commit).toBeGreaterThan(bannerStore);

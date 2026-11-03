@@ -1,56 +1,57 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  executeYugabyteSql: vi.fn()
+}));
+
+vi.mock('$lib/server/yugabyte', () => ({
+  executeYugabyteSql: mocks.executeYugabyteSql
+}));
+
 import { load, actions } from '../src/routes/admin/staff/+page.server.js';
+import { adminStaffCache } from '../src/lib/server/admin-cache';
 
 describe('/admin/staff PageServerLoad & Actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    adminStaffCache.clear();
+  });
+
   it('redirects unauthorized users to /entrar', async () => {
     const unauthLocals = {
       user: null,
-      role: 'USER',
-      db: {} as any
+      role: 'USER'
     };
 
     await expect(load({ locals: unauthLocals } as any)).rejects.toThrow();
 
     const memberLocals = {
       user: { id: 'user-123' },
-      role: 'USER',
-      db: {} as any
+      role: 'USER'
     };
 
     await expect(load({ locals: memberLocals } as any)).rejects.toThrow();
   });
 
   it('loads staff members cleanly for ADMIN role without 500 errors', async () => {
-    const mockStaffData = [
+    const mockStaffRows = [
       {
         user_id: 'admin-uuid',
         role: 'ADMIN',
         suspended: false,
-        members: {
-          id: 'admin-uuid',
-          username: 'awerkori',
-          display_name: 'Awerkori',
-          avatar_id: null,
-          xp: 500,
-          created_at: '2026-09-01T00:00:00Z'
-        }
+        username: 'awerkori',
+        display_name: 'Awerkori',
+        avatar_id: null,
+        xp: 500,
+        created_at: '2026-09-01T00:00:00Z'
       }
     ];
 
-    const mockDb = {
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          in: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: mockStaffData, error: null })
-          })
-        })
-      })
-    };
+    mocks.executeYugabyteSql.mockResolvedValueOnce({ rows: mockStaffRows, rowCount: 1 });
 
     const adminLocals = {
       user: { id: 'admin-uuid' },
-      role: 'ADMIN',
-      db: mockDb as any
+      role: 'ADMIN'
     };
 
     const result = (await load({ locals: adminLocals } as any)) as any;
@@ -62,45 +63,24 @@ describe('/admin/staff PageServerLoad & Actions', () => {
   });
 
   it('handles fallback query gracefully if join fails', async () => {
-    const mockRawRoles = [
-      { user_id: 'editor-uuid', role: 'EDITOR', suspended: false }
-    ];
-    const mockMembers = [
-      { id: 'editor-uuid', username: 'editor1', display_name: 'Editor Um', avatar_id: null, xp: 100, created_at: '2026-09-05T00:00:00Z' }
+    const mockStaffRows = [
+      {
+        user_id: 'editor-uuid',
+        role: 'EDITOR',
+        suspended: false,
+        username: 'editor1',
+        display_name: 'Editor Um',
+        avatar_id: null,
+        xp: 100,
+        created_at: '2026-09-05T00:00:00Z'
+      }
     ];
 
-    const mockDb = {
-      from: vi.fn().mockImplementation((table: string) => {
-        if (table === 'access_roles') {
-          return {
-            select: vi.fn().mockReturnValue({
-              in: vi.fn().mockImplementation((col: string) => {
-                if (col === 'role') {
-                  return {
-                    order: vi.fn().mockResolvedValue({ data: null, error: { message: 'column access_roles.members does not exist' } }),
-                    then: (r: any) => r({ data: mockRawRoles, error: null })
-                  };
-                }
-                return Promise.resolve({ data: mockRawRoles, error: null });
-              })
-            })
-          };
-        }
-        if (table === 'members') {
-          return {
-            select: vi.fn().mockReturnValue({
-              in: vi.fn().mockResolvedValue({ data: mockMembers, error: null })
-            })
-          };
-        }
-        return {};
-      })
-    };
+    mocks.executeYugabyteSql.mockResolvedValueOnce({ rows: mockStaffRows, rowCount: 1 });
 
     const adminLocals = {
       user: { id: 'admin-uuid' },
-      role: 'ADMIN',
-      db: mockDb as any
+      role: 'ADMIN'
     };
 
     const result = (await load({ locals: adminLocals } as any)) as any;
@@ -112,13 +92,16 @@ describe('/admin/staff PageServerLoad & Actions', () => {
   it('validates permissions on updateRole action', async () => {
     const editorLocals = {
       user: { id: 'editor-uuid' },
-      role: 'EDITOR',
-      db: {} as any
+      role: 'EDITOR'
     };
+
+    const form = new FormData();
+    form.set('userId', 'user-1');
+    form.set('role', 'ADMIN');
 
     const res = await (actions.updateRole as any)({
       request: {
-        formData: async () => new Map([['userId', 'user-1'], ['role', 'ADMIN']])
+        formData: async () => form
       },
       locals: editorLocals
     });

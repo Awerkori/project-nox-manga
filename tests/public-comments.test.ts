@@ -6,54 +6,46 @@ vi.mock('$lib/server/reader-editorial', () => ({
   readerPreviewTarget: vi.fn(),
   readerPreviewWork: vi.fn()
 }));
+vi.mock('$lib/server/yugabyte', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/server/yugabyte')>();
+  return {
+    ...actual,
+    fetchFullWorkPageFromYugabyte: vi.fn(async () => ({
+      work: { id: 'work', slug: 'story', title: 'Story', synopsis: '', aliases: [], published: true },
+      chapters: [{ id: 'chapter', work_id: 'work', number: 64, published_at: '2026-09-07' }],
+      tags: [],
+      rating: { rating: 5, total_votes: 1 }
+    })),
+    executeYugabyteSql: vi.fn(async (sql: string) => {
+      if (sql.includes('FROM comments') && sql.includes('chapter_id IS NULL')) {
+        return {
+          rows: [
+            { id: 'visible', work_id: 'work', chapter_id: null, removed: false, created_at: '2026-01-01' },
+            { id: 'removed', work_id: 'work', chapter_id: null, removed: true, created_at: '2026-01-02' }
+          ]
+        };
+      }
+      if (sql.includes('FROM comments') && sql.includes('c.chapter_id = $1')) {
+        return {
+          rows: [
+            { id: 'chapter-visible', work_id: 'work', chapter_id: 'chapter', removed: false, created_at: '2026-01-01' },
+            { id: 'chapter-removed', work_id: 'work', chapter_id: 'chapter', removed: true, created_at: '2026-01-02' }
+          ]
+        };
+      }
+      if (sql.includes('FROM public.works')) {
+        return { rows: [{ id: 'work', slug: 'story', title: 'Story', synopsis: '', aliases: [], published: true }] };
+      }
+      return { rows: [] };
+    })
+  };
+});
 import { load as workLoad } from '../src/routes/obra/[slug]/+page.server';
 import { load as readerLoad } from '../src/routes/ler/[id]/+page.server';
 
 function event() {
-  const work = { id: 'work', slug: 'story', title: 'Story', synopsis: '', aliases: [], published: true };
-  const chapter = { id: 'chapter', work_id: 'work', number: 64, works: work, published_at: '2026-09-07' };
-  const tables: Record<string, any[]> = {
-    works: [work],
-    chapters: [chapter],
-    comments: [
-      { id: 'visible', work_id: 'work', chapter_id: null, removed: false },
-      { id: 'removed', work_id: 'work', chapter_id: null, removed: true },
-      { id: 'chapter-visible', work_id: 'work', chapter_id: 'chapter', removed: false },
-      { id: 'chapter-removed', work_id: 'work', chapter_id: 'chapter', removed: true }
-    ],
-    pages: [{ id: 'p1', chapter_id: 'chapter', page_number: 1, media_id: 'm1' }]
-  };
-  // An administrator can read moderated rows for the moderation panel.
-  // Public page loaders must explicitly exclude those rows for every role.
-  const db = {
-    from(table: string) {
-      let rows = [...(tables[table] || [])];
-      const q: any = {
-        select: (fields: string) => {
-          if (table === 'comments') expect(fields).toContain('members!comments_user_id_fkey(');
-          return q;
-        },
-        order: () => q,
-        limit: () => q,
-        not: () => q,
-        eq: (key: string, value: unknown) => {
-          rows = rows.filter((r) => r[key] === value);
-          return q;
-        },
-        is: (key: string, value: unknown) => {
-          rows = rows.filter((r) => r[key] === value);
-          return q;
-        },
-        maybeSingle: async () => ({ data: rows[0] || null, error: null }),
-        then: (resolve: (value: unknown) => unknown) =>
-          Promise.resolve({ data: rows, error: null }).then(resolve)
-      };
-      return q;
-    },
-    rpc: async () => ({ data: [], error: null })
-  };
   return {
-    locals: { db, user: null, role: 'ADMIN' },
+    locals: { user: null, role: 'ADMIN' },
     params: { slug: 'story', id: 'chapter' },
     url: new URL('https://nox.invalid'),
     setHeaders: () => {}

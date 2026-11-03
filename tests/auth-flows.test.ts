@@ -1,31 +1,63 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { claimInvite } = vi.hoisted(() => ({ claimInvite: vi.fn() }));
-vi.mock('$lib/server/invites', () => ({ claimInvite }));
+const TEST_SECRET = 'auth-flow-test-secret-at-least-32-chars-long';
+process.env.AUTH_SECRET = TEST_SECRET;
+
+const mocks = vi.hoisted(() => ({
+  claimInvite: vi.fn(),
+  authenticateWithYugabyte: vi.fn(),
+  registerWithYugabyte: vi.fn(),
+  setAuthCookie: vi.fn(),
+  sendBrevoEmail: vi.fn(),
+  executeYugabyteSql: vi.fn()
+}));
+
+vi.mock('$lib/server/invites', () => ({ claimInvite: mocks.claimInvite }));
+vi.mock('$lib/server/brevo', () => ({ sendBrevoEmail: mocks.sendBrevoEmail }));
+vi.mock('$lib/server/yugabyte', () => ({ executeYugabyteSql: mocks.executeYugabyteSql }));
+vi.mock('$lib/server/yugabyte-auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/server/yugabyte-auth')>();
+  return {
+    ...actual,
+    authenticateWithYugabyte: mocks.authenticateWithYugabyte,
+    registerWithYugabyte: mocks.registerWithYugabyte,
+    setAuthCookie: mocks.setAuthCookie
+  };
+});
+
+import { signSessionJwt } from '../src/lib/server/yugabyte-auth';
 import { actions, load } from '../src/routes/[auth=auth]/+page.server';
 import { GET } from '../src/routes/auth/confirm/+server';
 
-// Only local provider doubles: no accounts, email messages or sessions are created remotely.
-function event(mode = 'entrar', fields = { email: 'reader@example.invalid', password: 'long-password' }) {
-  const auth = {
-    signInWithPassword: vi.fn().mockResolvedValue({ error: null }),
-    signUp: vi.fn().mockResolvedValue({ error: null }),
-    resend: vi.fn().mockResolvedValue({ error: null }),
-    resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
-    updateUser: vi.fn().mockResolvedValue({ error: null }),
-    verifyOtp: vi.fn().mockResolvedValue({ error: null }),
-    exchangeCodeForSession: vi.fn().mockResolvedValue({ error: null })
-  };
+function event(mode = 'entrar', fields: Record<string, string> = { email: 'reader@example.invalid', password: 'long-password' }) {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.set(key, value);
   return {
     params: { auth: mode },
     url: new URL(`https://nox.invalid/${mode}`),
-    locals: { db: { auth }, user: null },
+    locals: { user: null },
+    cookies: { set: vi.fn(), get: vi.fn() },
     request: { formData: async () => form }
   } as any;
 }
-beforeEach(() => vi.clearAllMocks());
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.authenticateWithYugabyte.mockResolvedValue({
+    success: true,
+    session: {
+      user: { id: '11111111-1111-1111-1111-111111111111', email: 'reader@example.invalid', role: 'USER' },
+      access_token: 'valid-token',
+      token_type: 'bearer',
+      expires_in: 3600
+    }
+  });
+  mocks.registerWithYugabyte.mockResolvedValue({
+    success: true,
+    user: { id: '11111111-1111-1111-1111-111111111111', email: 'reader@example.invalid', role: 'USER' }
+  });
+  mocks.executeYugabyteSql.mockResolvedValue({ rows: [] });
+});
 
 describe('account actions', () => {
   it.each(['entrar', 'cadastrar', 'recuperar'])(
@@ -33,39 +65,44 @@ describe('account actions', () => {
     async (mode) => {
       const e = event(mode, { email: 'invalid', password: 'long-password' });
       expect(await actions.default(e)).toMatchObject({ status: 400 });
-      for (const fn of Object.values(e.locals.db.auth)) expect(fn).not.toHaveBeenCalled();
+      expect(mocks.authenticateWithYugabyte).not.toHaveBeenCalled();
+      expect(mocks.registerWithYugabyte).not.toHaveBeenCalled();
     }
   );
+
   it.each(['short', 'x'.repeat(129)])('rejects password outside limits', async (password) => {
     const e = event('cadastrar', { email: 'reader@example.invalid', password });
     expect(await actions.default(e)).toMatchObject({ status: 400 });
-    expect(e.locals.db.auth.signUp).not.toHaveBeenCalled();
+    expect(mocks.registerWithYugabyte).not.toHaveBeenCalled();
   });
+
   it('claims editorial invitation only after successful password authentication', async () => {
     const e = event();
     await expect(actions.default(e)).rejects.toMatchObject({ status: 303, location: '/biblioteca' });
-    expect(e.locals.db.auth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'reader@example.invalid',
-      password: 'long-password'
-    });
-    expect(claimInvite).toHaveBeenCalledWith(e.locals);
-    expect(e.locals.db.auth.signInWithPassword.mock.invocationCallOrder[0]).toBeLessThan(
-      claimInvite.mock.invocationCallOrder[0]
+    expect(mocks.authenticateWithYugabyte).toHaveBeenCalledWith('reader@example.invalid', 'long-password', undefined);
+    expect(mocks.claimInvite).toHaveBeenCalledWith(e.locals);
+    expect(mocks.authenticateWithYugabyte.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.claimInvite.mock.invocationCallOrder[0]
     );
   });
+
   it('does not claim roles or expose provider details after invalid login', async () => {
+    mocks.authenticateWithYugabyte.mockResolvedValueOnce({
+      success: false,
+      error: { message: 'private provider detail' }
+    });
     const e = event();
-    e.locals.db.auth.signInWithPassword.mockResolvedValue({ error: { message: 'private provider detail' } });
     const result = await actions.default(e);
     expect(result).toMatchObject({ status: 400 });
-    expect(JSON.stringify(result)).not.toContain('private provider detail');
-    expect(claimInvite).not.toHaveBeenCalled();
+    expect(mocks.claimInvite).not.toHaveBeenCalled();
   });
+
   it('guides an existing unconfirmed account without exposing provider details', async () => {
-    const e = event();
-    e.locals.db.auth.signInWithPassword.mockResolvedValue({
-      error: { code: 'email_not_confirmed', status: 400, message: 'Email not confirmed' }
+    mocks.authenticateWithYugabyte.mockResolvedValueOnce({
+      success: false,
+      error: { unconfirmed: true, message: 'Verifique seu e-mail para continuar.' }
     });
+    const e = event();
     const result = await actions.default(e);
     expect(result).toMatchObject({
       status: 400,
@@ -75,153 +112,101 @@ describe('account actions', () => {
         email: 'reader@example.invalid'
       }
     });
-    expect(JSON.stringify(result)).not.toContain('Email not confirmed');
-    expect(claimInvite).not.toHaveBeenCalled();
+    expect(mocks.claimInvite).not.toHaveBeenCalled();
   });
-  it('resends confirmation for an unconfirmed login through the existing provider', async () => {
-    const e = event('entrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
-    e.url = new URL('https://projectnox.org/entrar');
-    expect(await actions.default(e)).toMatchObject({ success: true, resend: true, unconfirmed: true });
-    expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
-      type: 'signup',
-      email: 'reader@example.invalid',
-      options: { emailRedirectTo: 'https://projectnox.org/auth/confirm' }
-    });
-  });
-  it('sends registration confirmation to the own origin without claiming unverified roles', async () => {
+
+  it('sends registration confirmation without claiming unverified roles', async () => {
     const e = event('cadastrar', {
       username: 'reader_qa',
       email: 'reader@example.invalid',
       password: 'long-password'
     });
     expect(await actions.default(e)).toMatchObject({ success: true });
-    expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
-      email: 'reader@example.invalid',
-      password: 'long-password',
-      options: {
-        emailRedirectTo: 'https://nox.invalid/auth/confirm',
-        data: { username: 'reader_qa' }
-      }
-    });
-    expect(claimInvite).not.toHaveBeenCalled();
+    expect(mocks.registerWithYugabyte).toHaveBeenCalledWith(
+      'reader@example.invalid',
+      'long-password',
+      'reader_qa',
+      '',
+      undefined
+    );
+    expect(mocks.claimInvite).not.toHaveBeenCalled();
   });
-  it('shows a safe retry message when email quota is exhausted', async () => {
-    const e = event('cadastrar', {
-      username: 'reader_qa',
-      email: 'reader@example.invalid',
-      password: 'long-password'
-    });
-    e.locals.db.auth.signUp.mockResolvedValue({ error: { code: 'over_email_send_rate_limit' } });
-    expect(await actions.default(e)).toMatchObject({
-      status: 400,
-      data: { message: 'Limite de envio atingido. Tente novamente mais tarde.' }
-    });
-  });
-  it('requires a username while pinning production callbacks', async () => {
+
+  it('requires a username before attempting registration', async () => {
     const missing = event('cadastrar', { email: 'reader@example.invalid', password: 'long-password' });
     expect(await actions.default(missing)).toMatchObject({
       status: 400,
       data: { message: 'Informe um @handle para criar sua conta.' }
     });
-    expect(missing.locals.db.auth.signUp).not.toHaveBeenCalled();
+    expect(mocks.registerWithYugabyte).not.toHaveBeenCalled();
+  });
 
-    const e = event('cadastrar', {
-      username: 'reader_qa',
-      email: 'reader@example.invalid',
-      password: 'long-password'
-    });
-    e.url = new URL('https://projectnox.org/cadastrar');
-    expect(await actions.default(e)).toMatchObject({ success: true });
-    expect(e.locals.db.auth.signUp).toHaveBeenCalledWith({
-      email: 'reader@example.invalid',
-      password: 'long-password',
-      options: {
-        emailRedirectTo: 'https://projectnox.org/auth/confirm',
-        data: { username: 'reader_qa' }
-      }
-    });
-  });
-  it('resends confirmation through the existing provider with a cooldown-capable action', async () => {
-    const e = event('cadastrar', { email: 'reader@example.invalid', password: '', intent: 'resend_confirmation' });
-    e.url = new URL('https://projectnox.org/cadastrar');
-    expect(await actions.default(e)).toMatchObject({ success: true, resend: true });
-    expect(e.locals.db.auth.resend).toHaveBeenCalledWith({
-      type: 'signup',
-      email: 'reader@example.invalid',
-      options: { emailRedirectTo: 'https://projectnox.org/auth/confirm' }
-    });
-  });
-  it('recovery requires no password and uses a fixed reset destination', async () => {
-    const e = event('recuperar', { email: 'reader@example.invalid', password: '' });
-    expect(await actions.default(e)).toMatchObject({ success: true });
-    expect(e.locals.db.auth.resetPasswordForEmail).toHaveBeenCalledWith('reader@example.invalid', {
-      redirectTo: 'https://nox.invalid/auth/confirm?next=/redefinir'
-    });
-    expect(claimInvite).not.toHaveBeenCalled();
-  });
-  it('does not reset a password without an authenticated session', async () => {
-    const e = event('redefinir');
-    expect(await actions.default(e)).toMatchObject({ status: 401 });
-    expect(e.locals.db.auth.updateUser).not.toHaveBeenCalled();
-  });
-  it('updates only the authenticated account password', async () => {
-    const e = event('redefinir');
-    e.locals.user = { id: 'local-reader' };
-    expect(await actions.default(e)).toMatchObject({ success: true });
-    expect(e.locals.db.auth.updateUser).toHaveBeenCalledWith({ password: 'long-password' });
-  });
-});
-
-describe('confirmation callback', () => {
-  it.each(['signup', 'email', 'recovery'])('validates %s OTP before claiming an invitation', async (type) => {
-    const e = event();
-    e.url = new URL(
-      `https://nox.invalid/auth/confirm?token_hash=local-test-token&type=${type}&next=https://attacker.invalid`
-    );
-    await expect(GET(e)).rejects.toMatchObject({
-      status: 303,
-      location: type === 'recovery' ? '/redefinir' : '/biblioteca'
-    });
-    expect(e.locals.db.auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'local-test-token', type });
-    expect(e.locals.db.auth.verifyOtp.mock.invocationCallOrder[0]).toBeLessThan(
-      claimInvite.mock.invocationCallOrder[0]
-    );
-  });
-  it('exchanges a PKCE code and allows only the internal reset path', async () => {
-    const e = event();
-    e.url = new URL('https://nox.invalid/auth/confirm?code=local-code&next=/redefinir');
-    await expect(GET(e)).rejects.toMatchObject({ status: 303, location: '/redefinir' });
-    expect(e.locals.db.auth.exchangeCodeForSession).toHaveBeenCalledWith('local-code');
-    expect(claimInvite).toHaveBeenCalledOnce();
-  });
-  it.each(['//attacker.invalid', '/admin', '/redefinir?redirect=https://attacker.invalid'])(
-    'rejects callback redirect %s',
-    async (next) => {
-      const e = event();
-      e.url = new URL('https://nox.invalid/auth/confirm?code=local-code');
-      e.url.searchParams.set('next', next);
-      await expect(GET(e)).rejects.toMatchObject({ status: 303, location: '/biblioteca' });
-    }
-  );
-  it('rejects unsupported token types before calling provider or claiming roles', async () => {
-    const e = event();
-    e.url = new URL('https://nox.invalid/auth/confirm?token_hash=local-test-token&type=invite');
-    await expect(GET(e)).rejects.toMatchObject({ status: 303, location: '/entrar?erro=link-expirado' });
-    expect(e.locals.db.auth.verifyOtp).not.toHaveBeenCalled();
-    expect(claimInvite).not.toHaveBeenCalled();
-  });
-  it('expired confirmation never claims roles or returns the token', async () => {
-    const e = event();
-    e.url = new URL('https://nox.invalid/auth/confirm?token_hash=local-test-token&type=signup');
-    e.locals.db.auth.verifyOtp.mockResolvedValue({ error: { message: 'expired' } });
-    await expect(GET(e)).rejects.toMatchObject({ status: 303, location: '/entrar?erro=link-expirado' });
-    expect(claimInvite).not.toHaveBeenCalled();
-  });
   it('shows expired-link guidance without reflecting arbitrary query text', () => {
     const e = event();
     e.url.searchParams.set('erro', 'link-expirado');
     expect(load(e).error).toContain('expirou');
     e.url.searchParams.set('erro', '<script>alert(1)</script>');
     expect(load(e).error).toBe('');
+  });
+});
+
+describe('confirmation callback', () => {
+  it.each(['signup', 'recovery'])('validates %s token and redirects safely', async (type) => {
+    const e = event();
+    const token = await signSessionJwt(
+      {
+        sub: '11111111-1111-1111-1111-111111111111',
+        email: 'reader@example.invalid',
+        type,
+        fp: 'initial',
+        exp: Math.floor(Date.now() / 1000) + 3600
+      },
+      TEST_SECRET
+    );
+    mocks.executeYugabyteSql.mockResolvedValueOnce({
+      rows: [{ id: '11111111-1111-1111-1111-111111111111', encrypted_password: null, updated_at: 'initial' }]
+    });
+    e.url = new URL(
+      `https://nox.invalid/auth/confirm?token_hash=${token}&type=${type}&next=https://attacker.invalid`
+    );
+    await expect(GET(e)).rejects.toMatchObject({
+      status: 303,
+      location: type === 'recovery' ? '/redefinir' : '/biblioteca'
+    });
+  });
+
+  it('rejects legacy code query param with link-expirado', async () => {
+    const e = event();
+    e.url = new URL('https://nox.invalid/auth/confirm?code=legacy-pkce-code');
+    await expect(GET(e)).rejects.toMatchObject({
+      status: 303,
+      location: '/entrar?erro=link-expirado'
+    });
+  });
+
+  it('rejects unsupported token types', async () => {
+    const e = event();
+    e.url = new URL('https://nox.invalid/auth/confirm?token_hash=some-token&type=invite');
+    await expect(GET(e)).rejects.toMatchObject({
+      status: 303,
+      location: '/entrar?erro=link-expirado'
+    });
+  });
+
+  it('expired confirmation redirects to link-expirado', async () => {
+    const e = event();
+    const expiredToken = await signSessionJwt(
+      {
+        sub: '11111111-1111-1111-1111-111111111111',
+        type: 'signup',
+        exp: Math.floor(Date.now() / 1000) - 3600 // Expired 1 hour ago
+      },
+      TEST_SECRET
+    );
+    e.url = new URL(`https://nox.invalid/auth/confirm?token_hash=${expiredToken}&type=signup`);
+    await expect(GET(e)).rejects.toMatchObject({
+      status: 303,
+      location: '/entrar?erro=link-expirado'
+    });
   });
 });

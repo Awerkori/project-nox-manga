@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ download: vi.fn(), resolveSessionData: vi.fn(), media: { id: '11111111-1111-4111-8111-111111111111', provider: 'telegram', storage_ready: true, status: 'ACTIVE', access_class: 'PUBLIC', bot_reference: 'MANGA_STORAGE_01', mime: 'image/jpeg', sha256: 'test', provider_key: 'file' } }));
-vi.mock('$lib/server/db', () => ({ privileged: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mocks.media }) }) }) }) }) }));
 vi.mock('$lib/server/storage-router', () => ({ resolveBotDownloadClient: () => ({ download: mocks.download }), normalizeBotReference: (x: string) => x, deduceMangaShardFromFileId: () => null }));
 vi.mock('$lib/server/session-cache', () => ({ extractFullAuthCookie: vi.fn(), decodeSessionJwt: vi.fn(), resolveSessionData: mocks.resolveSessionData }));
+vi.mock('$lib/server/yugabyte', () => ({
+  fetchMediaMetadataFromYugabyte: vi.fn(async () => mocks.media),
+  executeYugabyteSql: vi.fn(async () => ({ rows: [] }))
+}));
 import { GET } from '../src/routes/media/[id]/+server';
 
 describe('public media delivery', () => {

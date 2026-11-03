@@ -8,20 +8,6 @@ import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 import type { PageServerLoad, Actions } from './$types';
 
-let cachedGlobalAchievements: { at: number; data: any[] } | null = null;
-const GLOBAL_ACHIEVEMENTS_TTL_MS = 300_000;
-
-async function loadGlobalAchievements(db: any) {
-  if (cachedGlobalAchievements && Date.now() - cachedGlobalAchievements.at < GLOBAL_ACHIEVEMENTS_TTL_MS) {
-    return { data: cachedGlobalAchievements.data };
-  }
-  const res = await db.from('achievements').select('*').order('order_index', { ascending: true });
-  if (Array.isArray(res?.data) && res.data.length > 0) {
-    cachedGlobalAchievements = { at: Date.now(), data: res.data };
-  }
-  return res;
-}
-
 export const load: PageServerLoad = async ({ locals, platform }) => {
   if (!locals.user) {
     redirect(303, '/entrar');

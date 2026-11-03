@@ -110,53 +110,8 @@ export async function enrichReadingRowsWithCatalog<T extends Record<string, any>
         }
       });
     }
-  } catch {
-    // Fallback to Supabase chapters below if Yugabyte is unavailable
-  }
-
-  const missingIds = chapterIds.filter((id) => !byChapterId.has(id));
-  if (missingIds.length > 0 && db && typeof db.from === 'function') {
-    try {
-      const supaRes = await withTimeout(
-        db
-          .from('chapters')
-          .select(
-            'id,number,display_number,canonical_chapter_key,chapter_order_key,title,work_id,published_at,works!inner(id,slug,title,cover_id,kind,status,published,content_rating)'
-          )
-          .in('id', missingIds)
-          .not('published_at', 'is', null)
-          .eq('works.published', true),
-        1800,
-        { data: [] } as any,
-        'reading_enrich_supabase_fallback'
-      );
-      for (const row of supaRes?.data || []) {
-        const w = Array.isArray(row.works) ? row.works[0] : row.works;
-        if (!w) continue;
-        byChapterId.set(row.id, {
-          id: row.id,
-          number: row.number,
-          display_number: row.display_number,
-          canonical_chapter_key: row.canonical_chapter_key,
-          chapter_order_key: row.chapter_order_key,
-          title: row.title,
-          work_id: row.work_id,
-          published_at: row.published_at,
-          works: {
-            id: w.id || row.work_id,
-            slug: w.slug,
-            title: w.title,
-            cover_id: w.cover_id || null,
-            kind: w.kind || null,
-            status: w.status || null,
-            published: Boolean(w.published),
-            content_rating: w.content_rating || null
-          }
-        });
-      }
-    } catch {
-      // Ignore secondary fallback errors
-    }
+  } catch (err) {
+    console.warn('[READING_HISTORY_YUGABYTE_WARN]', err);
   }
 
   const enriched: Array<T & { chapters: EnrichedReadingChapter }> = [];

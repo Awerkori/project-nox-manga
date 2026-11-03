@@ -172,14 +172,14 @@
         </div>
 
         <div class="integrations-stack">
-          <!-- Supabase DB & Auth -->
+          <!-- YugabyteDB Aeon -->
           <div class="integration-card">
             <div class="integration-card-top">
               <div class="integration-identity">
                 <Database size={16} class="integration-icon" />
                 <div>
-                  <strong>Banco de Dados & Auth SSR</strong>
-                  <span class="provider-name">PostgreSQL / Supabase</span>
+                  <strong>Banco de Dados & Auth Nativo</strong>
+                  <span class="provider-name">YugabyteDB Aeon</span>
                 </div>
               </div>
               <span class="status-pill connected">
@@ -188,7 +188,7 @@
               </span>
             </div>
             <p class="small muted">
-              Autenticação segura via cookies HTTP-only assinados e isolamento via Row-Level Security (RLS).
+              Base de dados distribuída com autenticação segura via cookies HTTP-only Web Crypto HS256 e YSQL.
             </p>
           </div>
 
@@ -199,12 +199,12 @@
                 <HardDrive size={16} class="integration-icon" />
                 <div>
                   <strong>Armazenamento de Mídia</strong>
-                  <span class="provider-name">{data.telegram ? 'Telegram Bot CDN' : 'Supabase Storage'}</span>
+                  <span class="provider-name">Telegram Bot CDN</span>
                 </div>
               </div>
               <span class="status-pill connected">
                 <span class="dot-connected"></span>
-                {data.telegram ? 'Configurado' : 'Padrão Ativo'}
+                Configurado
               </span>
             </div>
             <p class="small muted">

@@ -36,7 +36,6 @@ import {
   getLkg
 } from '../src/lib/server/yugabyte';
 import * as yugabyteModule from '../src/lib/server/yugabyte';
-import { privileged } from '../src/lib/server/db';
 import { load as loadHome } from '../src/routes/+page.server';
 import { GET as getReleases } from '../src/routes/api/releases/+server';
 
@@ -52,14 +51,9 @@ describe('Yugabyte Authoritative Runtime & Architecture Smoke Tests', () => {
     expect(content).not.toMatch(/DEFAULT_GATEWAY_TOKEN\s*=\s*['"][0-9a-fA-F]{32,}['"]/);
   });
 
-  it('verifies privileged() returns pure Supabase client without Yugabyte Proxy', () => {
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
-    const client = privileged();
-    expect(client).toBeDefined();
-    // Pure Supabase client has .from, .auth, .storage
-    expect(typeof client.from).toBe('function');
-    expect(client.auth).toBeDefined();
-    expect(client.storage).toBeDefined();
+  it('verifies legacy Supabase privileged() client is completely eliminated under Supabase Zero', async () => {
+    const dbModule = await import('../src/lib/server/db');
+    expect((dbModule as any).privileged).toBeUndefined();
   });
 
   it('guarantees LKG cache works and provides graceful degradation on DB errors', async () => {

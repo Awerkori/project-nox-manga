@@ -36,7 +36,8 @@ vi.mock('$lib/server/session-cache', () => ({
 }));
 
 vi.mock('$lib/server/yugabyte', () => ({
-  fetchMediaMetadataFromYugabyte: mocks.fetchMediaMetadataFromYugabyte
+  fetchMediaMetadataFromYugabyte: mocks.fetchMediaMetadataFromYugabyte,
+  executeYugabyteSql: vi.fn(async () => ({ rows: [] }))
 }));
 
 import { GET } from '../src/routes/media/[id]/+server';
@@ -45,7 +46,7 @@ import { TelegramStorageError } from '../src/lib/server/telegram';
 describe('Media Security and Cache Guard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.fetchMediaMetadataFromYugabyte.mockResolvedValue(null);
+    mocks.fetchMediaMetadataFromYugabyte.mockImplementation(async () => mocks.mediaRecord);
     // Default mock DB behavior
     mocks.dbFrom.mockReturnValue({
       select: () => ({
