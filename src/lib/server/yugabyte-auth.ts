@@ -27,9 +27,8 @@ export interface AuthSession {
   };
 }
 
-export const AUTH_COOKIE_NAME = 'sb-izregkwaqdygwioqzwwo-auth-token';
-const DEFAULT_AUTH_SECRET = 'project-nox-production-auth-key-2026-secure-token';
-const PRODUCTION_AUTH_SECRET = 'f382a52479e0004ff94cb34891b29a259c77c6883b4c1074b1263d6b1d8e1215';
+export const AUTH_COOKIE_NAME = 'nox-auth-token';
+export const LEGACY_AUTH_COOKIE_NAME = 'sb-izregkwaqdygwioqzwwo-auth-token';
 
 export function getAuthSecrets(platformEnv?: any): string[] {
   const secrets = new Set<string>();
@@ -37,30 +36,26 @@ export function getAuthSecrets(platformEnv?: any): string[] {
     if (s && typeof s === 'string' && s.trim()) secrets.add(s.trim());
   };
   add(platformEnv?.AUTH_SECRET);
-  add(platformEnv?.BETTER_AUTH_SECRET);
   add(platformEnv?.JWT_SECRET);
+  add(platformEnv?.BETTER_AUTH_SECRET);
   add(platformEnv?.SUPABASE_JWT_SECRET);
   add(platformEnv?.SUPABASE_SERVICE_ROLE_KEY);
-  add(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY);
   if (typeof process !== 'undefined' && process.env) {
     add(process.env.AUTH_SECRET);
-    add(process.env.BETTER_AUTH_SECRET);
     add(process.env.JWT_SECRET);
+    add(process.env.BETTER_AUTH_SECRET);
     add(process.env.SUPABASE_JWT_SECRET);
     add(process.env.SUPABASE_SERVICE_ROLE_KEY);
-    add(process.env.STAFF_SUPABASE_SERVICE_ROLE_KEY);
-  }
-  // Authoritative production fallback secrets only when environment secrets are absent
-  if (secrets.size === 0) {
-    add(PRODUCTION_AUTH_SECRET);
-    add(DEFAULT_AUTH_SECRET);
   }
   return Array.from(secrets);
 }
 
 export function getAuthSecret(platformEnv?: any): string {
   const secrets = getAuthSecrets(platformEnv);
-  return secrets[0] || PRODUCTION_AUTH_SECRET;
+  if (secrets.length === 0) {
+    throw new Error('AUTH_SECRET_MISSING: Nenhum segredo criptográfico de autenticação configurado no ambiente.');
+  }
+  return secrets[0];
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -307,14 +302,17 @@ export async function authenticateWithYugabyte(
  * Set the standard base64-encoded cookie recognized by @supabase/ssr and session-cache
  */
 export function setAuthCookie(cookies: Cookies, session: AuthSession, isSecure: boolean): void {
-  // Clear any stale chunked cookies (.0, .1, etc.) before writing the fresh session
+  // Clear any stale chunked cookies (.0, .1, etc.) and legacy cookies before writing the fresh session
   if (typeof cookies.getAll === 'function') {
     for (const c of cookies.getAll()) {
-      if (/^sb-.*-auth-token\.\d+$/.test(c.name)) {
+      if (/^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === LEGACY_AUTH_COOKIE_NAME) {
         cookies.delete(c.name, { path: '/' });
       }
     }
   }
+  try {
+    cookies.delete(LEGACY_AUTH_COOKIE_NAME, { path: '/' });
+  } catch {}
 
   const jsonStr = JSON.stringify(session);
   const bytes = new TextEncoder().encode(jsonStr);
@@ -340,12 +338,13 @@ export function setAuthCookie(cookies: Cookies, session: AuthSession, isSecure: 
 export function clearAllAuthCookies(cookies: Cookies): void {
   try {
     cookies.delete(AUTH_COOKIE_NAME, { path: '/' });
+    cookies.delete(LEGACY_AUTH_COOKIE_NAME, { path: '/' });
     cookies.delete('nox-auth-token', { path: '/' });
   } catch {}
 
   if (typeof cookies.getAll === 'function') {
     for (const c of cookies.getAll()) {
-      if (/^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === AUTH_COOKIE_NAME || c.name === 'nox-auth-token') {
+      if (/^sb-.*-auth-token(?:\.\d+)?$/.test(c.name) || c.name === AUTH_COOKIE_NAME || c.name === LEGACY_AUTH_COOKIE_NAME || c.name === 'nox-auth-token') {
         cookies.delete(c.name, { path: '/' });
       }
     }

@@ -9,7 +9,7 @@ if (!process.env.PUBLIC_SUPABASE_URL && existsSync('.dev.vars.preview_full')) {
 }
 
 function createNativeOwnerCookie(origin) {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_JWT_SECRET;
+  const secret = process.env.AUTH_SECRET || process.env.JWT_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_JWT_SECRET;
   if (!secret) return null;
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const exp = Math.floor(Date.now() / 1000) + 604800;
@@ -46,6 +46,14 @@ function createNativeOwnerCookie(origin) {
   const cookieVal = `base64-${b64}`;
 
   return [
+    {
+      name: 'nox-auth-token',
+      value: cookieVal,
+      url: origin,
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: origin.startsWith('https:')
+    },
     {
       name: 'sb-izregkwaqdygwioqzwwo-auth-token',
       value: cookieVal,
