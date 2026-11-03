@@ -38,8 +38,8 @@
   let progress = $derived(getLevelProgress(data.member.xp));
   let memberColorInfo = $derived(getNameColorInfo(data.member.name_color));
 
-  let isFollowing = $state(false);
-  let followersCount = $state(0);
+  let isFollowing = $state(data.isFollowing ?? false);
+  let followersCount = $state(data.followersCount ?? 0);
   let followBusy = $state(false);
 
   // Active public profile tab

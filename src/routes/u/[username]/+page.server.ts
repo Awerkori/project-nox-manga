@@ -469,14 +469,9 @@ export const actions = {
         platform?.env
       );
       return { success: true, action: 'toggleScanPrivacy' };
-    } catch {}
-
-    const { error: rpcErr } = await locals.db.rpc('toggle_user_scan_privacy', {
-      p_show_scans: showScans,
-      p_mode: mode
-    });
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, action: 'toggleScanPrivacy' };
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao atualizar privacidade da scan' });
+    }
   },
 
   moderateUserScans: async ({ request, locals, platform }: any) => {
@@ -492,13 +487,8 @@ export const actions = {
         platform?.env
       );
       return { success: true, action: 'moderateUserScans' };
-    } catch {}
-
-    const { error: rpcErr } = await locals.db.rpc('admin_moderate_user_scans', {
-      p_target_user_id: targetUserId,
-      p_hide_badges: hideBadges
-    });
-    if (rpcErr) return fail(400, { message: rpcErr.message });
-    return { success: true, action: 'moderateUserScans' };
+    } catch (err: any) {
+      return fail(400, { message: err?.message || 'Falha ao moderar badges da scan' });
+    }
   }
 };
