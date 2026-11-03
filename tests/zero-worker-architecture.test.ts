@@ -1,9 +1,23 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
+const mockRpc = vi.fn();
+const mockGetSession = vi.fn();
+
+vi.mock('$lib/supabase', () => ({
+  getSupabaseBrowserClient: () => ({
+    auth: { getSession: () => mockGetSession() },
+    rpc: (...args: any[]) => mockRpc(...args)
+  })
+}));
+
 describe('Zero-Worker Architecture Verification Suite', () => {
   const root = path.resolve(__dirname, '..');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('enforces canonical www to apex 308 redirect in worker runtime patch', () => {
     const patchScript = path.join(root, 'scripts/patch-worker-runtime.mjs');
@@ -47,16 +61,38 @@ describe('Zero-Worker Architecture Verification Suite', () => {
     expect(wranglerConfig.triggers?.crons).toEqual(['0 * * * *']);
   });
 
-  it('routes member action through Supabase direct RPC when session exists (Camada C)', async () => {
-    const { action } = await import('../src/lib/actions');
+  it('routes member action through Supabase direct RPC when session exists in browser (Camada C)', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: { ok: true, liked: true },
+      error: null
+    });
+    mockGetSession.mockResolvedValueOnce({
+      data: { session: { user: { id: 'test-user-id' } } }
+    });
 
-    // Simulate node/SSR environment fallback
+    vi.stubGlobal('window', {});
+    const mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { action } = await import('../src/lib/actions');
+    const result = await action('member', 'like', { work_id: 'test-work' });
+    expect(result).toEqual({ ok: true, liked: true });
+    expect(mockRpc).toHaveBeenCalledWith('member_action', {
+      p_action: 'like',
+      p_data: { work_id: 'test-work' }
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('falls back to /api/action when direct RPC fails or in non-browser environment (Camada C)', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, liked: true })
+      json: async () => ({ ok: true, fallback: true })
     });
     vi.stubGlobal('fetch', mockFetch);
 
+    const { action } = await import('../src/lib/actions');
     const result = await action('member', 'like', { work_id: 'test-work' });
     expect(result.ok).toBe(true);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -67,6 +103,15 @@ describe('Zero-Worker Architecture Verification Suite', () => {
       })
     );
     vi.unstubAllGlobals();
+  });
+
+  it('includes aggressive edge cache headers for prerendered institutional pages in _headers', () => {
+    const headersFile = path.join(root, '_headers');
+    const content = fs.readFileSync(headersFile, 'utf8');
+
+    expect(content).toContain('/sobre');
+    expect(content).toContain('/privacidade');
+    expect(content).toContain('max-age=86400');
   });
 
   it('includes proper edge cache directives on Mihon catalog and chapter endpoints', async () => {

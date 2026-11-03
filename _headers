@@ -14,3 +14,7 @@
   Cache-Control: public, max-age=86400
 /robots.txt
   Cache-Control: public, max-age=3600
+/sobre
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/privacidade
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
