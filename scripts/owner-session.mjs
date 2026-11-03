@@ -1,5 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
+import { existsSync } from 'node:fs';
+import crypto from 'node:crypto';
+
+let createClient = null;
+let createServerClient = null;
+try {
+  const sbJs = await import('@supabase/supabase-js');
+  createClient = sbJs.createClient;
+  const sbSsr = await import('@supabase/ssr');
+  createServerClient = sbSsr.createServerClient;
+} catch {
+  // Supabase Zero mode: running fully decoupled on native YugabyteDB
+}
 import { existsSync } from 'node:fs';
 import crypto from 'node:crypto';
 

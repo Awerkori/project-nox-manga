@@ -1,6 +1,5 @@
 import { error } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
-import type { Database } from '$lib/database.types';
 import { withTimeout } from '$lib/server/resilience';
 import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
@@ -24,36 +23,6 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
     if (Number(event.request.headers.get('content-length') || 0) > max)
       error(413, 'Arquivo ou solicitação acima do limite');
   }
-  // Safe decoupled locals.db proxy - all real data operations run on authoritative YugabyteDB
-  const proxyHandler: ProxyHandler<any> = {
-    get(target, prop) {
-      if (prop in target) return target[prop];
-      if (prop === 'then') {
-        return (resolve: any) => resolve({ data: null, error: null, count: 0 });
-      }
-      if (prop === 'catch') {
-        return (reject: any) => Promise.resolve({ data: null, error: null, count: 0 });
-      }
-      if (prop === 'abortSignal') {
-        return () => new Proxy(() => {}, proxyHandler);
-      }
-      return (...args: any[]) => new Proxy(() => {}, proxyHandler);
-    },
-    apply(target, thisArg, argArray) {
-      return new Proxy(() => {}, proxyHandler);
-    }
-  };
-
-  event.locals.db = new Proxy(
-    {
-      auth: {
-        getUser: async () => ({ data: { user: null }, error: null }),
-        getSession: async () => ({ data: { session: null }, error: null }),
-        signOut: async () => ({ error: null })
-      }
-    },
-    proxyHandler
-  );
 
   const allCookies = event.cookies.getAll();
   const rawAuthCookie = extractFullAuthCookie(allCookies);
@@ -89,7 +58,7 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
 
     if (jwt && isNotExpired) {
       try {
-        sessionData = await resolveSessionData(event.locals.db, jwt, accessToken, event.platform?.env);
+        sessionData = await resolveSessionData(jwt, accessToken, event.platform?.env);
         if (sessionData?.user) {
           user = sessionData.user;
           role = sessionData.role;
@@ -206,7 +175,7 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
   }
 
   const resolved = await resolve(event, {
-    filterSerializedResponseHeaders: (name: string) => name === 'content-range' || name === 'x-supabase-api-version'
+    filterSerializedResponseHeaders: (name: string) => name === 'content-range'
   });
 
   // Media and static assets handle their own caching and security headers; return immediately

@@ -16,18 +16,8 @@ export const GET = async ({ url, locals, cookies, platform }: any) => {
   const next = url.searchParams.get('next') === '/redefinir' ? '/redefinir' : '/biblioteca';
 
   if (code) {
-    if (locals.db?.auth?.exchangeCodeForSession) {
-      try {
-        const { error } = await locals.db.auth.exchangeCodeForSession(code);
-        if (!error) {
-          await claimInvite(locals);
-          redirect(303, next);
-        }
-      } catch (e: any) {
-        if (e?.status === 303) throw e;
-      }
-    }
-    console.warn(`[AUTH_CONFIRM] mode=code result=failed`);
+    console.warn(`[AUTH_CONFIRM] mode=code result=failed (legacy code unsupported)`);
+    redirect(303, '/entrar?erro=link-expirado');
   }
 
   if (token_hash && (type === 'signup' || type === 'recovery' || type === 'email')) {

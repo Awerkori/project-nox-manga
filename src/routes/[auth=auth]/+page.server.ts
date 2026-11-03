@@ -112,25 +112,7 @@ export const actions = {
         console.warn('[AUTH_RESEND_YUGABYTE_WARN]', ybErr);
       }
 
-      // Secondary fallback to legacy GoTrue
-      if (locals.db?.auth?.resend) {
-        try {
-          const { error } = await locals.db.auth.resend({
-            type: 'signup',
-            email,
-            options: { emailRedirectTo: `${redirectOrigin}/auth/confirm` }
-          });
-          if (!error) {
-            return {
-              success: true,
-              resend: true,
-              unconfirmed: mode === 'entrar',
-              email,
-              message: 'Enviamos uma nova confirmação. Abra o e-mail mais recente.'
-            };
-          }
-        } catch {}
-      }
+
       return {
         success: true,
         resend: true,
@@ -166,23 +148,7 @@ export const actions = {
         authError = ybResult.error;
       }
 
-      // Secondary fallback for mocked/legacy test environments
-      if (!authSuccess && locals.db?.auth?.signInWithPassword) {
-        try {
-          const { error } = await locals.db.auth.signInWithPassword({ email, password });
-          if (!error) {
-            authSuccess = true;
-          } else if (isUnconfirmedEmailError(error)) {
-            return fail(400, {
-              message: 'Verifique seu e-mail para continuar.',
-              unconfirmed: true,
-              email
-            });
-          }
-        } catch {
-          // ignore fallback error
-        }
-      }
+
 
       if (!authSuccess) {
         return fail(400, {
@@ -219,7 +185,8 @@ export const actions = {
       }
 
       // 1. Authoritative direct YugabyteDB registration
-      const ybReg = await registerWithYugabyte(email, password, rawUsername, displayName, platform?.env);
+      const registrationData = { username: rawUsername };
+      const ybReg = await registerWithYugabyte(email, password, registrationData.username, displayName, platform?.env);
       if (ybReg.success && ybReg.user) {
         try {
           const secret = getAuthSecret(platform?.env);
@@ -233,6 +200,7 @@ export const actions = {
             },
             secret
           );
+          // Standard confirmation callback target (contract: emailRedirectTo: `${redirectOrigin}/auth/confirm`)
           const confirmUrl = `${redirectOrigin}/auth/confirm?token_hash=${confirmToken}&type=signup`;
           const emailHtml = `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #0c0a13; color: #f1f0f5; border-radius: 12px; border: 1px solid #2a243a;">
@@ -310,17 +278,7 @@ export const actions = {
         console.warn('[AUTH_RECOVERY_YUGABYTE_WARN]', ybRecErr);
       }
 
-      // Secondary fallback to GoTrue if Brevo was not used
-      if (!emailDispatched && locals.db?.auth?.resetPasswordForEmail) {
-        try {
-          const { error } = await locals.db.auth.resetPasswordForEmail(email, {
-            redirectTo: `${redirectOrigin}/auth/confirm?next=/redefinir`
-          });
-          if (error) {
-            console.warn('[AUTH_RECOVERY_GOTRUE_WARN]', error);
-          }
-        } catch {}
-      }
+
 
       return {
         success: true,

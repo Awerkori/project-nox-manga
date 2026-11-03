@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 export async function staffRequest(locals: App.Locals, action: string, id?: string) {
   if (!env.STAFF_BRIDGE_URL) error(503, 'A conexão com a central ainda não está configurada.');
-  const token = (locals as any).session?.access_token || (await (locals.db as any)?.auth?.getSession?.())?.data?.session?.access_token;
+  const token = (locals as any).session?.access_token;
   if (!token) error(401, 'Entre novamente.');
   const response = await fetch(env.STAFF_BRIDGE_URL, {
     method: 'POST',

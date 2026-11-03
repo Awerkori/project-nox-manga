@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET = async ({ url, locals, platform }: any) => {
   if (!locals.user || locals.role !== 'ADMIN') {
     throw error(403, 'Acesso restrito a administradores.');
   }
@@ -12,19 +12,21 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     return json({ users: [] });
   }
 
-  const { data: members, error: dbError } = await locals.db
-    .from('members')
-    .select('id, username, display_name, avatar_id, created_at, xp, access_roles(role, suspended)')
-    .or(`username.ilike.%${cleanQ}%,display_name.ilike.%${cleanQ}%`)
-    .order('created_at', { ascending: false })
-    .limit(15);
+  const searchPattern = `%${cleanQ}%`;
+  const res = await executeYugabyteSql(`
+    SELECT m.id, m.username, m.display_name, m.avatar_id, m.created_at, m.xp,
+           ar.role, ar.suspended
+    FROM members m
+    LEFT JOIN access_roles ar ON ar.user_id = m.id
+    WHERE m.username ILIKE $1 OR m.display_name ILIKE $1
+    ORDER BY m.created_at DESC
+    LIMIT 15;
+  `, [searchPattern], platform?.env).catch((err: any) => {
+    throw error(500, 'Erro ao buscar membros: ' + (err?.message || 'Falha no banco de dados'));
+  });
 
-  if (dbError) {
-    throw error(500, 'Erro ao buscar membros: ' + dbError.message);
-  }
-
-  const users = (members || []).map((m: any) => {
-    const role = m.access_roles?.role || 'USER';
+  const users = (res.rows || []).map((m: any) => {
+    const role = m.role || 'USER';
     return {
       id: m.id,
       username: m.username,
@@ -33,7 +35,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       xp: m.xp || 0,
       role,
       isStaff: role === 'ADMIN' || role === 'STAFF_SITE' || role === 'EDITOR',
-      suspended: Boolean(m.access_roles?.suspended)
+      suspended: Boolean(m.suspended)
     };
   });
 

@@ -176,11 +176,15 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
  * Single-flight session resolver with memory cache and resilient fallback
  */
 export async function resolveSessionData(
-  db: any,
-  decoded: DecodedJwt,
-  accessToken: string,
-  platformEnv?: any
+  decodedOrDb: any,
+  accessTokenOrDecoded: any,
+  platformEnvOrAccessToken?: any,
+  maybePlatformEnv?: any
 ): Promise<CachedSession> {
+  const decoded: DecodedJwt = decodedOrDb && typeof decodedOrDb === 'object' && 'sub' in decodedOrDb ? decodedOrDb : accessTokenOrDecoded;
+  const accessToken: string = typeof accessTokenOrDecoded === 'string' ? accessTokenOrDecoded : platformEnvOrAccessToken;
+  const platformEnv: any = typeof platformEnvOrAccessToken === 'object' && platformEnvOrAccessToken && !('sub' in platformEnvOrAccessToken) ? platformEnvOrAccessToken : maybePlatformEnv;
+
   // Only the exact verified token may reuse a cached identity.
   const cacheKey = accessToken;
   const now = Date.now();
@@ -210,16 +214,6 @@ export async function resolveSessionData(
         const verifiedByJwt = await verifySessionJwtAny(accessToken, platformEnv);
         if (verifiedByJwt && verifiedByJwt.sub === decoded.sub) {
           identityVerified = true;
-        }
-
-        // Secondary verification if db.auth.getUser is provided (e.g. test mock environments)
-        if (!identityVerified && db?.auth?.getUser) {
-          try {
-            const verified = await db.auth.getUser(accessToken);
-            if (verified?.data?.user && verified.data.user.id === decoded.sub) {
-              identityVerified = true;
-            }
-          } catch {}
         }
 
         // Cryptographic verification is MANDATORY: never accept an identity merely
@@ -281,15 +275,7 @@ export async function resolveSessionData(
         console.warn('[SESSION_YUGABYTE_READ_WARN]', err?.message || err);
       }
 
-      // Test-double fallback for unit test suites mocking db.from
-      if (!profileData && db?.from) {
-        try {
-          const profileRes = await db.from('members').select('*').eq('id', userId).maybeSingle();
-          const roleRes = await db.from('access_roles').select('role, suspended').eq('user_id', userId).maybeSingle();
-          profileData = profileRes?.data || null;
-          roleData = roleRes?.data || null;
-        } catch {}
-      }
+
 
 
 

@@ -1,68 +1,66 @@
 import { json } from '@sveltejs/kit';
 import { getLevelProgress, resolveRankingDisplay } from '$lib/levels';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET = async ({ url, locals }: any) => {
+export const GET = async ({ url, platform }: any) => {
   const query = (url.searchParams.get('q') || '').trim();
   if (!query || query.length < 2) {
     return json({ results: [] });
   }
 
   const cleanQuery = query.startsWith('@') ? query.slice(1) : query;
+  const pattern = `%${cleanQuery}%`;
 
   try {
-    // Search matching non-test members
-    const { data: matchedMembers, error } = await locals.db
-      .from('members')
-      .select(
-        'id,username,display_name,xp,season_xp,lifetime_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,equipped_badge_id,created_at'
+    const res = await executeYugabyteSql<{
+      id: string;
+      username: string;
+      display_name: string;
+      xp: number;
+      season_xp: number;
+      avatar_id: string | null;
+      avatar_crop: unknown;
+      avatar_frame_id: string | null;
+      name_color: string | null;
+      equipped_badge_id: string | null;
+      rank: number;
+    }>(`
+      WITH ranked AS (
+        SELECT id, username, display_name, xp, season_xp, lifetime_xp, avatar_id, avatar_crop,
+               avatar_frame_id, name_color, equipped_badge_id, created_at,
+               ROW_NUMBER() OVER (ORDER BY season_xp DESC, created_at ASC, id ASC) AS rank
+        FROM members
+        WHERE is_test = false
       )
-      .eq('is_test', false)
-      .or(`username.ilike.%${cleanQuery}%,display_name.ilike.%${cleanQuery}%`)
-      .order('season_xp', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(10);
+      SELECT * FROM ranked
+      WHERE username ILIKE $1 OR display_name ILIKE $1
+      ORDER BY rank ASC
+      LIMIT 10;
+    `, [pattern], platform?.env);
 
-    if (error || !matchedMembers || matchedMembers.length === 0) {
-      return json({ results: [] });
-    }
+    const matchedMembers = res.rows || [];
+    const results = matchedMembers.map((m: any) => {
+      const seasonXp = m.season_xp ?? 0;
+      const rankPosition = Number(m.rank);
+      const rankInfo = resolveRankingDisplay(seasonXp, m.equipped_badge_id);
+      const progress = getLevelProgress(seasonXp);
 
-    // For each member, compute exact ranking position using deterministic tie-breaker
-    const results = await Promise.all(
-      matchedMembers.map(async (m: any) => {
-        const seasonXp = m.season_xp ?? 0;
-        const createdAt = m.created_at;
-        const memberId = m.id;
-
-        const { count } = await locals.db
-          .from('members')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_test', false)
-          .or(
-            `season_xp.gt.${seasonXp},and(season_xp.eq.${seasonXp},created_at.lt.${createdAt}),and(season_xp.eq.${seasonXp},created_at.eq.${createdAt},id.lt.${memberId})`
-          );
-
-        const rankPosition = (count ?? 0) + 1;
-        const rankInfo = resolveRankingDisplay(seasonXp, m.equipped_badge_id);
-        const progress = getLevelProgress(seasonXp);
-
-        return {
-          id: m.id,
-          username: m.username,
-          display_name: m.display_name,
-          avatar_id: m.avatar_id,
-          avatar_crop: m.avatar_crop,
-          avatar_frame_id: m.avatar_frame_id,
-          name_color: m.name_color,
-          season_xp: seasonXp,
-          rank: rankPosition,
-          level: rankInfo.level,
-          title: rankInfo.title,
-          badge: rankInfo.badge,
-          progressPercent: progress.progressPercent
-        };
-      })
-    );
+      return {
+        id: m.id,
+        username: m.username,
+        display_name: m.display_name,
+        avatar_id: m.avatar_id,
+        avatar_crop: m.avatar_crop,
+        avatar_frame_id: m.avatar_frame_id,
+        name_color: m.name_color,
+        season_xp: seasonXp,
+        rank: rankPosition,
+        level: rankInfo.level,
+        title: rankInfo.title,
+        badge: rankInfo.badge,
+        progressPercent: progress.progressPercent
+      };
+    });
 
     return json({ results });
   } catch (err: any) {

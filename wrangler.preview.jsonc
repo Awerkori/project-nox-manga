@@ -15,9 +15,6 @@
   "observability": {
     "enabled": true
   },
-  "vars": {
-    "AUTH_SECRET": "15470467587e043eac3caaf3f93e169b1277327481996fa710cea3fda3457d1e"
-  },
   "placement": {
     "mode": "off"
   },

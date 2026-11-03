@@ -84,58 +84,39 @@ export const load = async ({ locals, platform }: { locals: App.Locals; platform?
 
 async function buildHealthPayload(locals: App.Locals, platform?: App.Platform) {
   try {
-    const hasYsqlEnv = Boolean(platform?.env);
+    const ysqlStats = await withYugabyteReadSession(
+      platform?.env,
+      async (sessionEnv) => {
+        const sessionPlatform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
+        const [hb, relRows, connRows] = await Promise.all([
+          loadYsqlImporterHeartbeat(sessionPlatform),
+          executeYugabyteSql(
+            `SELECT relname, GREATEST(0, reltuples::bigint)::int AS est
+             FROM pg_class
+             WHERE relname IN ('chapters', 'importer_lite_tasks')`,
+            [],
+            sessionEnv,
+          ).catch(() => ({ rows: [] })),
+          executeYugabyteSql(
+            `SELECT COUNT(*)::int AS total_conn,
+                    COUNT(*) FILTER (WHERE state = 'active')::int AS active_conn
+             FROM pg_stat_activity
+             WHERE datname = current_database()`,
+            [],
+            sessionEnv,
+          ).catch(() => ({ rows: [] })),
+        ]);
+        return {
+          hb,
+          relRows: relRows.rows || [],
+          connRow: connRows.rows?.[0] || null,
+        };
+      },
+      1,
+    ).catch(() => null);
 
-    const [health, fallbackTelemetry, ysqlStats] = await Promise.all([
-      withTimeout((locals.db as any).rpc('admin_get_system_health'), 2500, null, 'admin_get_system_health'),
-      withTimeout(
-        locals.db
-          .from('importer_telemetry')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        2000,
-        null,
-        'admin_importer_heartbeat',
-      ),
-      hasYsqlEnv
-        ? withYugabyteReadSession(
-            platform?.env,
-            async (sessionEnv) => {
-              const sessionPlatform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
-              const [hb, relRows, connRows] = await Promise.all([
-                loadYsqlImporterHeartbeat(sessionPlatform),
-                executeYugabyteSql(
-                  `SELECT relname, GREATEST(0, reltuples::bigint)::int AS est
-                   FROM pg_class
-                   WHERE relname IN ('chapters', 'importer_lite_tasks')`,
-                  [],
-                  sessionEnv,
-                ).catch(() => ({ rows: [] })),
-                executeYugabyteSql(
-                  `SELECT COUNT(*)::int AS total_conn,
-                          COUNT(*) FILTER (WHERE state = 'active')::int AS active_conn
-                   FROM pg_stat_activity
-                   WHERE datname = current_database()`,
-                  [],
-                  sessionEnv,
-                ).catch(() => ({ rows: [] })),
-              ]);
-              return {
-                hb,
-                relRows: relRows.rows || [],
-                connRow: connRows.rows?.[0] || null,
-              };
-            },
-            1,
-          )
-        : Promise.resolve(null),
-    ]);
-
-    const raw = (health as any)?.data;
+    const raw: any = null;
     const hb = ysqlStats?.hb || null;
-    const fallbackT = (fallbackTelemetry as any)?.data;
     const t = hb
       ? {
           created_at: hb.observedAt || new Date().toISOString(),
@@ -149,7 +130,7 @@ async function buildHealthPayload(locals: App.Locals, platform?: App.Platform) {
           cycle_reason:
             hb.adaptiveAdmission?.reason || 'Operação contínua Always-On',
         }
-      : fallbackT;
+      : null;
 
     const fresh = t && Date.now() - Date.parse(t.created_at) < 180000;
 

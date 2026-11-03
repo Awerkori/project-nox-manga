@@ -1,74 +1,96 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
-
 type RuntimeEnv = Record<string, unknown> | undefined;
 
-/**
- * Resolve the private artifact-storage project from the Worker runtime.
- *
- * This intentionally has no project/credential fallback. A URL and a
- * service-role key from different projects produce opaque storage signature
- * failures, so continuing with a guessed value is worse than failing closed.
- */
-export function getScanArtifactStorage(platformEnv?: RuntimeEnv): SupabaseClient {
-  let url = String(platformEnv?.STAFF_SUPABASE_URL ?? env.STAFF_SUPABASE_URL ?? '').trim();
-  let key = String(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? env.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+export interface StorageBucketClient {
+  upload: (fileKey: string, body: any, opts?: { contentType?: string; upsert?: boolean }) => Promise<{ data: any; error: any }>;
+  download: (fileKey: string) => Promise<{ data: Blob | null; error: any }>;
+  remove: (fileKeys: string[]) => Promise<{ data: any; error: any }>;
+}
 
-  // Resilient fallback: if STAFF_SUPABASE_URL points to the decommissioned project or is missing,
-  // resolve from canonical Supabase instance.
-  if (!url || url.includes('pgumtergvtbeepzpgvkv') || !key) {
-    const canonicalUrl = String(platformEnv?.PUBLIC_SUPABASE_URL ?? env.PUBLIC_SUPABASE_URL ?? '').trim();
-    const canonicalKey = String(platformEnv?.SUPABASE_SERVICE_ROLE_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
-    if (canonicalUrl && canonicalKey) {
-      url = canonicalUrl;
-      key = canonicalKey;
+export interface ScanArtifactStorageClient {
+  storage: {
+    from: (bucket: string) => StorageBucketClient;
+  };
+}
+
+export function getScanArtifactStorage(platformEnv?: RuntimeEnv): ScanArtifactStorageClient {
+  const url = String(platformEnv?.STAFF_SUPABASE_URL ?? '').trim();
+  const key = String(platformEnv?.STAFF_SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+
+  return {
+    storage: {
+      from: (bucket: string): StorageBucketClient => ({
+        async upload(fileKey, body, opts) {
+          if (!url || !key) {
+            return { data: null, error: new Error('SCAN_ARTIFACT_STORAGE_NOT_CONFIGURED') };
+          }
+          try {
+            const endpoint = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}/${encodeURIComponent(fileKey).replace(/%2F/g, '/')}`;
+            const res = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${key}`,
+                apikey: key,
+                'Content-Type': opts?.contentType || 'application/octet-stream',
+                'x-upsert': opts?.upsert ? 'true' : 'false'
+              },
+              body
+            });
+            if (!res.ok) {
+              const errJson = await res.json().catch(() => ({ message: res.statusText }));
+              return { data: null, error: errJson };
+            }
+            return { data: await res.json().catch(() => ({ Key: fileKey })), error: null };
+          } catch (err) {
+            return { data: null, error: err };
+          }
+        },
+        async download(fileKey) {
+          if (!url || !key) {
+            return { data: null, error: new Error('SCAN_ARTIFACT_STORAGE_NOT_CONFIGURED') };
+          }
+          try {
+            const endpoint = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}/${encodeURIComponent(fileKey).replace(/%2F/g, '/')}`;
+            const res = await fetch(endpoint, {
+              headers: {
+                Authorization: `Bearer ${key}`,
+                apikey: key
+              }
+            });
+            if (!res.ok) {
+              return { data: null, error: new Error(`Download failed with HTTP ${res.status}`) };
+            }
+            const blob = await res.blob();
+            return { data: blob, error: null };
+          } catch (err) {
+            return { data: null, error: err };
+          }
+        },
+        async remove(fileKeys) {
+          if (!url || !key) {
+            return { data: null, error: new Error('SCAN_ARTIFACT_STORAGE_NOT_CONFIGURED') };
+          }
+          try {
+            const endpoint = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}`;
+            const res = await fetch(endpoint, {
+              method: 'DELETE',
+              headers: {
+                Authorization: `Bearer ${key}`,
+                apikey: key,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ prefixes: fileKeys })
+            });
+            if (!res.ok) {
+              return { data: null, error: new Error(`Delete failed with HTTP ${res.status}`) };
+            }
+            return { data: await res.json().catch(() => ({})), error: null };
+          } catch (err) {
+            return { data: null, error: err };
+          }
+        }
+      })
     }
-  }
-
-  if (!url || !key) throw new Error('SCAN_ARTIFACT_STORAGE_CONFIG_MISSING');
-
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error('SCAN_ARTIFACT_STORAGE_URL_INVALID');
-  }
-  if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.supabase.co')) {
-    throw new Error('SCAN_ARTIFACT_STORAGE_URL_INVALID');
-  }
-
-  // Supabase service-role keys are JWTs. Check the issuer host without ever
-  // logging or returning the token. This catches URL/key cross-project drift
-  // before the storage API returns "signature verification failed".
-  const parts = key.split('.');
-  if (parts.length !== 3) throw new Error('SCAN_ARTIFACT_STORAGE_KEY_INVALID');
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
-      iss?: unknown;
-      ref?: unknown;
-      role?: unknown;
-    };
-    const projectRef = parsed.hostname.slice(0, -'.supabase.co'.length);
-    if (typeof payload.ref === 'string' && payload.ref !== projectRef) {
-      throw new Error('SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH');
-    }
-    // Supabase service-role JWTs commonly use the literal `supabase` issuer;
-    // only URL issuers need host comparison. The ref claim is authoritative.
-    if (!payload.ref && typeof payload.iss === 'string' && payload.iss.includes('://')) {
-      const issuer = new URL(payload.iss);
-      if (issuer.hostname !== parsed.hostname) throw new Error('SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH');
-    }
-    if (payload.role && payload.role !== 'service_role') {
-      throw new Error('SCAN_ARTIFACT_STORAGE_KEY_INVALID');
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message === 'SCAN_ARTIFACT_STORAGE_CONFIG_MISMATCH') throw error;
-    throw new Error('SCAN_ARTIFACT_STORAGE_KEY_INVALID', { cause: error });
-  }
-
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false }
-  });
+  };
 }
 
 export async function removeScanArtifact(platformEnv: RuntimeEnv, fileKey: string): Promise<void> {

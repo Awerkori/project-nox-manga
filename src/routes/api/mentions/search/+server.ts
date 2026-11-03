@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import type { RequestHandler } from './$types';
 
 function foldAccents(str: string): string {
@@ -23,7 +24,7 @@ function scoreCandidate(username: string, displayName: string, q: string): numbe
   return 10;
 }
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, platform }: any) => {
   const rawQuery = (url.searchParams.get('q') || '').trim();
   const cleanQ = rawQuery.replace(/^@/, '').trim().replace(/[%_]/g, '');
   const scanId = url.searchParams.get('scan_id');
@@ -47,23 +48,21 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }> = [];
 
     // Buscar cargos compatíveis
-    const { data: positions } = await locals.db
-      .from('scan_positions')
-      .select('id, name')
-      .eq('scan_id', scanId)
-      .ilike('name', `%${cleanQ}%`)
-      .limit(4);
+    const posRes = await executeYugabyteSql<{ id: string; name: string }>(`
+      SELECT id, name
+      FROM scan_positions
+      WHERE scan_id = $1 AND name ILIKE $2
+      LIMIT 4;
+    `, [scanId, `%${cleanQ}%`], platform?.env).catch(() => ({ rows: [] }));
 
-    if (positions) {
-      for (const p of positions) {
-        candidates.push({
-          type: 'position',
-          id: p.id,
-          label: '@' + p.name,
-          sub: `Notifica todos os ${p.name}s da Scan`,
-          score: foldAccents(p.name).startsWith(foldAccents(cleanQ)) ? 92 : 72
-        });
-      }
+    for (const p of posRes.rows || []) {
+      candidates.push({
+        type: 'position',
+        id: p.id,
+        label: '@' + p.name,
+        sub: `Notifica todos os ${p.name}s da Scan`,
+        score: foldAccents(p.name).startsWith(foldAccents(cleanQ)) ? 92 : 72
+      });
     }
 
     // @todos para liderança
@@ -80,30 +79,32 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }
 
     // Membros da Scan
-    const membersQuery = locals.db
-      .from('scan_members')
-      .select('user_id, role, members!scan_members_user_id_fkey(id, username, display_name, avatar_id, avatar_crop)')
-      .eq('scan_id', scanId);
+    const memRes = await executeYugabyteSql<{
+      user_id: string; role: string; id: string; username: string; display_name: string;
+      avatar_id: string | null; avatar_crop: unknown;
+    }>(`
+      SELECT sm.user_id, sm.role, m.id, m.username, m.display_name, m.avatar_id, m.avatar_crop
+      FROM scan_members sm
+      JOIN members m ON m.id = sm.user_id
+      WHERE sm.scan_id = $1
+      LIMIT 30;
+    `, [scanId], platform?.env).catch(() => ({ rows: [] }));
 
-    const { data: scanMems } = await membersQuery.limit(30);
-    if (scanMems) {
-      for (const sm of scanMems) {
-        const m = (sm as any).members;
-        if (!m || !m.username) continue;
-        const score = scoreCandidate(m.username, m.display_name || '', cleanQ);
-        if (!cleanQ || score >= 60) {
-          candidates.push({
-            type: 'user',
-            id: m.id,
-            username: m.username,
-            display_name: m.display_name,
-            avatar_id: m.avatar_id,
-            avatar_crop: m.avatar_crop,
-            label: '@' + m.username,
-            sub: m.display_name || sm.role || 'Membro',
-            score
-          });
-        }
+    for (const sm of memRes.rows || []) {
+      if (!sm || !sm.username) continue;
+      const score = scoreCandidate(sm.username, sm.display_name || '', cleanQ);
+      if (!cleanQ || score >= 60) {
+        candidates.push({
+          type: 'user',
+          id: sm.id,
+          username: sm.username,
+          display_name: sm.display_name,
+          avatar_id: sm.avatar_id,
+          avatar_crop: sm.avatar_crop,
+          label: '@' + sm.username,
+          sub: sm.display_name || sm.role || 'Membro',
+          score
+        });
       }
     }
 
@@ -119,20 +120,21 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   }
 
   // 2. Public Platform Context (Comentários de Obras, Capítulos, Comunidade)
-  let query = locals.db
-    .from('members')
-    .select('id, username, display_name, avatar_id, avatar_crop, xp');
+  const searchPattern = cleanQ ? `%${cleanQ}%` : '';
+  const pubRes = await executeYugabyteSql<{
+    id: string; username: string; display_name: string; avatar_id: string | null;
+    avatar_crop: unknown; xp: number;
+  }>(`
+    SELECT id, username, display_name, avatar_id, avatar_crop, xp
+    FROM members
+    WHERE ($1 = '' OR username ILIKE $2 OR display_name ILIKE $2)
+    ORDER BY xp DESC
+    LIMIT 25;
+  `, [cleanQ, searchPattern], platform?.env).catch((err: any) => {
+    throw error(500, 'Erro ao buscar membros: ' + (err?.message || 'Falha no banco de dados'));
+  });
 
-  if (cleanQ) {
-    query = query.or(`username.ilike.%${cleanQ}%,display_name.ilike.%${cleanQ}%`);
-  }
-
-  query = query.order('xp', { ascending: false }).limit(25);
-
-  const { data: members, error: dbError } = await query;
-  if (dbError) {
-    throw error(500, 'Erro ao buscar membros: ' + dbError.message);
-  }
+  const members = pubRes.rows || [];
 
   const rawList = (members || []).map((m: any) => ({
     type: 'user' as const,

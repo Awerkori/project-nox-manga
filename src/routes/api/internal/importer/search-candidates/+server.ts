@@ -1,6 +1,7 @@
-import { json, type RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET = async ({ url, locals, platform }: any) => {
   if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     return json({ error: 'Não autorizado' }, { status: 403 });
   }
@@ -16,19 +17,22 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const { provider, slug, cleanUrl } = urlMatch;
 
     // Check if we already have this work mapped in our database
-    const { data: mappings } = await locals.db
-      .from('importer_work_mappings')
-      .select('work_id, source, source_work_id, source_slug, source_title, metadata, works(id, title, slug, cover_id)')
-      .eq('source', provider)
-      .or(`source_slug.eq.${slug},source_work_id.eq.${slug}`)
-      .limit(5);
+    const mapRes = await executeYugabyteSql(`
+      SELECT m.work_id, m.source, m.source_work_id, m.source_slug, m.source_title, m.metadata,
+             w.id AS w_id, w.title AS w_title, w.slug AS w_slug, w.cover_id AS w_cover_id
+      FROM importer_work_mappings m
+      LEFT JOIN works w ON w.id = m.work_id
+      WHERE m.source = $1 AND (m.source_slug = $2 OR m.source_work_id = $2)
+      LIMIT 5;
+    `, [provider, slug], platform?.env).catch(() => ({ rows: [] }));
 
-    if (mappings && mappings.length > 0) {
+    const mappings = mapRes.rows || [];
+    if (mappings.length > 0) {
       const candidates = mappings.map((m: any) => ({
         workId: m.work_id,
-        title: m.works?.title || m.source_title || cleanSlugTitle(slug),
-        slug: m.works?.slug || slug,
-        coverId: m.works?.cover_id || null,
+        title: m.w_title || m.source_title || cleanSlugTitle(slug),
+        slug: m.w_slug || slug,
+        coverId: m.w_cover_id || null,
         provider: m.source || provider,
         sourceWorkId: m.source_work_id || slug,
         sourceUrl: cleanUrl,
@@ -62,65 +66,61 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   // 2. Query by Title / Name
   const results: any[] = [];
   const seenKeys = new Set<string>();
+  const searchPattern = `%${q}%`;
 
   // A. Search in existing works
-  const { data: works } = await locals.db
-    .from('works')
-    .select(`
-      id,
-      title,
-      slug,
-      cover_id,
-      kind,
-      importer_work_mappings(source, source_work_id, source_slug, metadata)
-    `)
-    .or(`title.ilike.%${q}%,slug.ilike.%${q}%`)
-    .limit(10);
+  const worksRes = await executeYugabyteSql(`
+    SELECT w.id, w.title, w.slug, w.cover_id, w.kind,
+           (SELECT json_agg(json_build_object('source', m.source, 'source_work_id', m.source_work_id, 'source_slug', m.source_slug, 'metadata', m.metadata))
+            FROM importer_work_mappings m WHERE m.work_id = w.id) AS importer_work_mappings
+    FROM works w
+    WHERE w.title ILIKE $1 OR w.slug ILIKE $1
+    LIMIT 10;
+  `, [searchPattern], platform?.env).catch(() => ({ rows: [] }));
 
-  if (works) {
-    for (const w of works as any[]) {
-      const primaryMapping = w.importer_work_mappings?.[0];
-      const key = `nox:${w.id}`;
-      seenKeys.add(key);
+  for (const w of (worksRes.rows || []) as any[]) {
+    const primaryMapping = w.importer_work_mappings?.[0];
+    const key = `nox:${w.id}`;
+    seenKeys.add(key);
 
-      results.push({
-        workId: w.id,
-        title: w.title,
-        slug: w.slug,
-        coverId: w.cover_id,
-        provider: primaryMapping?.source || 'nexus',
-        sourceWorkId: primaryMapping?.source_work_id || w.slug,
-        sourceUrl: null,
-        existsInNox: true,
-        chapterCount: primaryMapping?.metadata?.totalChapters || null
-      });
-    }
+    results.push({
+      workId: w.id,
+      title: w.title,
+      slug: w.slug,
+      coverId: w.cover_id,
+      provider: primaryMapping?.source || 'nexus',
+      sourceWorkId: primaryMapping?.source_work_id || w.slug,
+      sourceUrl: null,
+      existsInNox: true,
+      chapterCount: primaryMapping?.metadata?.totalChapters || null
+    });
   }
 
   // B. Search in existing importer_work_mappings
-  const { data: mappings } = await locals.db
-    .from('importer_work_mappings')
-    .select('work_id, source, source_work_id, source_slug, source_title, metadata, works(id, title, slug, cover_id)')
-    .or(`source_title.ilike.%${q}%,source_slug.ilike.%${q}%`)
-    .limit(10);
+  const mappingsRes = await executeYugabyteSql(`
+    SELECT m.work_id, m.source, m.source_work_id, m.source_slug, m.source_title, m.metadata,
+           w.id AS w_id, w.title AS w_title, w.slug AS w_slug, w.cover_id AS w_cover_id
+    FROM importer_work_mappings m
+    LEFT JOIN works w ON w.id = m.work_id
+    WHERE m.source_title ILIKE $1 OR m.source_slug ILIKE $1
+    LIMIT 10;
+  `, [searchPattern], platform?.env).catch(() => ({ rows: [] }));
 
-  if (mappings) {
-    for (const m of mappings as any[]) {
-      const key = m.work_id ? `nox:${m.work_id}` : `src:${m.source}:${m.source_work_id}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        results.push({
-          workId: m.work_id,
-          title: m.works?.title || m.source_title || cleanSlugTitle(m.source_slug),
-          slug: m.works?.slug || m.source_slug,
-          coverId: m.works?.cover_id || null,
-          provider: m.source,
-          sourceWorkId: m.source_work_id || m.source_slug,
-          sourceUrl: null,
-          existsInNox: Boolean(m.work_id),
-          chapterCount: m.metadata?.totalChapters || null
-        });
-      }
+  for (const m of (mappingsRes.rows || []) as any[]) {
+    const key = m.work_id ? `nox:${m.work_id}` : `src:${m.source}:${m.source_work_id}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      results.push({
+        workId: m.work_id,
+        title: m.w_title || m.source_title || cleanSlugTitle(m.source_slug),
+        slug: m.w_slug || m.source_slug,
+        coverId: m.w_cover_id || null,
+        provider: m.source,
+        sourceWorkId: m.source_work_id || m.source_slug,
+        sourceUrl: null,
+        existsInNox: Boolean(m.work_id),
+        chapterCount: m.metadata?.totalChapters || null
+      });
     }
   }
 

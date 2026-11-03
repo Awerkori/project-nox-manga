@@ -7,7 +7,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
-import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
+import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
 import {
   MAX_COVER_THUMBNAIL_BYTES,
   persistCoverThumbnail,
@@ -230,7 +230,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       const { jwt, accessToken } = decodeSessionJwt(token);
       if (jwt) {
         try {
-          verifiedSession = await resolveSessionData(locals.db, jwt, accessToken, platform?.env);
+          verifiedSession = await resolveSessionData(null, jwt, accessToken, platform?.env);
         } catch {
           // Authentication resolution failure
         }
@@ -287,17 +287,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   let body: BodyInit;
   let downloadBotRef = media.bot_reference;
   if (media.provider === 'supabase') {
-    const { data, error: problem } = await db.storage.from('nox-media').download(media.provider_key);
-    if (problem || !data) {
-      return new Response(JSON.stringify({ error: 'Página temporariamente indisponível' }), {
-        status: 502,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-        }
-      });
-    }
-    body = data;
+    return new Response(JSON.stringify({ error: 'Mídia legada descontinuada' }), {
+      status: 502,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      }
+    });
   } else {
     // Determine exact bot with strict Bot Affinity
     let botRef = media.bot_reference;
@@ -305,13 +301,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
     // 1. If storage_shard_id is present and botRef is missing or default 'primary', lookup shard definition
     if (shardId && (!botRef || botRef === 'primary')) {
-      const { data: shardRow } = await db
-        .from('storage_shards')
-        .select('bot_reference')
-        .eq('id', shardId)
-        .maybeSingle();
-      if (shardRow?.bot_reference) {
-        botRef = shardRow.bot_reference;
+      const shardRes = await executeYugabyteSql(
+        'SELECT bot_reference FROM storage_shards WHERE id = $1 LIMIT 1;',
+        [shardId],
+        platform?.env
+      ).catch(() => ({ rows: [] as any[] }));
+      if (shardRes.rows[0]?.bot_reference) {
+        botRef = shardRes.rows[0].bot_reference;
       }
     }
 
@@ -342,13 +338,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           body = stream;
           botRef = altBotRef;
           // Self-heal DB mapping in background
-          const healingUpdate = { bot_reference: altBotRef };
+          const healingPromise = executeYugabyteSql(
+            'UPDATE media SET bot_reference = $1 WHERE id = $2;',
+            [altBotRef, media.id],
+            platform?.env
+          ).catch((e) => console.warn('[MEDIA_HEAL_WARN]', e));
           if (platform?.context?.waitUntil) {
-            platform.context.waitUntil(
-              db.from('media').update(healingUpdate).eq('id', media.id)
-            );
-          } else {
-            db.from('media').update(healingUpdate).eq('id', media.id).then();
+            platform.context.waitUntil(healingPromise);
           }
         } catch {
           console.error('[MEDIA_DOWNLOAD_FAILED]', {

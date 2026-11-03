@@ -1,4 +1,4 @@
-import { safeDbQuery } from '$lib/server/resilience';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { getLevelProgress, resolveRankingDisplay, NOX_SEASON_ACHIEVEMENT_TITLES } from '$lib/levels';
 
 const DEFAULT_SEASON = {
@@ -22,7 +22,7 @@ let cachedPublicRankingBase: {
   top3: any[];
 } | null = null;
 
-export const load = async ({ locals, url, setHeaders }: any) => {
+export const load = async ({ locals, url, setHeaders, platform }: any) => {
   if (!locals.user) {
     setHeaders({
       'cache-control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120'
@@ -48,22 +48,23 @@ export const load = async ({ locals, url, setHeaders }: any) => {
     totalMembers = cachedPublicRankingBase!.totalMembers;
   } else {
     // 1 & 2. Fetch active season and total non-test members in parallel
-    const [{ data: activeSeason }, { count: totalMembersCount }] = await Promise.all([
-      locals.db
-        .from('seasons')
-        .select('id,name,number,starts_at,ends_at,is_active,rules_text')
-        .eq('is_active', true)
-        .order('number', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      locals.db
-        .from('members')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_test', false)
+    const [seasonRes, countRes] = await Promise.all([
+      executeYugabyteSql(`
+        SELECT id, name, number, starts_at, ends_at, is_active, rules_text
+        FROM seasons
+        WHERE is_active = true
+        ORDER BY number DESC
+        LIMIT 1;
+      `, [], platform?.env).catch(() => ({ rows: [] })),
+      executeYugabyteSql<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM members
+        WHERE is_test = false;
+      `, [], platform?.env).catch(() => ({ rows: [{ count: 0 }] }))
     ]);
 
-    currentSeason = activeSeason || DEFAULT_SEASON;
-    totalMembers = totalMembersCount || 0;
+    currentSeason = seasonRes.rows[0] || DEFAULT_SEASON;
+    totalMembers = Number(countRes.rows[0]?.count || 0);
   }
 
   const totalPages = Math.max(1, Math.ceil(totalMembers / PAGE_SIZE));
@@ -75,21 +76,15 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   if (canUsePublicCache && currentPage === 1) {
     rawMembers = cachedPublicRankingBase!.page1Rows;
   } else {
-    const { data: pageRows } = await safeDbQuery(
-      locals.db
-        .from('members')
-        .select(
-          'id,username,display_name,xp,lifetime_xp,season_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,created_at,equipped_badge_id'
-        )
-        .eq('is_test', false)
-        .order('season_xp', { ascending: false })
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1),
-      1500,
-      'ranking_page_members'
-    );
-    rawMembers = pageRows || [];
+    const pageRes = await executeYugabyteSql(`
+      SELECT id, username, display_name, xp, lifetime_xp, season_xp, avatar_id, avatar_crop,
+             avatar_frame_id, name_color, created_at, equipped_badge_id
+      FROM members
+      WHERE is_test = false
+      ORDER BY season_xp DESC, created_at ASC, id ASC
+      LIMIT $1 OFFSET $2;
+    `, [PAGE_SIZE, offset], platform?.env).catch(() => ({ rows: [] }));
+    rawMembers = pageRes.rows || [];
   }
 
   // Decorate members with deterministic global rank and seasonal achievement title
@@ -123,18 +118,16 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   } else if (canUsePublicCache && cachedPublicRankingBase!.top3.length > 0) {
     top3 = cachedPublicRankingBase!.top3;
   } else {
-    const { data: top3Rows } = await locals.db
-      .from('members')
-      .select(
-        'id,username,display_name,xp,lifetime_xp,season_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,created_at,equipped_badge_id'
-      )
-      .eq('is_test', false)
-      .order('season_xp', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(3);
+    const top3Res = await executeYugabyteSql(`
+      SELECT id, username, display_name, xp, lifetime_xp, season_xp, avatar_id, avatar_crop,
+             avatar_frame_id, name_color, created_at, equipped_badge_id
+      FROM members
+      WHERE is_test = false
+      ORDER BY season_xp DESC, created_at ASC, id ASC
+      LIMIT 3;
+    `, [], platform?.env).catch(() => ({ rows: [] }));
 
-    top3 = (top3Rows || []).map((m: any, idx: number) => {
+    top3 = (top3Res.rows || []).map((m: any, idx: number) => {
       const rank = idx + 1;
       const seasonXp = m.season_xp ?? 0;
       const rankInfo = resolveRankingDisplay(seasonXp, m.equipped_badge_id);
@@ -156,29 +149,23 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   let currentUserProgress = null;
 
   if (locals.user?.id) {
-    const { data: myMember } = await locals.db
-      .from('members')
-      .select(
-        'id,username,display_name,xp,lifetime_xp,season_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,created_at,equipped_badge_id,equipped_title_id'
+    const userRes = await executeYugabyteSql(`
+      WITH ranked AS (
+        SELECT id, username, display_name, xp, lifetime_xp, season_xp, avatar_id, avatar_crop,
+               avatar_frame_id, name_color, created_at, equipped_badge_id, equipped_title_id,
+               ROW_NUMBER() OVER (ORDER BY season_xp DESC, created_at ASC, id ASC) AS rank
+        FROM members
+        WHERE is_test = false
       )
-      .eq('id', locals.user.id)
-      .maybeSingle();
+      SELECT * FROM ranked WHERE id = $1 LIMIT 1;
+    `, [locals.user.id], platform?.env).catch(() => ({ rows: [] }));
 
+    const myMember = userRes.rows[0];
     if (myMember) {
       currentUser = myMember;
       const seasonalXp = Math.max(0, myMember.season_xp ?? 0);
       currentUserProgress = getLevelProgress(seasonalXp);
-
-      // Exact deterministic rank calculation
-      const { count: aheadCount } = await locals.db
-        .from('members')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_test', false)
-        .or(
-          `season_xp.gt.${seasonalXp},and(season_xp.eq.${seasonalXp},created_at.lt.${myMember.created_at}),and(season_xp.eq.${seasonalXp},created_at.eq.${myMember.created_at},id.lt.${myMember.id})`
-        );
-
-      currentUserRank = (aheadCount ?? 0) + 1;
+      currentUserRank = Number(myMember.rank);
       currentUserPage = Math.ceil(currentUserRank / PAGE_SIZE) || 1;
     }
   }
@@ -187,52 +174,42 @@ export const load = async ({ locals, url, setHeaders }: any) => {
   let searchResults: any[] = [];
   if (searchQuery && searchQuery.length >= 2) {
     const cleanQ = searchQuery.startsWith('@') ? searchQuery.slice(1) : searchQuery;
-    const { data: matched } = await locals.db
-      .from('members')
-      .select(
-        'id,username,display_name,xp,season_xp,lifetime_xp,avatar_id,avatar_crop,avatar_frame_id,name_color,created_at,equipped_badge_id'
+    const searchRes = await executeYugabyteSql(`
+      WITH ranked AS (
+        SELECT id, username, display_name, xp, season_xp, lifetime_xp, avatar_id, avatar_crop,
+               avatar_frame_id, name_color, created_at, equipped_badge_id,
+               ROW_NUMBER() OVER (ORDER BY season_xp DESC, created_at ASC, id ASC) AS rank
+        FROM members
+        WHERE is_test = false
       )
-      .eq('is_test', false)
-      .or(`username.ilike.%${cleanQ}%,display_name.ilike.%${cleanQ}%`)
-      .order('season_xp', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(10);
+      SELECT * FROM ranked
+      WHERE username ILIKE $1 OR display_name ILIKE $1
+      ORDER BY rank ASC
+      LIMIT 10;
+    `, [`%${cleanQ}%`], platform?.env).catch(() => ({ rows: [] }));
 
-    if (matched && matched.length > 0) {
-      searchResults = await Promise.all(
-        matched.map(async (m: any) => {
-          const seasonXp = m.season_xp ?? 0;
-          const { count } = await locals.db
-            .from('members')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_test', false)
-            .or(
-              `season_xp.gt.${seasonXp},and(season_xp.eq.${seasonXp},created_at.lt.${m.created_at}),and(season_xp.eq.${seasonXp},created_at.eq.${m.created_at},id.lt.${m.id})`
-            );
+    searchResults = (searchRes.rows || []).map((m: any) => {
+      const seasonXp = m.season_xp ?? 0;
+      const rankPosition = Number(m.rank);
+      const rankInfo = resolveRankingDisplay(seasonXp, m.equipped_badge_id);
+      const progress = getLevelProgress(seasonXp);
 
-          const rankPosition = (count ?? 0) + 1;
-          const rankInfo = resolveRankingDisplay(seasonXp, m.equipped_badge_id);
-          const progress = getLevelProgress(seasonXp);
-
-          return {
-            id: m.id,
-            username: m.username,
-            display_name: m.display_name,
-            avatar_id: m.avatar_id,
-            avatar_crop: m.avatar_crop,
-            avatar_frame_id: m.avatar_frame_id,
-            name_color: m.name_color,
-            season_xp: seasonXp,
-            rank: rankPosition,
-            level: rankInfo.level,
-            title: rankInfo.title,
-            badge: rankInfo.badge,
-            progressPercent: progress.progressPercent
-          };
-        })
-      );
-    }
+      return {
+        id: m.id,
+        username: m.username,
+        display_name: m.display_name,
+        avatar_id: m.avatar_id,
+        avatar_crop: m.avatar_crop,
+        avatar_frame_id: m.avatar_frame_id,
+        name_color: m.name_color,
+        season_xp: seasonXp,
+        rank: rankPosition,
+        level: rankInfo.level,
+        title: rankInfo.title,
+        badge: rankInfo.badge,
+        progressPercent: progress.progressPercent
+      };
+    });
   }
 
   return {

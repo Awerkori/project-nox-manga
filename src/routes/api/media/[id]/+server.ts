@@ -6,7 +6,7 @@ import {
 } from '$lib/server/storage-router';
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
-import { fetchMediaMetadataFromYugabyte } from '$lib/server/yugabyte';
+import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
 
 const PRIVATE_MEDIA_IDLE_TIMEOUT_MS = 12_000;
 
@@ -86,7 +86,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       const { jwt, accessToken } = decodeSessionJwt(token);
       if (jwt) {
         try {
-          verifiedSession = await resolveSessionData(locals.db, jwt, accessToken, platform?.env);
+          verifiedSession = await resolveSessionData(null, jwt, accessToken, platform?.env);
         } catch {
           // Identity unverified
         }
@@ -133,29 +133,25 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   let body: BodyInit;
   if (media.provider === 'supabase') {
-    const { data, error: problem } = await db.storage.from('nox-media').download(media.provider_key);
-    if (problem || !data) {
-      return new Response(JSON.stringify({ error: 'Arquivo temporariamente indisponível' }), {
-        status: 502,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-        }
-      });
-    }
-    body = data;
+    return new Response(JSON.stringify({ error: 'Mídia legada descontinuada' }), {
+      status: 502,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      }
+    });
   } else {
     let botRef = media.bot_reference;
     let shardId = media.storage_shard_id;
 
     if (shardId && (!botRef || botRef === 'primary')) {
-      const { data: shardRow } = await db
-        .from('storage_shards')
-        .select('bot_reference')
-        .eq('id', shardId)
-        .maybeSingle();
-      if (shardRow?.bot_reference) {
-        botRef = shardRow.bot_reference;
+      const shardRes = await executeYugabyteSql(
+        'SELECT bot_reference FROM storage_shards WHERE id = $1 LIMIT 1;',
+        [shardId],
+        platform?.env
+      ).catch(() => ({ rows: [] as any[] }));
+      if (shardRes.rows[0]?.bot_reference) {
+        botRef = shardRes.rows[0].bot_reference;
       }
     }
 

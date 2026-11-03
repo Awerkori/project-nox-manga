@@ -1,32 +1,29 @@
 import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET = async ({ locals, platform }: any) => {
   if (!locals.user) {
     throw error(401, 'Autenticação necessária.');
   }
 
-  const { data: userReports, error: dbError } = await locals.db
-    .from('reports')
-    .select(`
-      id,
-      target_type,
-      reason,
-      details,
-      status,
-      created_at,
-      updated_at,
-      work:works(id, title, slug),
-      chapter:chapters(id, number, display_number, title, works(id, title, slug)),
-      comment:comments(id, body)
-    `)
-    .eq('reporter_id', locals.user.id)
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const res = await executeYugabyteSql(`
+    SELECT r.id, r.target_type, r.reason, r.details, r.status, r.created_at, r.updated_at,
+           CASE WHEN w.id IS NOT NULL THEN json_build_object('id', w.id, 'title', w.title, 'slug', w.slug) ELSE NULL END AS work,
+           CASE WHEN ch.id IS NOT NULL THEN json_build_object('id', ch.id, 'number', ch.number, 'display_number', ch.display_number, 'title', ch.title, 'works', json_build_object('id', ch_w.id, 'title', ch_w.title, 'slug', ch_w.slug)) ELSE NULL END AS chapter,
+           CASE WHEN c.id IS NOT NULL THEN json_build_object('id', c.id, 'body', c.body) ELSE NULL END AS comment
+    FROM reports r
+    LEFT JOIN works w ON w.id = r.work_id
+    LEFT JOIN chapters ch ON ch.id = r.chapter_id
+    LEFT JOIN works ch_w ON ch_w.id = ch.work_id
+    LEFT JOIN comments c ON c.id = r.comment_id
+    WHERE r.reporter_id = $1
+    ORDER BY r.created_at DESC
+    LIMIT 50;
+  `, [locals.user.id], platform?.env).catch((err: any) => {
+    throw error(500, 'Erro ao carregar denúncias: ' + (err?.message || 'Falha no banco de dados'));
+  });
 
-  if (dbError) {
-    throw error(500, 'Erro ao carregar denúncias: ' + dbError.message);
-  }
+  const userReports = res.rows || [];
 
   const reports = (userReports || []).map((rep: any) => {
     let targetTitle = 'Conteúdo da plataforma';

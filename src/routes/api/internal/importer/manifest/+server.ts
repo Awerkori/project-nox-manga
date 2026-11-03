@@ -1,26 +1,27 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
+import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET = async ({ url, locals, platform }: any) => {
   const workId = url.searchParams.get('workId');
   if (!workId) {
     return json({ error: 'Missing workId' }, { status: 400 });
   }
 
   // Ensure user is staff
-  if (!locals.user || locals.role !== 'ADMIN' && locals.role !== 'MODERATOR' && locals.role !== 'SCAN_LEADER') {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR', 'MODERATOR', 'SCAN_LEADER'].includes(locals.role || '')) {
     return json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { data: chapters, error } = await locals.db
-    .from('importer_chapter_manifest')
-    .select('*')
-    .eq('work_id', workId)
-    .order('chapter_sort_key', { ascending: true });
+  try {
+    const res = await executeYugabyteSql(`
+      SELECT *
+      FROM importer_chapter_manifest
+      WHERE work_id = $1
+      ORDER BY chapter_sort_key ASC;
+    `, [workId], platform?.env);
 
-  if (error) {
-    return json({ error: error.message }, { status: 500 });
+    return json({ chapters: res.rows || [] });
+  } catch (err: any) {
+    return json({ error: err?.message || 'Database error' }, { status: 500 });
   }
-
-  return json({ chapters: chapters || [] });
 };

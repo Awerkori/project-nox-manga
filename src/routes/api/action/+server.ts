@@ -676,16 +676,8 @@ export const POST = async ({ request, locals, platform }: any) => {
         );
         data = rpcRes.rows[0]?.result;
         problem = null;
-      } else if (locals.db?.rpc) {
-        const res = await locals.db.rpc(`${body.scope}_action`, {
-          p_action: body.action,
-          p_data: body.data
-        });
-        data = res?.data || { ok: true };
-        problem = res?.error || null;
       } else {
-        data = { ok: true };
-        problem = null;
+        error(400, `Ação não suportada: ${body.scope}.${body.action}`);
       }
     } catch (err: any) {
       problem = err;
