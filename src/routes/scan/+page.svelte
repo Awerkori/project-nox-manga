@@ -67,6 +67,7 @@
   import ChapterDetailsView from './components/ChapterDetailsView.svelte';
   import QcReaderView from './components/QcReaderView.svelte';
   import PipelineConfigTab from './components/PipelineConfigTab.svelte';
+  import ObrasDaScanView from './components/ObrasDaScanView.svelte';
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
   import { invalidate } from '$app/navigation';
@@ -1324,160 +1325,19 @@
                 userRole={data.userRole}
               />
             {:else if currentWorkspaceTab === 'capitulos' || currentWorkspaceTab === 'works' || currentWorkspaceTab === 'obras'}
-        <div class="dash-columns">
-          <div class="dash-col-left">
-            <section class="card-section">
-              <div class="section-top space-between">
-                <div class="section-title-wrap">
-                  <BookOpen size={18} />
-                  <h2>Obras da Scan ({works.length})</h2>
-                </div>
-                {#if ['OWNER', 'ADMIN', 'UPLOADER'].includes(data.userRole)}
-                  <button type="button" class="btn-sm-action" onclick={() => (showProjectModal = true)}>
-                    <Plus size={14} />
-                    <span>Solicitar Obra</span>
-                  </button>
-                {/if}
-              </div>
-
-              {#if works.length > 0}
-                <div class="works-list">
-                  {#each works.slice(0, visibleWorksLimit) as work (work.id)}
-                    <div class="dash-work-row">
-                      <a href="/obra/{work.slug}" class="dash-work-item">
-                        {#if work.cover_id}
-                          <img src="/media/{work.cover_id}?size=thumb&v=3" alt={work.title} class="work-mini-cover" loading="lazy" decoding="async" />
-                        {:else}
-                          <div class="work-mini-placeholder">NOX</div>
-                        {/if}
-                        <div class="work-mini-info">
-                          <span class="work-mini-title">{work.title}</span>
-                          <span class="work-mini-views">
-                            <Eye size={12} />
-                            <span>{formatNumber(work.views_total || 0)} leituras</span>
-                          </span>
-                        </div>
-                      </a>
-
-                      <div class="dash-work-status-cell">
-                        {#if ['OWNER', 'ADMIN'].includes(data.userRole)}
-                          <form method="POST" action="?/updateProjectStatus" use:enhance class="project-status-form">
-                            <input type="hidden" name="scan_id" value={data.currentScan?.id} />
-                            <input type="hidden" name="work_id" value={work.id} />
-                            <label for="work-status-{work.id}" class="sr-only">Status do Projeto</label>
-                            <select
-                              id="work-status-{work.id}"
-                              name="status"
-                              value={work.project_status || 'ACTIVE'}
-                              class="project-status-select status-{(work.project_status || 'ACTIVE').toLowerCase()}"
-                              onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
-                            >
-                              <option value="ACTIVE">Ativo</option>
-                              <option value="PAUSED">Pausado</option>
-                              <option value="COMPLETED">Concluído</option>
-                              <option value="ABANDONED">Abandonado</option>
-                            </select>
-                          </form>
-                        {:else}
-                          <span class="status-pill status-{(work.project_status || 'ACTIVE').toLowerCase()}">
-                            {work.project_status === 'ACTIVE' ? 'Ativo' : work.project_status === 'PAUSED' ? 'Pausado' : work.project_status === 'COMPLETED' ? 'Concluído' : 'Abandonado'}
-                          </span>
-                        {/if}
-                        <a href="/obra/{work.slug}" class="work-arrow-link" title="Abrir Obra">
-                          <ArrowRight size={15} class="work-arrow" />
-                        </a>
-                      </div>
-                    </div>
-                  {/each}
-                </div>
-                {#if works.length > visibleWorksLimit}
-                  <div style="margin-top: 0.75rem; display: flex; justify-content: center;">
-                    <button
-                      type="button"
-                      class="btn-sm-action"
-                      onclick={() => (visibleWorksLimit = works.length)}
-                    >
-                      <span>Mostrar todas as {works.length} obras</span>
-                    </button>
-                  </div>
-                {/if}
-              {:else}
-                <p class="empty-text">Nenhuma obra atribuída a esta scan ainda.</p>
-              {/if}
-
-              {#if projectRequests && projectRequests.length > 0}
-                <div class="project-requests-block">
-                  <span class="sub-section-title">Solicitações de Obras ({projectRequests.length})</span>
-                  <div class="proj-requests-list">
-                    {#each projectRequests as req (req.id)}
-                      <div class="proj-req-item status-{req.status.toLowerCase()}">
-                        {#if req.works?.cover_id}
-                          <img src="/media/{req.works.cover_id}?size=thumb&v=3" alt="" class="proj-cover-mini" loading="lazy" decoding="async" />
-                        {:else}
-                          <div class="proj-cover-fallback">NOX</div>
-                        {/if}
-                        <div class="proj-info">
-                          <strong class="proj-title">{req.works?.title}</strong>
-                          {#if req.message}
-                            <span class="proj-msg">"{req.message}"</span>
-                          {/if}
-                          {#if req.status === 'REJECTED' && req.rejection_reason}
-                            <span class="proj-rejection-note">
-                              <AlertTriangle size={12} />
-                              <span>Motivo: {req.rejection_reason}</span>
-                            </span>
-                          {/if}
-                        </div>
-                        <div class="proj-actions-cell">
-                          <span class="status-pill status-{req.status.toLowerCase()}">
-                            {req.status === 'PENDING' ? 'Em Análise' : req.status === 'APPROVED' ? 'Aprovada' : req.status === 'CANCELLED' ? 'Cancelada' : 'Recusada'}
-                          </span>
-                          {#if req.status === 'PENDING' && ['OWNER', 'ADMIN'].includes(data.userRole)}
-                            <form method="POST" action="?/cancelProjectRequest" use:enhance>
-                              <input type="hidden" name="request_id" value={req.id} />
-                              <button type="submit" class="btn-cancel-req">Cancelar Pedido</button>
-                            </form>
-                          {/if}
-                        </div>
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-            </section>
-          </div>
-
-          <div class="dash-col-right">
-            <section class="card-section">
-              <div class="section-top">
-                <Layers size={18} />
-                <h2>Últimos Capítulos Registrados ({chapters.length})</h2>
-              </div>
-
-              {#if chapters.length > 0}
-                <div class="recent-chapters-list">
-                  {#each chapters as ch (ch.id)}
-                    <a href="/ler/{ch.id}" class="dash-ch-item">
-                      <div class="ch-left">
-                        <span class="ch-work">{ch.works?.title}</span>
-                        <span class="ch-num">Capítulo {ch.number}</span>
-                      </div>
-                      <div class="ch-right">
-                        <span class="ch-views-count">
-                          <Eye size={12} />
-                          <span>{formatNumber(ch.views_total || 0)}</span>
-                        </span>
-                        <time datetime={ch.published_at}>{relativeTime(ch.published_at)}</time>
-                      </div>
-                    </a>
-                  {/each}
-                </div>
-              {:else}
-                <p class="empty-text">Nenhum capítulo lançado recentemente.</p>
-              {/if}
-            </section>
-          </div>
-        </div>
+              <ObrasDaScanView
+                works={works}
+                chapters={chapters}
+                productionChapters={data.productionChapters || []}
+                projectRequests={projectRequests}
+                catalogWorks={data.catalogWorks || []}
+                userRole={data.userRole}
+                scanId={data.currentScan?.id || ''}
+                scanName={data.currentScan?.name || 'Project Nox'}
+                isProductionSite={data.isProductionSite ?? false}
+                onSelectStage={(slug: string) => handleSelectTab('pipeline', slug)}
+                onRequestWork={() => (showProjectModal = true)}
+              />
 
       <!-- TAB PANE: EQUIPE & CARGOS -->
       {:else if currentWorkspaceTab === 'membros' || activeDashTab === 'team'}

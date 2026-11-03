@@ -248,6 +248,35 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
       return json({ catalogWorks: res.rows });
     }
 
+    case 'work_chapters': {
+      const workId = url.searchParams.get('work_id');
+      if (!workId) return json({ error: 'Missing work_id' }, { status: 400 });
+      const [pubRes, prodRes] = await Promise.all([
+        executeYugabyteSql(
+          `SELECT c.id, c.number, c.title, c.published_at, c.views_total,
+                  EXISTS(SELECT 1 FROM public.chapter_scans cs WHERE cs.chapter_id = c.id AND cs.scan_id = $1) as is_scan_chapter
+           FROM public.chapters c
+           WHERE c.work_id = $2
+           ORDER BY c.number DESC LIMIT 200`,
+          [scanId, workId],
+          sessionEnv
+        ),
+        executeYugabyteSql(
+          `SELECT spc.id, spc.chapter_number, spc.chapter_title, spc.status,
+                  spc.current_stage_slug, spc.target_chapter_id, spc.updated_at
+           FROM public.scan_production_chapters spc
+           WHERE spc.scan_id = $1 AND spc.work_id = $2
+           ORDER BY spc.chapter_number DESC LIMIT 100`,
+          [scanId, workId],
+          sessionEnv
+        )
+      ]);
+      return json({
+        publishedChapters: pubRes.rows,
+        productionChapters: prodRes.rows
+      });
+    }
+
     case 'team_invites': {
       const res = await executeYugabyteSql(
         `SELECT invite.* FROM public.scan_invites invite

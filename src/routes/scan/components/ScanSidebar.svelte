@@ -404,9 +404,9 @@
       </div>
     </div>
 
-    <!-- Group: SCANS -->
+    <!-- Group: GESTÃO DA SCAN -->
     <div class="nav-section">
-      <div class="section-title">SCANS</div>
+      <div class="section-title">GESTÃO DA SCAN</div>
 
       <button
         type="button"
