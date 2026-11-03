@@ -1,7 +1,7 @@
 import { withTimeout } from './resilience';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { executeYugabyteSql } from './yugabyte';
-import { getAuthSecret, verifySessionJwt } from './yugabyte-auth';
+import { getAuthSecrets, verifySessionJwt, verifySessionJwtAny } from './yugabyte-auth';
 
 export interface DecodedJwt {
   sub: string;
@@ -53,7 +53,7 @@ export function extractFullAuthCookie(cookies: Array<{ name: string; value: stri
 }
 
 /**
- * Extract and decode JWT payload from raw cookie value safely
+ * Extract and decode JWT payload from raw cookie value safely with algorithm and claims check
  */
 export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; accessToken: string } {
   try {
@@ -80,8 +80,19 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
     }
     if (!token || !token.includes('.')) return { jwt: null, accessToken: '' };
     const parts = token.split('.');
-    if (parts.length < 2) return { jwt: null, accessToken: '' };
+    if (parts.length !== 3) return { jwt: null, accessToken: '' };
 
+    // Decode and validate header
+    const base64UrlHeader = parts[0];
+    let base64H = base64UrlHeader.replace(/-/g, '+').replace(/_/g, '/');
+    while (base64H.length % 4 !== 0) base64H += '=';
+    const headerJson = new TextDecoder().decode(Uint8Array.from(atob(base64H), (c) => c.charCodeAt(0)));
+    const header = JSON.parse(headerJson);
+    if (!header || typeof header !== 'object' || !['HS256', 'RS256', 'ES256'].includes(header.alg)) {
+      return { jwt: null, accessToken: '' };
+    }
+
+    // Decode and validate payload
     const base64Url = parts[1];
     let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4 !== 0) {
@@ -91,6 +102,16 @@ export function decodeSessionJwt(rawCookie: string): { jwt: DecodedJwt | null; a
     const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0));
     const jsonStr = new TextDecoder().decode(bytes);
     const payload = JSON.parse(jsonStr) as DecodedJwt;
+
+    if (!payload || typeof payload !== 'object' || !payload.sub || typeof payload.sub !== 'string') {
+      return { jwt: null, accessToken: '' };
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.exp !== undefined && (typeof payload.exp !== 'number' || payload.exp <= nowSec)) {
+      return { jwt: null, accessToken: '' };
+    }
+
     return { jwt: payload, accessToken: token };
   } catch {
     return { jwt: null, accessToken: '' };
@@ -131,28 +152,17 @@ export async function resolveSessionData(
       if (cachedVerification && cachedVerification.userId === decoded.sub && cachedVerification.expiresAt > now) {
         identityVerified = true;
       } else {
-        // Fast-path: Web Crypto local HMAC verification
-        const authSecret = getAuthSecret(platformEnv);
-        const verifiedByJwt = await verifySessionJwt(accessToken, authSecret);
+        // Fast-path: Web Crypto local HMAC verification across all configured secrets
+        const verifiedByJwt = await verifySessionJwtAny(accessToken, platformEnv);
         if (verifiedByJwt && verifiedByJwt.sub === decoded.sub) {
           identityVerified = true;
-        } else if (decoded.sub && (!decoded.exp || decoded.exp * 1000 > now)) {
-          // Authoritative YugabyteDB membership check
-          try {
-            const mem = await executeYugabyteSql(`SELECT id FROM members WHERE id = $1 LIMIT 1;`, [decoded.sub], platformEnv);
-            if (mem.rows[0]) {
-              identityVerified = true;
-            }
-          } catch {
-            // fallback
-          }
         }
 
-        // Secondary fallback for legacy/external sessions if not yet verified
+        // Secondary fallback for legacy/external Supabase sessions if not yet verified
         if (!identityVerified && db?.auth?.getUser) {
           const verified = await withTimeout(
             db.auth.getUser(accessToken),
-            800,
+            1000,
             null,
             'session_verify_user'
           );
@@ -161,6 +171,8 @@ export async function resolveSessionData(
           }
         }
 
+        // Cryptographic verification is MANDATORY: never accept an identity merely
+        // because its UUID exists in the members database table.
         if (!identityVerified) {
           throw new Error('SESSION_NOT_VERIFIED');
         }

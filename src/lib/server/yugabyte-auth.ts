@@ -30,12 +30,30 @@ export interface AuthSession {
 export const AUTH_COOKIE_NAME = 'sb-izregkwaqdygwioqzwwo-auth-token';
 const DEFAULT_AUTH_SECRET = 'project-nox-production-auth-key-2026-secure-token';
 
+export function getAuthSecrets(platformEnv?: any): string[] {
+  const secrets = new Set<string>();
+  const add = (s?: string) => {
+    if (s && typeof s === 'string' && s.trim()) secrets.add(s.trim());
+  };
+  add(platformEnv?.SUPABASE_JWT_SECRET);
+  add(platformEnv?.JWT_SECRET);
+  add(platformEnv?.BETTER_AUTH_SECRET);
+  add(platformEnv?.SUPABASE_SERVICE_ROLE_KEY);
+  add(platformEnv?.NOX_STORAGE_BRIDGE_TOKEN);
+  if (typeof process !== 'undefined' && process.env) {
+    add(process.env.SUPABASE_JWT_SECRET);
+    add(process.env.JWT_SECRET);
+    add(process.env.BETTER_AUTH_SECRET);
+    add(process.env.SUPABASE_SERVICE_ROLE_KEY);
+    add(process.env.NOX_STORAGE_BRIDGE_TOKEN);
+  }
+  add(DEFAULT_AUTH_SECRET);
+  return Array.from(secrets);
+}
+
 export function getAuthSecret(platformEnv?: any): string {
-  const envSecret =
-    platformEnv?.SUPABASE_SERVICE_ROLE_KEY ||
-    platformEnv?.NOX_STORAGE_BRIDGE_TOKEN ||
-    (typeof process !== 'undefined' ? process.env?.SUPABASE_SERVICE_ROLE_KEY || process.env?.NOX_STORAGE_BRIDGE_TOKEN : '');
-  return envSecret || DEFAULT_AUTH_SECRET;
+  const secrets = getAuthSecrets(platformEnv);
+  return secrets[0] || DEFAULT_AUTH_SECRET;
 }
 
 function base64UrlEncode(str: string): string {
@@ -89,14 +107,37 @@ export async function signSessionJwt(payload: Record<string, any>, secret: strin
 }
 
 /**
- * Verify HS256 JWT signature and expiration
+ * Verify HS256 JWT signature, algorithm, payload claims, and expiration
  */
 export async function verifySessionJwt(token: string, secret: string): Promise<DecodedAuthToken | null> {
   try {
-    if (!token || !token.includes('.')) return null;
+    if (!token || typeof token !== 'string' || !token.includes('.')) return null;
     const parts = token.split('.');
     if (parts.length !== 3) return null;
 
+    // 1. Strict header validation: algorithm MUST be HS256
+    const headerJson = base64UrlDecode(parts[0]);
+    const header = JSON.parse(headerJson);
+    if (!header || typeof header !== 'object' || header.alg !== 'HS256') {
+      return null;
+    }
+
+    // 2. Strict payload validation
+    const payloadJson = base64UrlDecode(parts[1]);
+    const payload = JSON.parse(payloadJson) as DecodedAuthToken;
+    if (!payload || typeof payload !== 'object' || !payload.sub || typeof payload.sub !== 'string') {
+      return null;
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.exp !== undefined && (typeof payload.exp !== 'number' || payload.exp <= nowSec)) {
+      return null;
+    }
+    if ((payload as any).nbf !== undefined && (typeof (payload as any).nbf !== 'number' || (payload as any).nbf > nowSec)) {
+      return null;
+    }
+
+    // 3. Cryptographic HMAC signature check
     const data = `${parts[0]}.${parts[1]}`;
     let sigBase64 = parts[2].replace(/-/g, '+').replace(/_/g, '/');
     while (sigBase64.length % 4 !== 0) {
@@ -109,16 +150,22 @@ export async function verifySessionJwt(token: string, secret: string): Promise<D
     const isValid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(data));
     if (!isValid) return null;
 
-    const payloadJson = base64UrlDecode(parts[1]);
-    const payload = JSON.parse(payloadJson) as DecodedAuthToken;
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp <= nowSec) {
-      return null;
-    }
     return payload;
   } catch {
     return null;
   }
+}
+
+/**
+ * Verify JWT signature across all candidate environment secrets
+ */
+export async function verifySessionJwtAny(token: string, platformEnv?: any): Promise<DecodedAuthToken | null> {
+  const secrets = getAuthSecrets(platformEnv);
+  for (const secret of secrets) {
+    const verified = await verifySessionJwt(token, secret);
+    if (verified) return verified;
+  }
+  return null;
 }
 
 /**
