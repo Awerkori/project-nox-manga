@@ -1,7 +1,11 @@
 import { json } from '@sveltejs/kit';
 import { clearAllAuthCookies } from '$lib/server/yugabyte-auth';
+import { invalidateUserSession } from '$lib/server/session-cache';
 
 export const POST = async ({ locals, cookies }: any) => {
+  if (locals.user?.id) {
+    invalidateUserSession(locals.user.id);
+  }
   try {
     if (locals.db?.auth?.signOut) {
       await locals.db.auth.signOut();
@@ -12,3 +16,4 @@ export const POST = async ({ locals, cookies }: any) => {
   clearAllAuthCookies(cookies);
   return json({ success: true });
 };
+

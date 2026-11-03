@@ -189,7 +189,7 @@ var worker_default = {
     // 3. Media Edge Cache Fast-Path: public pages and covers served in <1ms without SvelteKit SSR
     if (url.pathname.startsWith('/media/') && (req.method === 'GET' || req.method === 'HEAD')) {
       const cache = typeof caches !== 'undefined' && caches.default;
-      if (cache && !req.headers.has('authorization')) {
+      if (cache && !req.headers.has('authorization') && !shouldBypassSharedCache(req)) {
         const mediaId = url.pathname.slice(7);
         if (/^[0-9a-f-]{36}$/i.test(mediaId)) {
           const sizeParam = url.searchParams.get('size');

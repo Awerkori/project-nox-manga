@@ -387,3 +387,21 @@ export function invalidateUserSession(userId: string) {
     }
   }
 }
+
+/**
+ * Clear session cache for a specific access token
+ */
+export function invalidateToken(token: string) {
+  sessionCache.delete(token);
+  verifiedTokens.delete(token);
+}
+
+/**
+ * Reset all session caches (primarily for unit tests and key rotation)
+ */
+export function clearSessionCache() {
+  sessionCache.clear();
+  verifiedTokens.clear();
+  activeFlights.clear();
+}
+

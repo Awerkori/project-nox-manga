@@ -119,7 +119,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   const canonicalUrl = coverVariant ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
-  if (cache && !internalCoverWarm) {
+  const hasAuth = Boolean(auth) || Boolean(extractFullAuthCookie(cookies.getAll()));
+  if (cache && !internalCoverWarm && !hasAuth) {
     try {
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
@@ -162,7 +163,11 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       status: 404,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
   }
@@ -186,7 +191,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       const { jwt, accessToken } = decodeSessionJwt(raw);
       if (jwt) {
         try {
-          verifiedSession = await resolveSessionData(locals.db, jwt, accessToken);
+          verifiedSession = await resolveSessionData(locals.db, jwt, accessToken, platform?.env);
         } catch {
           // ignore session resolution failure for anonymous fallback
         }
@@ -200,18 +205,37 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         status: 404,
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       });
     }
+
+    // Authorized access to non-public media: redirect to dedicated private endpoint
+    // to strictly prevent edge CDN caching under the /media/* zone rule.
+    return new Response(null, {
+      status: 307,
+      headers: {
+        'Location': `/api/media/${params.id}${url.search}`,
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Vary': 'Cookie, Authorization'
+      }
+    });
   }
 
   const headers: Record<string, string> = {
     'Content-Type': media.mime || 'image/jpeg',
     'X-Content-Type-Options': 'nosniff',
-    'Cache-Control': isPublic
-      ? 'public, max-age=31536000, s-maxage=31536000, immutable'
-      : 'private, no-cache',
+    'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
+    'CDN-Cache-Control': 'public, max-age=31536000',
+    'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
     'ETag': `"${media.sha256}"`,
     'Content-Security-Policy': "default-src 'none'; sandbox",
     'X-Media-Cache': 'MISS'
