@@ -20,7 +20,7 @@ function patchGeneratedWorker() {
   return !/(private|no-cache|no-store)/i.test(t2);
 }`;
   const sanitizedWorktopR = `function r(res) {
-  if (!n.has(res.status)) return false;
+  if (!n.has(res.status) || res.status >= 400) return false;
   let cc = res.headers.get("Cache-Control") || "";
   if (cc.includes("no-store") || cc.includes("no-cache")) return false;
   return cc.includes("public") || (cc.includes("private") && (cc.includes("max-age=") || cc.includes("s-maxage=")));

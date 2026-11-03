@@ -39,7 +39,7 @@ function t(cache, req, res, ctx) {
 }
 var n = /* @__PURE__ */ new Set([200, 203, 204, 300, 301, 404, 405, 410, 414, 501]);
 function r(res) {
-  if (!n.has(res.status)) return false;
+  if (!n.has(res.status) || res.status >= 400) return false;
   let cc = res.headers.get("Cache-Control") || "";
   if (cc.includes("no-store") || cc.includes("no-cache")) return false;
   return cc.includes("public") || (cc.includes("private") && (cc.includes("max-age=") || cc.includes("s-maxage=")));

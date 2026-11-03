@@ -1865,7 +1865,7 @@
                         </a>
                       </div>
                       <span class="requester-byline">
-                        Solicitado por <strong>{req.requester?.display_name || req.requester?.username}</strong> ({req.requester_role || 'Liderança'})
+                        Solicitado por <strong>{req.requester?.display_name || req.requester?.username}</strong> ({req.requester_role === 'OWNER' ? 'DONO' : req.requester_role || 'Liderança'})
                       </span>
                     </div>
                   </div>
