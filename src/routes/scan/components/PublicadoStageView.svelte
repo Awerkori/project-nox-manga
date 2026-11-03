@@ -209,7 +209,22 @@
     }
   }
 
+  function getCompactFixtureModeLabel(mode: FixtureMode): string {
+    switch (mode) {
+      case 'REAL': return `(Real)`;
+      case 'ONE': return `(1)`;
+      case 'FIVE': return `(5)`;
+      case 'MULTI': return `(24)`;
+      case 'EMPTY': return `(0)`;
+      default: return `(Real)`;
+    }
+  }
+
   function selectFixture(mode: FixtureMode) {
+    if (isProductionSite) {
+      fixtureMode = 'REAL';
+      return;
+    }
     fixtureMode = mode;
     currentPage = 1;
     isScenariosMenuOpen = false;
@@ -224,24 +239,43 @@
     if (!stagesScrollContainer) return;
     const { scrollLeft, scrollWidth, clientWidth } = stagesScrollContainer;
     canScrollLeft = scrollLeft > 8;
-    canScrollRight = scrollLeft + clientWidth < scrollWidth - 8;
+    // When scrolled close to the end, turn off right cue completely so it never covers Publicado
+    canScrollRight = scrollLeft + clientWidth < scrollWidth - 10;
   }
 
-  function centerActiveStage(smooth = true) {
+  function alignActiveStagePill(smooth = true) {
     if (!stagesScrollContainer) return;
     const activePill = stagesScrollContainer.querySelector('.stage-tab-btn.is-active') as HTMLElement | null;
     if (!activePill) return;
 
     const containerWidth = stagesScrollContainer.clientWidth;
+    const scrollWidth = stagesScrollContainer.scrollWidth;
+    const maxScroll = Math.max(0, scrollWidth - containerWidth);
     const pillLeft = activePill.offsetLeft;
     const pillWidth = activePill.offsetWidth;
+    const pillRight = pillLeft + pillWidth;
 
-    // Center active pill with comfortable margin, leaving previous chips visible
-    const targetScroll = Math.max(0, pillLeft - (containerWidth / 2) + (pillWidth / 2));
+    let targetScroll: number;
+
+    // For end stages like Publicado, scroll all the way to maxScroll
+    // This guarantees the chip has full safe margin and disables the right scroll cue
+    if (pillRight >= scrollWidth - 80) {
+      targetScroll = maxScroll;
+    } else {
+      targetScroll = Math.max(0, Math.min(pillLeft - (containerWidth / 2) + (pillWidth / 2), maxScroll));
+    }
+
     stagesScrollContainer.scrollTo({
       left: targetScroll,
       behavior: smooth ? 'smooth' : 'auto'
     });
+    setTimeout(() => {
+      updateScrollCues();
+    }, smooth ? 250 : 20);
+  }
+
+  function handleWindowResize() {
+    alignActiveStagePill(false);
     updateScrollCues();
   }
 
@@ -260,15 +294,23 @@
       } else {
         fixtureMode = 'REAL';
       }
+
+      window.addEventListener('resize', handleWindowResize);
     }
 
     requestAnimationFrame(() => {
-      centerActiveStage(false);
+      alignActiveStagePill(false);
       setTimeout(() => {
-        centerActiveStage(true);
+        alignActiveStagePill(true);
         updateScrollCues();
       }, 150);
     });
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', handleWindowResize);
+      }
+    };
   });
 
   // Demo fixture dataset for preview visual homologation
@@ -491,7 +533,7 @@
 
   // Active items derived from selected mode
   let rawActiveItems = $derived.by(() => {
-    if (fixtureMode === 'REAL') {
+    if (isProductionSite || fixtureMode === 'REAL') {
       return realPublishedItems;
     }
     return DEMO_FIXTURES[fixtureMode] || [];
@@ -610,7 +652,8 @@
       <div class="homologation-inner-row">
         <div class="preview-env-badge" title="Ambiente isolado de testes e homologação Cloudflare Preview">
           <span class="preview-pulse-dot"></span>
-          <span class="preview-env-label">Cloudflare Preview</span>
+          <span class="preview-env-label desktop-only">Cloudflare Preview</span>
+          <span class="preview-env-label mobile-only">Preview</span>
         </div>
 
         <div class="scenarios-dropdown-root">
@@ -624,8 +667,10 @@
             title="Alterar cenário visual de teste"
           >
             <Sparkles size={12} class="sparkle-ico" />
-            <span class="scenarios-lbl-text">Cenários de teste:</span>
-            <span class="scenarios-val-text">{getFixtureModeLabel(fixtureMode)}</span>
+            <span class="scenarios-lbl-text desktop-only">Cenários de teste:</span>
+            <span class="scenarios-val-text desktop-only">{getFixtureModeLabel(fixtureMode)}</span>
+            <span class="scenarios-lbl-text mobile-only">Cenários</span>
+            <span class="scenarios-val-text mobile-only">{getCompactFixtureModeLabel(fixtureMode)}</span>
             <ChevronDown size={12} class="chevron-arrow {isScenariosMenuOpen ? 'is-flipped' : ''}" />
           </button>
 
@@ -812,6 +857,7 @@
             {/if}
           </button>
         {/each}
+        <div class="stages-track-end-spacer" aria-hidden="true"></div>
       </div>
     </nav>
     <div class="stages-scroll-cue-right" class:is-visible={canScrollRight} aria-hidden="true"></div>
@@ -1257,6 +1303,14 @@
     font-family: inherit;
   }
 
+  .desktop-only {
+    display: inline;
+  }
+
+  .mobile-only {
+    display: none;
+  }
+
   /* -------------------------------------------------------------
      HOMOLOGATION PREVIEW UTILITY BAR (Item 1)
      ------------------------------------------------------------- */
@@ -1627,10 +1681,18 @@
     align-items: center;
     gap: 0.45rem;
     overflow-x: auto;
-    padding: 0.15rem 0.1rem;
+    padding: 0.2rem 0.35rem 0.2rem 0.15rem;
     scrollbar-width: thin;
     scrollbar-color: #334155 transparent;
     scroll-behavior: smooth;
+  }
+
+  .stages-track-end-spacer {
+    width: 28px;
+    min-width: 28px;
+    height: 1px;
+    flex-shrink: 0;
+    pointer-events: none;
   }
 
   .stage-tab-btn {
@@ -2464,6 +2526,37 @@
      MOBILE OPTIMIZATIONS (ANDROID: 320px - 430px) (Item 8)
      ------------------------------------------------------------- */
   @media (max-width: 768px) {
+    .desktop-only {
+      display: none !important;
+    }
+
+    .mobile-only {
+      display: inline !important;
+    }
+
+    .homologation-utility-bar {
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    .homologation-inner-row {
+      gap: 0.5rem;
+      white-space: nowrap;
+    }
+
+    .btn-scenarios-toggle {
+      padding: 0.2rem 0.45rem;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      gap: 0.3rem;
+    }
+
+    .preview-env-badge {
+      font-size: 0.72rem;
+      gap: 0.35rem;
+      white-space: nowrap;
+    }
+
     .publicado-view-root {
       padding: 0 0.5rem 4.5rem;
       gap: 0.85rem;

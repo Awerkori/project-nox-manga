@@ -79,9 +79,9 @@ async function main() {
     }
 
     // =========================================================================
-    // 2. MOBILE WITH 1 PUBLISHED CHAPTER (390x844 - iPhone 14) & COVER THUMBNAIL
+    // 2. MOBILE WITH 1 PUBLISHED CHAPTER (390x844 - iPhone 14) & COMPACT BAR
     // =========================================================================
-    console.log('\n--- SCENARIO 2: MOBILE (390x844) WITH COVER THUMBNAIL (44x62px) ---');
+    console.log('\n--- SCENARIO 2: MOBILE (390x844) WITH COMPACT PREVIEW BAR & COVER ---');
     const ctx390 = await browser.newContext({
       viewport: { width: 390, height: 844 },
       isMobile: true,
@@ -92,7 +92,45 @@ async function main() {
     await page390.goto(`${targetUrl}/scan?tab=pipeline&stage=publicado&fixture=ONE`, { waitUntil: 'networkidle', timeout: 30000 });
     await page390.waitForTimeout(1500);
 
-    // Verify mobile cover is VISIBLE
+    // 2.1 Compact Preview Utility Bar on Mobile Check
+    const mobileUtilityBar = page390.locator('.homologation-utility-bar');
+    const barBox = await mobileUtilityBar.boundingBox();
+    console.log(`  Mobile Preview Bar bounding box: height=${barBox?.height}px, width=${barBox?.width}px (must be <= 38px height)`);
+    if (!barBox || barBox.height > 40) {
+      throw new Error(`Mobile preview bar is too tall or wrapped: height=${barBox?.height}px`);
+    }
+
+    // Verify badge shows "Preview" and button shows "Cenários (1)"
+    const mobileBadgeText = await page390.locator('.preview-env-badge .mobile-only').textContent();
+    const mobileBtnLabel = await page390.locator('.btn-scenarios-toggle .mobile-only').first().textContent();
+    console.log(`  Mobile badge text: "${mobileBadgeText?.trim()}", Mobile scenarios text: "${mobileBtnLabel?.trim()}"`);
+    if (mobileBadgeText?.trim() !== 'Preview' || mobileBtnLabel?.trim() !== 'Cenários') {
+      throw new Error(`Mobile preview bar texts mismatch: badge="${mobileBadgeText}", label="${mobileBtnLabel}"`);
+    }
+
+    const shotBarMob = join(artifactDir, 'publicado_mobile_preview_bar_compact_390.png');
+    await page390.screenshot({ path: shotBarMob, fullPage: false });
+    console.log(`✓ Saved ${shotBarMob}`);
+
+    // Test Scenarios Dropdown on Android
+    const scenariosBtnMob = page390.locator('.btn-scenarios-toggle');
+    await scenariosBtnMob.click();
+    await page390.waitForTimeout(400);
+
+    const shotMenuMob = join(artifactDir, 'publicado_cenarios_menu_android_390.png');
+    await page390.screenshot({ path: shotMenuMob, fullPage: false });
+    console.log(`✓ Saved ${shotMenuMob}`);
+
+    // Close menu by clicking backdrop
+    const backdropMob = page390.locator('.scenarios-backdrop');
+    if (await backdropMob.isVisible()) {
+      await backdropMob.click({ force: true });
+    } else {
+      await scenariosBtnMob.click();
+    }
+    await page390.waitForTimeout(300);
+
+    // 2.2 Verify mobile cover is VISIBLE
     const mobileCover = page390.locator('.card-main-info-group .cover-thumb-wrapper').first();
     const isCoverVisible = await mobileCover.isVisible();
     const coverBox = await mobileCover.boundingBox();
@@ -101,10 +139,38 @@ async function main() {
       throw new Error(`Mobile cover thumbnail is missing or improperly sized: ${JSON.stringify(coverBox)}`);
     }
 
-    // Verify active Publicado tab in stages track is visible / scrolled
+    // 2.3 Verify active Publicado tab in stages track is 100% VISIBLE and NOT CROPPED
     const activeStageTab = page390.locator('.stage-tab-btn.is-active');
-    const tabVisible = await activeStageTab.isVisible();
-    console.log(`  Active stage tab visible: ${tabVisible}`);
+    const stagesTrack = page390.locator('.stages-track');
+    const chipBox390 = await activeStageTab.boundingBox();
+    const trackBox390 = await stagesTrack.boundingBox();
+
+    if (!chipBox390 || !trackBox390) {
+      throw new Error('Publicado chip or track element missing on 390px');
+    }
+    const chipLeft390 = chipBox390.x;
+    const chipRight390 = chipBox390.x + chipBox390.width;
+    const trackLeft390 = trackBox390.x;
+    const trackRight390 = trackBox390.x + trackBox390.width;
+    console.log(`  Publicado chip 390px: left=${chipLeft390.toFixed(1)}, right=${chipRight390.toFixed(1)} | Track: left=${trackLeft390.toFixed(1)}, right=${trackRight390.toFixed(1)}`);
+
+    if (chipRight390 > trackRight390 - 4 || chipLeft390 < trackLeft390) {
+      throw new Error(`Publicado chip is cropped or misaligned on 390px: chipRight=${chipRight390}, trackRight=${trackRight390}`);
+    }
+
+    // Verify right cue gradient is 0 opacity
+    const cueOpacity390 = await page390.evaluate(() => {
+      const cue = document.querySelector('.stages-scroll-cue-right');
+      return cue ? window.getComputedStyle(cue).opacity : '0';
+    });
+    console.log(`  Right scroll cue opacity on 390px: ${cueOpacity390} (must be <= 0.05)`);
+    if (parseFloat(cueOpacity390) > 0.05) {
+      throw new Error(`Right scroll cue is obscuring the chip on 390px (opacity=${cueOpacity390})`);
+    }
+
+    const shotChip390 = join(artifactDir, 'publicado_chip_100_visible_390px.png');
+    await page390.screenshot({ path: shotChip390, fullPage: false });
+    console.log(`✓ Saved ${shotChip390}`);
 
     const shot2 = join(artifactDir, 'publicado_mobile_1_capitulo_390.png');
     await page390.screenshot({ path: shot2, fullPage: false });
@@ -309,6 +375,40 @@ async function main() {
       console.log(`  ${vp.name}: scrollWidth=${scrollWidth}, clientWidth=${clientWidth}, overflow=${hasOverflow}`);
       if (hasOverflow) {
         throw new Error(`Horizontal overflow detected on viewport ${vp.name}: scrollWidth=${scrollWidth} > clientWidth=${clientWidth}`);
+      }
+
+      // If mobile viewport (320, 360, 390, 430), verify Publicado chip 100% visible & cue opacity 0
+      if (vp.isMobile) {
+        const activeChip = page.locator('.stage-tab-btn.is-active');
+        const track = page.locator('.stages-track');
+        const cBox = await activeChip.boundingBox();
+        const tBox = await track.boundingBox();
+        if (!cBox || !tBox) {
+          throw new Error(`Publicado chip or track not found on ${vp.name}`);
+        }
+        const chipLeft = cBox.x;
+        const chipRight = cBox.x + cBox.width;
+        const trackLeft = tBox.x;
+        const trackRight = tBox.x + tBox.width;
+
+        console.log(`  ${vp.name} Publicado chip box: left=${chipLeft.toFixed(1)}, right=${chipRight.toFixed(1)} | Track: right=${trackRight.toFixed(1)}`);
+        if (chipRight > trackRight - 2 || chipLeft < trackLeft) {
+          throw new Error(`Publicado chip cropped or misaligned on ${vp.name}: chipRight=${chipRight}, trackRight=${trackRight}`);
+        }
+
+        const cueOp = await page.evaluate(() => {
+          const cue = document.querySelector('.stages-scroll-cue-right');
+          return cue ? window.getComputedStyle(cue).opacity : '0';
+        });
+        if (parseFloat(cueOp) > 0.05) {
+          throw new Error(`Right scroll cue is obscuring the chip on ${vp.name} (opacity=${cueOp})`);
+        }
+
+        if (vp.name === '320px') {
+          const shot320 = join(artifactDir, 'publicado_chip_100_visible_320px.png');
+          await page.screenshot({ path: shot320, fullPage: false });
+          console.log(`  ✓ Saved ${shot320}`);
+        }
       }
 
       const shotPath = join(artifactDir, `publicado_viewport_${vp.name}.png`);
