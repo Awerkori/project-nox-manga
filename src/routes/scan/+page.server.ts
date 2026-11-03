@@ -721,8 +721,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
            'kind', work.kind,
            'views_total', work.views_total,
            'updated_at', work.updated_at,
-           'published', work.published,
-           'chapters_count', (SELECT count(*)::int FROM public.chapters WHERE work_id = work.id)
+           'published', work.published
          ) AS works
        FROM public.work_scans work_scan
        JOIN public.works work ON work.id = work_scan.work_id

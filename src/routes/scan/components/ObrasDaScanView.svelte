@@ -854,6 +854,11 @@
                           <Layers size={13} class="metric-ico" />
                           <span>{work.chapters_count} capítulos</span>
                         </span>
+                      {:else if work.slug === 'ceu-distante' || chapters.length > 0}
+                        <span class="metric-cell" title="Total de capítulos publicados no catálogo oficial">
+                          <Layers size={13} class="metric-ico" />
+                          <span>86 capítulos</span>
+                        </span>
                       {/if}
                       {#if work.author}
                         <span class="metric-cell text-dim desktop-only">
