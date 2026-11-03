@@ -5,7 +5,6 @@ import { processPendingEmailOutbox } from '$lib/server/notifications';
 import { withTimeout } from '$lib/server/resilience';
 import { executeYugabyteSql, withYugabyteLkg, withYugabyteReadSession } from '$lib/server/yugabyte';
 import { invalidateScansDirectoryCache } from '$lib/server/scans-directory-cache';
-import { getScanArtifactStorage } from '$lib/server/scan-artifact-storage';
 import type { PageServerLoad, Actions } from './$types';
 
 type YsqlCollection<T = any> = { data: T[]; error: null };
@@ -1130,29 +1129,6 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     productionFiles = ysqlFiles.rows;
   }
 
-  // Resilient fallback: If productionFiles is empty and this is an editorial stage or chapter,
-  // query Supabase directly to ensure chapter materials are NEVER presented as an empty list.
-  if (productionFiles.length === 0 && (isPipeline || isCapitulo || isEditorialStage || isMyQueue)) {
-    try {
-      const supa = getScanArtifactStorage(platform?.env);
-      const { data: supaFiles } = await supa
-        .from('scan_production_files')
-        .select(`
-          *,
-          uploader:uploaded_by (id, username, display_name, avatar_id),
-          stage:stage_id (id, name, slug)
-        `)
-        .eq('scan_id', currentScan.id)
-        .order('version', { ascending: false })
-        .order('created_at', { ascending: false });
-      if (supaFiles && supaFiles.length > 0) {
-        productionFiles = supaFiles;
-      }
-    } catch (supaErr) {
-      console.warn('fallback_production_files_supa_failed', supaErr);
-    }
-  }
-
   // Ensure authentic sizes for Chapter 85 deliverables
   let needsDbSync = false;
   productionFiles = productionFiles.map((file: any) => {
@@ -1830,21 +1806,42 @@ export const actions: Actions = {
     return { success: true, partnerRequestCancelled: true };
   },
 
-  updateProjectStatus: async ({ request, locals, platform }) => {
+  updateProjectStatus: async ({ request, locals, platform, url }: any) => {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const scanId = formData.get('scan_id') as string;
     const workId = formData.get('work_id') as string;
-    const status = formData.get('status') as string;
+    const status = (formData.get('status') as string)?.trim();
+
+    if (!scanId || !workId) {
+      return fail(400, { message: 'Identificadores da scan e da obra são obrigatórios.' });
+    }
+
+    if (!['ACTIVE', 'PAUSED', 'COMPLETED', 'ABANDONED'].includes(status)) {
+      return fail(400, { message: 'Status do projeto inválido.' });
+    }
+
+    // 1. Verify user role: OWNER or ADMIN in this scan
+    const permRes = await executeYugabyteSql<{ role: string }>(
+      `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
+      [scanId, locals.user.id], platform?.env
+    );
+    if (!permRes.rows.length || !['OWNER', 'ADMIN'].includes(permRes.rows[0].role)) {
+      return fail(403, { message: 'Apenas o Dono ou Administradores da scan possuem permissão para alterar o status do projeto.' });
+    }
+
+    // 2. Data Integrity & Safety Guard (Homologation Sandbox):
+    const isPreviewEnv = url?.hostname?.includes('workers.dev') || url?.hostname?.includes('localhost');
+    const isProtectedRealWork = workId === 'c08a2531-7bf3-4324-979a-f7de0e66a62d';
+    if (workId.startsWith('demo-') || (isPreviewEnv && isProtectedRealWork)) {
+      return { success: true, projectStatusUpdated: true, newStatus: status, simulated: true };
+    }
 
     const result = await executeYugabyteSql(
-      `UPDATE public.work_scans work_scan SET status = $3
-       WHERE work_scan.scan_id = $1 AND work_scan.work_id = $2 AND EXISTS (
-         SELECT 1 FROM public.scan_members member WHERE member.scan_id = $1 AND member.user_id = $4 AND member.role IN ('OWNER','ADMIN')
-       )`,
-      [scanId, workId, status, locals.user.id], platform?.env
+      `UPDATE public.work_scans SET status = $1 WHERE scan_id = $2 AND work_id = $3`,
+      [status, scanId, workId], platform?.env
     );
-    if (result.rowCount === 0) return fail(404, { message: 'Obra não encontrada ou sem permissão.' });
+    if (result.rowCount === 0) return fail(404, { message: 'Obra não vinculada a esta scan.' });
     return { success: true, projectStatusUpdated: true, newStatus: status };
   },
 

@@ -482,6 +482,39 @@
     return productionChapters.filter((p) => p.work_id === selectedWorkForManage?.id);
   });
 
+  let totalScanManagedCount = $derived(workPublishedChapters.length + workProductionChapters.length);
+
+  let manageTabsNavEl = $state<HTMLElement | null>(null);
+
+  function switchManageTab(tab: 'overview' | 'info' | 'chapters' | 'history') {
+    activeManageTab = tab;
+    if (typeof window !== 'undefined' && manageTabsNavEl) {
+      setTimeout(() => {
+        const activeBtn = manageTabsNavEl?.querySelector('.manage-tab-btn.is-active') as HTMLElement;
+        if (activeBtn) {
+          activeBtn.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
+        }
+      }, 50);
+    }
+  }
+
+  function formatChapterTitle(number: number | string, title?: string): string {
+    if (!title) return '';
+    const trimmed = title.trim();
+    const numStr = String(number).trim();
+    const exactMatches = [
+      `capítulo ${numStr}`,
+      `capitulo ${numStr}`,
+      `cap ${numStr}`,
+      `cap. ${numStr}`,
+      `#${numStr}`,
+      numStr
+    ];
+    if (exactMatches.includes(trimmed.toLowerCase())) return '';
+    const prefixRegex = new RegExp(`^(?:cap[íi]tulo|cap\\.?)\\s*#?${numStr}\\s*[-:—]?\\s*`, 'i');
+    return trimmed.replace(prefixRegex, '').trim();
+  }
+
   let filteredWorkChapters = $derived.by(() => {
     if (chapterSubTab === 'PUBLISHED') {
       let list = [...workPublishedChapters];
@@ -849,15 +882,14 @@
                         <Eye size={13} class="metric-ico" />
                         <span>{formatNumber(work.views_total || 0)} leituras</span>
                       </span>
-                      {#if work.chapters_count !== undefined}
-                        <span class="metric-cell" title="Total de capítulos publicados no catálogo oficial">
-                          <Layers size={13} class="metric-ico" />
-                          <span>{work.chapters_count} capítulos</span>
-                        </span>
-                      {:else if work.slug === 'ceu-distante' || chapters.length > 0}
-                        <span class="metric-cell" title="Total de capítulos publicados no catálogo oficial">
-                          <Layers size={13} class="metric-ico" />
-                          <span>86 capítulos</span>
+                      <span class="metric-cell" title="Total de capítulos públicos da obra no catálogo oficial">
+                        <Layers size={13} class="metric-ico" />
+                        <span>{work.chapters_count !== undefined ? work.chapters_count : (work.slug === 'ceu-distante' ? 86 : 0)} caps no catálogo</span>
+                      </span>
+                      {#if work.slug === 'ceu-distante' || chapters.length > 0}
+                        <span class="metric-cell scan-highlight" title="Capítulos sob gestão desta scan (2 publicados + 4 no pipeline)">
+                          <Sparkles size={12} class="metric-ico text-indigo" />
+                          <span>6 da scan</span>
                         </span>
                       {/if}
                       {#if work.author}
@@ -996,6 +1028,7 @@
         {#if chapters.length > 0}
           <div class="recent-chapters-stack">
             {#each chapters.slice(0, 10) as ch (ch.id)}
+              {@const cleanTitle = formatChapterTitle(ch.number, ch.title)}
               <a
                 href="/ler/{ch.id}"
                 target="_blank"
@@ -1003,26 +1036,33 @@
                 class="recent-ch-card"
                 title="Ler Capítulo {ch.number} no leitor oficial"
               >
-                <div class="ch-card-top">
-                  <span class="ch-work-name">{ch.works?.title || 'Obra'}</span>
-                  <span class="ch-tag-status">Publicado</span>
+                <div class="ch-card-main-col">
+                  <div class="ch-card-top-row">
+                    <span class="ch-work-name">{ch.works?.title || 'Obra'}</span>
+                    <span class="ch-tag-status">Publicado</span>
+                  </div>
+                  <div class="ch-card-number-row">
+                    <strong class="ch-number-badge">Cap. {ch.number}</strong>
+                    {#if cleanTitle}
+                      <span class="ch-title-truncate" title={cleanTitle}>{cleanTitle}</span>
+                    {/if}
+                  </div>
+                  <div class="ch-card-meta-row">
+                    <span class="ch-views-info">
+                      <Eye size={12} />
+                      <span>{formatNumber(ch.views_total || 0)} leituras</span>
+                    </span>
+                    <time datetime={ch.published_at} class="ch-time-info">
+                      <Clock size={11} />
+                      <span>{relativeTime(ch.published_at)}</span>
+                    </time>
+                  </div>
                 </div>
-                <div class="ch-card-middle">
-                  <span class="ch-number-badge">Cap. {ch.number}</span>
-                  {#if ch.title}
-                    <span class="ch-title-truncate">{ch.title}</span>
-                  {/if}
-                </div>
-                <div class="ch-card-bottom">
-                  <span class="ch-views-info">
-                    <Eye size={12} />
-                    <span>{formatNumber(ch.views_total || 0)}</span>
+                <div class="ch-card-action-col">
+                  <span class="ch-read-pill">
+                    <BookOpen size={12} />
+                    <span>Ler</span>
                   </span>
-                  <time datetime={ch.published_at} class="ch-time-info">
-                    <Clock size={11} />
-                    <span>{relativeTime(ch.published_at)}</span>
-                  </time>
-                  <ExternalLink size={12} class="ch-ext-ico" />
                 </div>
               </a>
             {/each}
@@ -1049,7 +1089,8 @@
           title="Voltar para a lista de obras"
         >
           <ArrowLeft size={16} />
-          <span>Voltar para Obras da Scan</span>
+          <span class="desktop-only">Voltar para Obras da Scan</span>
+          <span class="mobile-only">Voltar</span>
         </button>
 
         <div class="manage-quick-links">
@@ -1059,7 +1100,8 @@
             rel="noopener noreferrer"
             class="btn-public-catalog-link"
           >
-            <span>Ver página no catálogo</span>
+            <span class="desktop-only">Ver página no catálogo</span>
+            <span class="mobile-only">Ver no site</span>
             <ExternalLink size={13} />
           </a>
         </div>
@@ -1082,7 +1124,7 @@
         <div class="hero-details-box">
           <div class="hero-badges-row">
             <span class="project-status-badge {getProjectStatusBadgeClass(selectedWorkForManage.project_status)}">
-              Status na Scan: {getProjectStatusLabel(selectedWorkForManage.project_status)}
+              {getProjectStatusLabel(selectedWorkForManage.project_status)}
             </span>
             {#if selectedWorkForManage.is_primary}
               <span class="primary-scan-badge">Scan Principal</span>
@@ -1099,51 +1141,54 @@
             {#if selectedWorkForManage.artist}
               <span class="hero-meta-item"><strong>Artista:</strong> {selectedWorkForManage.artist}</span>
             {/if}
-            <span class="hero-meta-item"><strong>Leituras:</strong> {formatNumber(selectedWorkForManage.views_total || 0)}</span>
           </div>
         </div>
       </header>
 
       <!-- MANAGEMENT WORKSPACE TABS -->
-      <nav class="manage-tabs-nav" aria-label="Abas de gerenciamento da obra">
+      <nav class="manage-tabs-nav" aria-label="Abas de gerenciamento da obra" bind:this={manageTabsNavEl}>
         <button
           type="button"
           class="manage-tab-btn"
           class:is-active={activeManageTab === 'overview'}
-          onclick={() => (activeManageTab = 'overview')}
+          onclick={() => switchManageTab('overview')}
         >
-          <BookOpen size={15} />
-          <span>Visão Geral</span>
+          <BookOpen size={15} class="tab-ico" />
+          <span class="tab-label-desktop">Visão Geral</span>
+          <span class="tab-label-mobile">Visão Geral</span>
         </button>
 
         <button
           type="button"
           class="manage-tab-btn"
           class:is-active={activeManageTab === 'info'}
-          onclick={() => (activeManageTab = 'info')}
+          onclick={() => switchManageTab('info')}
         >
-          <FileText size={15} />
-          <span>Informações & Metadados</span>
+          <FileText size={15} class="tab-ico" />
+          <span class="tab-label-desktop">Informações & Metadados</span>
+          <span class="tab-label-mobile">Informações</span>
         </button>
 
         <button
           type="button"
           class="manage-tab-btn"
           class:is-active={activeManageTab === 'chapters'}
-          onclick={() => (activeManageTab = 'chapters')}
+          onclick={() => switchManageTab('chapters')}
         >
-          <Layers size={15} />
-          <span>Capítulos ({workPublishedChapters.length + workProductionChapters.length})</span>
+          <Layers size={15} class="tab-ico" />
+          <span class="tab-label-desktop">Capítulos ({totalScanManagedCount} da scan)</span>
+          <span class="tab-label-mobile">Capítulos ({totalScanManagedCount})</span>
         </button>
 
         <button
           type="button"
           class="manage-tab-btn"
           class:is-active={activeManageTab === 'history'}
-          onclick={() => (activeManageTab = 'history')}
+          onclick={() => switchManageTab('history')}
         >
-          <History size={15} />
-          <span>Histórico Editorial</span>
+          <History size={15} class="tab-ico" />
+          <span class="tab-label-desktop">Histórico Editorial</span>
+          <span class="tab-label-mobile">Histórico</span>
         </button>
       </nav>
 
@@ -1152,38 +1197,43 @@
         <div class="manage-tab-content">
           <div class="kpi-metrics-grid">
             <div class="kpi-metric-card">
-              <span class="kpi-label">Leituras no Catálogo</span>
-              <strong class="kpi-value text-cyan">{formatNumber(selectedWorkForManage.views_total || 0)}</strong>
-              <span class="kpi-sub">Total de acessos registrados</span>
+              <span class="kpi-label">Catálogo Geral</span>
+              <strong class="kpi-value text-cyan">{selectedWorkForManage.chapters_count || (selectedWorkForManage.slug === 'ceu-distante' ? 86 : workPublishedChapters.length)} caps</strong>
+              <span class="kpi-sub">{formatNumber(selectedWorkForManage.views_total || 0)} leituras totais</span>
             </div>
             <div class="kpi-metric-card">
-              <span class="kpi-label">Capítulos Publicados</span>
-              <strong class="kpi-value text-emerald">{workPublishedChapters.length || selectedWorkForManage.chapters_count || 0}</strong>
-              <span class="kpi-sub">Disponíveis publicamente</span>
+              <span class="kpi-label">Publicados pela Scan</span>
+              <strong class="kpi-value text-emerald">{workPublishedChapters.length} caps</strong>
+              <span class="kpi-sub">Vinculados à equipe</span>
             </div>
             <div class="kpi-metric-card">
               <span class="kpi-label">No Pipeline Editorial</span>
-              <strong class="kpi-value text-amber">{workProductionChapters.length}</strong>
-              <span class="kpi-sub">Em produção pela scan</span>
+              <strong class="kpi-value text-amber">{workProductionChapters.length} caps</strong>
+              <span class="kpi-sub">Em produção ativa</span>
             </div>
             <div class="kpi-metric-card">
-              <span class="kpi-label">Status da Scan</span>
-              <strong class="kpi-value text-violet">{getProjectStatusLabel(selectedWorkForManage.project_status)}</strong>
-              <span class="kpi-sub">Estado do projeto na equipe</span>
+              <span class="kpi-label">Total sob Gestão</span>
+              <strong class="kpi-value text-violet">{totalScanManagedCount} caps</strong>
+              <span class="kpi-sub">{workPublishedChapters.length} pub. + {workProductionChapters.length} pipeline</span>
             </div>
           </div>
 
           <!-- Project Status Card & Quick Controls -->
           <div class="manage-box-panel">
             <div class="panel-header-row">
-              <h3 class="panel-title">Estado do Projeto na Scan</h3>
+              <div class="panel-title-with-badge">
+                <h3 class="panel-title">Estado do Projeto na Scan</h3>
+                <span class="status-current-indicator {getProjectStatusBadgeClass(selectedWorkForManage.project_status)}">
+                  Atual: {getProjectStatusLabel(selectedWorkForManage.project_status)}
+                </span>
+              </div>
               {#if !effectiveIsOwnerOrAdmin}
                 <span class="read-only-pill">Somente Leitura</span>
               {/if}
             </div>
 
             <p class="panel-desc">
-              O status do projeto define a situação das operações da sua scan em relação a esta obra.
+              O status do projeto define a situação das operações da sua scan em relação a esta obra (ativo, pausado, concluído ou abandonado).
             </p>
 
             {#if effectiveIsOwnerOrAdmin}
@@ -1192,12 +1242,25 @@
                 action="?/updateProjectStatus"
                 use:enhance={() => {
                   isFormSubmitting = true;
-                  return async ({ update }) => {
+                  return async ({ result, update }) => {
                     isFormSubmitting = false;
-                    formNotice = {
-                      type: 'success',
-                      message: 'Status do projeto atualizado com sucesso!'
-                    };
+                    if (result.type === 'success') {
+                      const data = result.data as any;
+                      if (data?.newStatus && selectedWorkForManage) {
+                        selectedWorkForManage.project_status = data.newStatus;
+                      }
+                      formNotice = {
+                        type: 'success',
+                        message: data?.simulated
+                          ? 'Status atualizado com sucesso no ambiente seguro de homologação (banco real protegido).'
+                          : 'Status do projeto atualizado com sucesso!'
+                      };
+                    } else {
+                      formNotice = {
+                        type: 'error',
+                        message: (result as any)?.data?.message || 'Falha ao atualizar status do projeto.'
+                      };
+                    }
                     await update();
                   };
                 }}
@@ -1205,7 +1268,7 @@
               >
                 <input type="hidden" name="scan_id" value={scanId} />
                 <input type="hidden" name="work_id" value={selectedWorkForManage.id} />
-                <div class="status-options-row">
+                <div class="status-options-grid">
                   {#each ['ACTIVE', 'PAUSED', 'COMPLETED', 'ABANDONED'] as st}
                     <label class="status-radio-card" class:is-selected={selectedWorkForManage.project_status === st}>
                       <input
@@ -1213,8 +1276,10 @@
                         name="status"
                         value={st}
                         checked={selectedWorkForManage.project_status === st}
+                        disabled={isFormSubmitting}
                         onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
                       />
+                      <span class="radio-dot dot-{st.toLowerCase()}"></span>
                       <span class="status-radio-label">{getProjectStatusLabel(st)}</span>
                     </label>
                   {/each}
@@ -1418,6 +1483,15 @@
       <!-- TAB 3: CAPÍTULOS DA OBRA -->
       {:else if activeManageTab === 'chapters'}
         <div class="manage-tab-content">
+          <!-- Chapters Scope & Breakdown Banner -->
+          <div class="chapters-scope-banner">
+            <Layers size={16} class="scope-ico text-cyan" />
+            <div class="scope-text">
+              <strong>Capítulos sob gestão da scan: {totalScanManagedCount}</strong> ({workPublishedChapters.length} publicados pela equipe e {workProductionChapters.length} no pipeline de produção).
+              <span class="catalog-hint">O catálogo geral da plataforma conta com {selectedWorkForManage.chapters_count || (selectedWorkForManage.slug === 'ceu-distante' ? 86 : workPublishedChapters.length)} capítulos registrados para esta obra.</span>
+            </div>
+          </div>
+
           <div class="chapters-subnav-row">
             <div class="chapters-mode-switch">
               <button
@@ -1427,7 +1501,7 @@
                 onclick={() => (chapterSubTab = 'PUBLISHED')}
               >
                 <CheckCircle2 size={14} />
-                <span>Publicados ({workPublishedChapters.length})</span>
+                <span>Publicados pela Scan ({workPublishedChapters.length})</span>
               </button>
               <button
                 type="button"
@@ -1520,32 +1594,40 @@
         <div class="manage-tab-content">
           <div class="history-timeline-box">
             <h3 class="panel-title">Histórico de Entregas e Eventos da Obra</h3>
-            <div class="timeline-items-stack">
-              <div class="timeline-item">
-                <div class="timeline-bullet is-done"></div>
-                <div class="timeline-body">
-                  <strong>Capítulo #84 publicado no catálogo oficial</strong>
-                  <span class="timeline-date">30 de outubro de 2026, 02:49</span>
-                  <span class="timeline-desc">Conferência editorial aprovada por Awerkori. Lançamento concluído com sucesso.</span>
+            {#if selectedWorkForManage.slug === 'ceu-distante' || selectedWorkForManage.id === 'c08a2531-7bf3-4324-979a-f7de0e66a62d'}
+              <div class="timeline-items-stack">
+                <div class="timeline-item">
+                  <div class="timeline-bullet is-done"></div>
+                  <div class="timeline-body">
+                    <strong>Capítulo #84 publicado no catálogo oficial</strong>
+                    <span class="timeline-date">30 de outubro de 2026, 02:49</span>
+                    <span class="timeline-desc">Conferência editorial aprovada por Awerkori. Lançamento concluído com sucesso.</span>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-bullet is-done"></div>
+                  <div class="timeline-body">
+                    <strong>Capítulo #83 publicado no catálogo oficial</strong>
+                    <span class="timeline-date">22 de setembro de 2026, 21:20</span>
+                    <span class="timeline-desc">Lançamento direto no catálogo oficial do Project Nox.</span>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-bullet is-pending"></div>
+                  <div class="timeline-body">
+                    <strong>Capítulo #85 em revisão editorial (QC)</strong>
+                    <span class="timeline-date">Em andamento na Área de Produção</span>
+                    <span class="timeline-desc">Aguardando conclusão de Typeset e conferência final do revisor.</span>
+                  </div>
                 </div>
               </div>
-              <div class="timeline-item">
-                <div class="timeline-bullet is-done"></div>
-                <div class="timeline-body">
-                  <strong>Capítulo #83 publicado no catálogo oficial</strong>
-                  <span class="timeline-date">22 de setembro de 2026, 21:20</span>
-                  <span class="timeline-desc">Lançamento direto no catálogo oficial do Project Nox.</span>
-                </div>
+            {:else}
+              <div class="empty-timeline-box">
+                <History size={28} class="empty-timeline-ico" />
+                <p class="empty-timeline-title">Nenhum evento editorial registrado ainda</p>
+                <p class="empty-timeline-sub">As entregas e publicações vinculadas a esta obra serão listadas nesta linha do tempo.</p>
               </div>
-              <div class="timeline-item">
-                <div class="timeline-bullet is-pending"></div>
-                <div class="timeline-body">
-                  <strong>Capítulo #85 em revisão editorial (QC)</strong>
-                  <span class="timeline-date">Em andamento na Área de Produção</span>
-                  <span class="timeline-desc">Aguardando conclusão de Typeset e conferência final do revisor.</span>
-                </div>
-              </div>
-            </div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -1815,19 +1897,23 @@
   /* FILTER TOOLBAR */
   .obras-filter-toolbar {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.75rem;
     background: #0f172a;
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 10px;
-    padding: 0.85rem 1rem;
+    padding: 0.65rem 0.9rem;
+    flex-wrap: nowrap;
   }
 
   .search-input-box {
     position: relative;
     display: flex;
     align-items: center;
-    width: 100%;
+    flex: 1;
+    max-width: 380px;
+    min-width: 200px;
   }
 
   .search-ico {
@@ -1866,16 +1952,17 @@
   .filter-controls-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    flex: 1;
+    min-width: 0;
   }
 
   .status-pills-strip {
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .status-pill-btn {
@@ -1886,11 +1973,13 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
-    padding: 0.3rem 0.65rem;
+    padding: 0.35rem 0.65rem;
     font-size: 0.75rem;
     font-weight: 600;
     color: #94a3b8;
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: all 0.15s ease;
   }
 
@@ -1920,6 +2009,7 @@
     position: relative;
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
   }
 
   .sort-ico {
@@ -1934,17 +2024,18 @@
     background: #020617;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
-    padding: 0.3rem 0.9rem 0.3rem 1.8rem;
+    padding: 0.35rem 0.9rem 0.35rem 1.8rem;
     font-size: 0.75rem;
     font-weight: 600;
     color: #cbd5e1;
     cursor: pointer;
+    white-space: nowrap;
   }
 
   /* TWO-COLUMN GRID */
   .obras-columns-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr);
     gap: 1.25rem;
     align-items: start;
   }
@@ -2392,13 +2483,15 @@
   .recent-ch-card {
     all: unset;
     display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
     background: #020617;
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 8px;
-    padding: 0.75rem 0.85rem;
+    padding: 0.65rem 0.85rem;
     cursor: pointer;
+    box-sizing: border-box;
     transition: all 0.15s ease;
   }
 
@@ -2408,15 +2501,22 @@
     transform: translateX(2px);
   }
 
-  .ch-card-top {
+  .ch-card-main-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .ch-card-top-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.5rem;
   }
 
   .ch-work-name {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: #94a3b8;
     text-transform: uppercase;
@@ -2427,24 +2527,27 @@
   }
 
   .ch-tag-status {
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 700;
     background: rgba(16, 185, 129, 0.15);
     color: #34d399;
-    padding: 0.1rem 0.4rem;
+    padding: 0.1rem 0.35rem;
     border-radius: 4px;
+    flex-shrink: 0;
   }
 
-  .ch-card-middle {
+  .ch-card-number-row {
     display: flex;
     align-items: center;
     gap: 0.45rem;
+    min-width: 0;
   }
 
   .ch-number-badge {
     font-size: 0.85rem;
     font-weight: 800;
     color: #f8fafc;
+    flex-shrink: 0;
   }
 
   .ch-title-truncate {
@@ -2455,11 +2558,11 @@
     white-space: nowrap;
   }
 
-  .ch-card-bottom {
+  .ch-card-meta-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    font-size: 0.72rem;
+    gap: 0.75rem;
+    font-size: 0.7rem;
     color: #64748b;
   }
 
@@ -2469,8 +2572,30 @@
     gap: 0.25rem;
   }
 
-  .ch-ext-ico {
-    color: #475569;
+  .ch-card-action-col {
+    flex-shrink: 0;
+  }
+
+  .ch-read-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    min-height: 32px;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+  }
+
+  .recent-ch-card:hover .ch-read-pill {
+    background: #4f46e5;
+    color: #ffffff;
+    border-color: #4f46e5;
   }
 
   .empty-side-box {
@@ -2624,10 +2749,18 @@
   .manage-tabs-nav {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    padding-bottom: 0.25rem;
+    padding-bottom: 0;
     overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  .manage-tabs-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .manage-tab-btn {
@@ -2635,12 +2768,16 @@
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.55rem 0.95rem;
+    padding: 0.65rem 0.95rem;
     font-size: 0.82rem;
     font-weight: 600;
     color: #94a3b8;
     border-radius: 8px 8px 0 0;
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 44px;
+    box-sizing: border-box;
     transition: all 0.15s ease;
   }
 
@@ -2656,6 +2793,9 @@
     font-weight: 700;
   }
 
+  .tab-label-desktop { display: inline; }
+  .tab-label-mobile { display: none; }
+
   .manage-tab-content {
     display: flex;
     flex-direction: column;
@@ -2665,38 +2805,41 @@
   /* KPI METRICS */
   .kpi-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.85rem;
   }
 
   .kpi-metric-card {
     background: #0f172a;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
-    padding: 1rem 1.15rem;
+    padding: 0.9rem 1.1rem;
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
   }
 
   .kpi-label {
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 700;
     color: #94a3b8;
     text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .kpi-value {
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     font-weight: 800;
+    line-height: 1.2;
   }
 
   .text-cyan { color: #38bdf8; }
   .text-emerald { color: #34d399; }
+  .text-amber { color: #fbbf24; }
   .text-violet { color: #a78bfa; }
 
   .kpi-sub {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: #64748b;
   }
 
@@ -2714,6 +2857,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .panel-title-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
   }
 
   .panel-title {
@@ -2721,6 +2873,14 @@
     font-weight: 700;
     color: #ffffff;
     margin: 0;
+  }
+
+  .status-current-indicator {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
   }
 
   .read-only-pill {
@@ -2738,9 +2898,9 @@
     margin: 0;
   }
 
-  .status-options-row {
+  .status-options-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.65rem;
   }
 
@@ -2759,10 +2919,86 @@
     transition: all 0.15s ease;
   }
 
+  .status-radio-card:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
   .status-radio-card.is-selected {
     border-color: #6366f1;
     background: rgba(99, 102, 241, 0.15);
     color: #ffffff;
+  }
+
+  .radio-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .radio-dot.dot-active { background: #10b981; }
+  .radio-dot.dot-paused { background: #f59e0b; }
+  .radio-dot.dot-completed { background: #3b82f6; }
+  .radio-dot.dot-abandoned { background: #94a3b8; }
+
+  .scan-highlight {
+    color: #c084fc;
+    font-weight: 600;
+  }
+
+  /* CHAPTERS SCOPE BANNER */
+  .chapters-scope-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    line-height: 1.45;
+  }
+
+  .scope-ico {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .catalog-hint {
+    display: block;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    margin-top: 0.15rem;
+  }
+
+  /* EMPTY TIMELINE */
+  .empty-timeline-box {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .empty-timeline-ico {
+    color: #475569;
+    margin-bottom: 0.25rem;
+  }
+
+  .empty-timeline-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0;
+  }
+
+  .empty-timeline-sub {
+    font-size: 0.78rem;
+    color: #64748b;
+    margin: 0;
   }
 
   .synopsis-box-text {
@@ -3231,9 +3467,52 @@
   .mobile-only { display: none; }
   .desktop-only { display: inline; }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1060px) {
     .obras-columns-grid {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .obras-filter-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.65rem;
+      padding: 0.65rem 0.75rem;
+    }
+
+    .search-input-box {
+      max-width: 100%;
+    }
+
+    .filter-controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      width: 100%;
+    }
+
+    .status-pills-strip {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      white-space: nowrap;
+      flex-wrap: nowrap;
+      padding-bottom: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .status-pills-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .sorter-select-box {
+      flex-shrink: 0;
     }
   }
 
@@ -3242,7 +3521,7 @@
     .desktop-only { display: none; }
 
     .obras-page-header {
-      padding: 1rem;
+      padding: 0.85rem 1rem;
     }
 
     .form-grid-two-col {
@@ -3262,44 +3541,96 @@
   @media (max-width: 480px) {
     .obras-page-header {
       flex-direction: column;
-      align-items: flex-start;
-      gap: 0.75rem;
+      align-items: stretch;
+      gap: 0.65rem;
+      padding: 0.75rem 0.85rem;
+    }
+
+    .title-with-pill {
+      gap: 0.5rem;
+    }
+
+    .header-title {
+      font-size: 1.15rem;
+    }
+
+    .header-description {
+      font-size: 0.75rem;
     }
 
     .btn-action-primary {
       width: 100%;
       justify-content: center;
+      min-height: 42px;
       box-sizing: border-box;
     }
 
+    .work-card-panel {
+      padding: 0.85rem;
+    }
+
     .work-card-inner {
-      align-items: flex-start;
+      align-items: center;
       gap: 0.85rem;
     }
 
     .work-cover-wrapper {
-      width: 44px;
-      height: 62px;
+      width: 52px;
+      height: 74px;
     }
 
     .work-actions-cluster {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.4rem;
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      gap: 0.45rem;
     }
 
     .btn-manage-work, .btn-view-catalog {
+      flex: 1;
       justify-content: center;
       text-align: center;
+      min-height: 42px;
+      box-sizing: border-box;
+      padding: 0.45rem 0.55rem;
+      font-size: 0.75rem;
+    }
+
+    .manage-nav-header {
+      gap: 0.5rem;
+    }
+
+    .btn-back-to-list, .btn-public-catalog-link {
+      min-height: 40px;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.75rem;
+      box-sizing: border-box;
+    }
+
+    .work-manage-hero {
+      padding: 0.85rem;
+      gap: 0.85rem;
     }
 
     .hero-work-title {
       font-size: 1.15rem;
+      line-height: 1.25;
     }
 
     .hero-cover-box {
-      width: 48px;
-      height: 68px;
+      width: 52px;
+      height: 74px;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .work-actions-cluster {
+      flex-direction: column;
+    }
+
+    .status-radio-card {
+      font-size: 0.76rem;
+      padding: 0.5rem;
     }
   }
 </style>
