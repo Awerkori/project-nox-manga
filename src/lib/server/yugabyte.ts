@@ -737,13 +737,19 @@ export interface PaginatedReleasesResponse {
   pageSize: number;
 }
 
-let cachedReleasesCount: { timestamp: number; count: number } | null = null;
+// Counts are public and depend only on the normalized kind, not on page size or
+// page number. Reuse them across pagination and filters for the same period as
+// the existing unfiltered count cache. Bound the map because kind is user input.
+const cachedReleasesCounts = new Map<string, { timestamp: number; count: number }>();
 const RELEASES_COUNT_TTL_MS = 120_000;
+const MAX_RELEASES_COUNT_KEYS = 16;
 
 export async function fetchReleasesWorksCountFromYugabyte(platformEnv?: any, kind?: string | null): Promise<number> {
   const isAll = !kind || kind.toUpperCase() === 'ALL';
-  if (isAll && cachedReleasesCount && Date.now() - cachedReleasesCount.timestamp < RELEASES_COUNT_TTL_MS) {
-    return cachedReleasesCount.count;
+  const cacheKey = isAll ? '' : kind!.toUpperCase();
+  const cachedCount = cachedReleasesCounts.get(cacheKey);
+  if (cachedCount && Date.now() - cachedCount.timestamp < RELEASES_COUNT_TTL_MS) {
+    return cachedCount.count;
   }
   const params: any[] = [];
   let kindClause = '';
@@ -757,8 +763,12 @@ export async function fetchReleasesWorksCountFromYugabyte(platformEnv?: any, kin
     platformEnv
   );
   const count = parseInt(res.rows[0]?.count || '0', 10);
-  if (isAll && count > 0) {
-    cachedReleasesCount = { timestamp: Date.now(), count };
+  if (count > 0) {
+    if (!cachedReleasesCounts.has(cacheKey) && cachedReleasesCounts.size >= MAX_RELEASES_COUNT_KEYS) {
+      const oldest = cachedReleasesCounts.keys().next().value;
+      if (oldest !== undefined) cachedReleasesCounts.delete(oldest);
+    }
+    cachedReleasesCounts.set(cacheKey, { timestamp: Date.now(), count });
   }
   return count || 9430;
 }
