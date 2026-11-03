@@ -1771,21 +1771,18 @@ export const actions: Actions = {
       return fail(400, { message: 'Identificadores da scan e da obra são obrigatórios.' });
     }
 
-    // 1. Strict Server-Side RBAC Guard: scan OWNER, scan ADMIN, or global site ADMIN
-    const isAuthorizedGlobal = locals.role === 'ADMIN';
-    if (!isAuthorizedGlobal) {
-      const permRes = await executeYugabyteSql<{ role: string }>(
-        `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
-        [scanId, locals.user.id],
-        platform?.env
-      ).catch(() => ({ rows: [] }));
+    // 1. Strict Server-Side RBAC Guard: caller must be scan leadership (OWNER or ADMIN in scan_members)
+    const permRes = await executeYugabyteSql<{ role: string }>(
+      `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
+      [scanId, locals.user.id],
+      platform?.env
+    ).catch(() => ({ rows: [] }));
 
-      const userScanRole = permRes.rows[0]?.role;
-      if (!userScanRole || !['OWNER', 'ADMIN'].includes(userScanRole)) {
-        return fail(403, {
-          message: 'Apenas a liderança da scan (Dono ou Administradores) possui permissão para solicitar obras do catálogo.'
-        });
-      }
+    const userScanRole = permRes.rows[0]?.role;
+    if (!userScanRole || !['OWNER', 'ADMIN'].includes(userScanRole)) {
+      return fail(403, {
+        message: 'Apenas a liderança da scan (Dono ou Administradores) possui permissão para solicitar obras do catálogo.'
+      });
     }
 
     // 2. Verify work exists in catalog
@@ -1824,14 +1821,28 @@ export const actions: Actions = {
       });
     }
 
-    // 5. Atomic insert of the request in YugabyteDB
+    // 5. Atomic insert of the request in YugabyteDB with race-condition guard
     const insertRes = await executeYugabyteSql(
       `INSERT INTO public.scan_project_requests (scan_id, work_id, user_id, message, status)
-       VALUES ($1, $2, $3, $4, 'PENDING')
+       SELECT $1, $2, $3, $4, 'PENDING'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM public.scan_project_requests
+         WHERE scan_id = $1 AND work_id = $2 AND status = 'PENDING'
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM public.work_scans
+         WHERE scan_id = $1 AND work_id = $2
+       )
        RETURNING id, created_at;`,
       [scanId, workId, locals.user.id, message],
       platform?.env
     );
+
+    if (!insertRes.rows || insertRes.rows.length === 0) {
+      return fail(409, {
+        message: `Já existe uma solicitação pendente ou vínculo ativo para a obra "${targetWork.title}".`
+      });
+    }
 
     // 6. Invalidate tickets cache for real-time visibility in admin panel
     invalidateAdminTicketsCache();

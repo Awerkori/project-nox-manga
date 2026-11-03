@@ -761,7 +761,7 @@
       </div>
 
       <div class="header-actions-group">
-        {#if effectiveIsOwnerOrAdmin || ['UPLOADER'].includes(userRole)}
+        {#if effectiveIsOwnerOrAdmin}
           <button
             type="button"
             class="btn-action-primary"

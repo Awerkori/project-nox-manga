@@ -5,12 +5,13 @@ import { executeYugabyteSql } from '$lib/server/yugabyte';
 const ADMIN_LAYOUT_COUNTS_TTL_MS = 30_000;
 
 export const load = async ({ locals, platform }: any) => {
-  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR', 'GERENTE'].includes(locals.role || '')) {
     throw redirect(303, '/entrar?redirect=/admin');
   }
 
   const isAdmin = locals.role === 'ADMIN';
-  const cacheKey = isAdmin ? 'admin' : 'editorial';
+  const isSiteManager = locals.role === 'ADMIN' || locals.role === 'GERENTE';
+  const cacheKey = isAdmin ? 'admin' : (isSiteManager ? 'manager' : 'editorial');
 
   return withSingleFlightCache(adminLayoutCache, adminLayoutFlights, cacheKey, ADMIN_LAYOUT_COUNTS_TTL_MS, async () => {
     const [reportsRes, scansRes, modRes, workReqsRes] = await Promise.all([
@@ -44,7 +45,7 @@ export const load = async ({ locals, platform }: any) => {
           ).catch(() => ({ rows: [{ cnt: 0 }] }))
         : Promise.resolve({ rows: [{ cnt: 0 }] }),
 
-      isAdmin
+      isSiteManager
         ? executeYugabyteSql(
             `SELECT count(*)::int AS cnt
              FROM public.scan_project_requests
@@ -59,9 +60,11 @@ export const load = async ({ locals, platform }: any) => {
     const pendingScansCount = Number(scansRes?.rows[0]?.cnt) || 0;
     const pendingModerationCount = Number(modRes?.rows[0]?.cnt) || 0;
     const pendingWorkRequestsCount = Number(workReqsRes?.rows[0]?.cnt) || 0;
-    const totalTicketsCount = pendingReportsCount + (isAdmin ? pendingScansCount + pendingModerationCount + pendingWorkRequestsCount : 0);
+    const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount) : 0) + (isSiteManager ? pendingWorkRequestsCount : 0);
 
     return {
+      isAdmin,
+      isSiteManager,
       pendingReportsCount,
       pendingScansCount,
       pendingModerationCount,

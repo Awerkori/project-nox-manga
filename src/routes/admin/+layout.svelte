@@ -72,6 +72,7 @@
   // Role & Capabilities
   let role = $derived((data.role || 'LEITOR').toUpperCase());
   let isAdmin = $derived(role === 'ADMIN');
+  let isSiteManager = $derived(role === 'ADMIN' || role === 'GERENTE');
   let isOwnerOrAdmin = $derived(role === 'ADMIN' || role === 'GERENTE');
   let canViewOverview = $derived(true);
   let canViewTickets = $derived(true);
@@ -451,7 +452,7 @@
                 </a>
               {/if}
 
-              {#if isAdmin}
+              {#if isSiteManager}
                 <a
                   href="/admin/tickets?tab=obras"
                   class="nav-link"
