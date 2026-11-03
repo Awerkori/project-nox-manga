@@ -13,8 +13,10 @@ interface LkgEntry<T> {
 }
 
 const lkgStore = new Map<string, LkgEntry<any>>();
-const activeLkgFlights = new Map<string, { promise: Promise<any>; startedAt: number }>();
-const MAX_FLIGHT_AGE_MS = 4_000;
+const activeLkgFlights = new Map<string, { promise: Promise<any>; startedAt: number; supersede: () => void }>();
+// A connection may take 5s and its query another 8s. Do not duplicate that
+// normal bounded operation after 4s, but allow recovery from a stuck flight.
+const MAX_FLIGHT_AGE_MS = 15_000;
 
 export function setLkg<T>(key: string, data: T): void {
   if (data !== null && data !== undefined) {
@@ -59,12 +61,16 @@ export async function withYugabyteLkg<T>(
     if (inFlight && Date.now() - inFlight.startedAt < MAX_FLIGHT_AGE_MS) {
       return inFlight.promise as Promise<T>;
     }
+    inFlight?.supersede();
   }
   const start = performance.now();
+  let superseded = false;
   const run = (async (): Promise<T> => {
     try {
-      const data = await fetcher();
-      setLkg(op, data);
+      const data = await Promise.resolve().then(fetcher);
+      // A flight replaced after the maximum age may still finish later. Its
+      // older result must not overwrite a newer successful response.
+      if (!superseded) setLkg(op, data);
       return data;
     } catch (err: any) {
       const dur = Math.round(performance.now() - start);
@@ -87,7 +93,7 @@ export async function withYugabyteLkg<T>(
   })();
 
   if (cacheTtlMs > 0 && !isTestEnv) {
-    activeLkgFlights.set(op, { promise: run, startedAt: Date.now() });
+    activeLkgFlights.set(op, { promise: run, startedAt: Date.now(), supersede: () => { superseded = true; } });
   }
   return run;
 }
