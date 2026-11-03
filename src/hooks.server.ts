@@ -27,17 +27,35 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
       error(413, 'Arquivo ou solicitação acima do limite');
   }
   // Safe decoupled locals.db proxy - all real data operations run on authoritative YugabyteDB
-  event.locals.db = {
-    auth: {
-      getUser: async () => ({ data: { user: null }, error: null }),
-      getSession: async () => ({ data: { session: null }, error: null }),
-      signOut: async () => ({ error: null })
+  const proxyHandler: ProxyHandler<any> = {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      if (prop === 'then') {
+        return (resolve: any) => resolve({ data: null, error: null, count: 0 });
+      }
+      if (prop === 'catch') {
+        return (reject: any) => Promise.resolve({ data: null, error: null, count: 0 });
+      }
+      if (prop === 'abortSignal') {
+        return () => new Proxy(() => {}, proxyHandler);
+      }
+      return (...args: any[]) => new Proxy(() => {}, proxyHandler);
     },
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }), is: () => ({ data: null }) })
-    }),
-    rpc: async () => ({ data: null, error: null })
+    apply(target, thisArg, argArray) {
+      return new Proxy(() => {}, proxyHandler);
+    }
   };
+
+  event.locals.db = new Proxy(
+    {
+      auth: {
+        getUser: async () => ({ data: { user: null }, error: null }),
+        getSession: async () => ({ data: { session: null }, error: null }),
+        signOut: async () => ({ error: null })
+      }
+    },
+    proxyHandler
+  );
 
   const allCookies = event.cookies.getAll();
   const rawAuthCookie = extractFullAuthCookie(allCookies);
