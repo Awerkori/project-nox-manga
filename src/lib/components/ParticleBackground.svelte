@@ -57,6 +57,11 @@
     let isScrolling = false;
     let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
     let lastFrameTime = 0;
+    let mobile = false;
+    let targetInterval = 1000 / 45;
+    let auraGradient: CanvasGradient | null = null;
+    let auraX = -9999;
+    let auraY = -9999;
 
     // Interactive tracking
     let mouseX = -9999;
@@ -82,8 +87,9 @@
 
     function initSize() {
       if (!canvas) return;
-      const mobile = isMobile();
+      mobile = isMobile();
       const lowEnd = isLowEndDevice();
+      targetInterval = 1000 / (mobile || lowEnd ? 30 : 45);
       const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.0 : 1.25);
       width = window.innerWidth;
       height = window.innerHeight;
@@ -149,16 +155,18 @@
       if (!ctx || width === 0 || height === 0) return;
       ctx.clearRect(0, 0, width, height);
 
-      const mobile = isMobile();
-
       // Cosmic aura following cursor on desktop (zero blur cost, pure radial gradient)
       if (mouseX > -100 && mouseY > -100 && !mobile) {
         const auraRadius = 170;
-        const aura = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, auraRadius);
-        aura.addColorStop(0, 'rgba(139, 92, 246, 0.045)');
-        aura.addColorStop(0.5, 'rgba(99, 102, 241, 0.018)');
-        aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = aura;
+        if (!auraGradient || auraX !== mouseX || auraY !== mouseY) {
+          auraGradient = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, auraRadius);
+          auraGradient.addColorStop(0, 'rgba(139, 92, 246, 0.045)');
+          auraGradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.018)');
+          auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          auraX = mouseX;
+          auraY = mouseY;
+        }
+        ctx.fillStyle = auraGradient;
         ctx.beginPath();
         ctx.arc(mouseX, mouseY, auraRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -258,9 +266,6 @@
       if (document.hidden || isScrolling) return;
 
       const elapsed = timestamp - lastFrameTime;
-      const targetFps = isMobile() || isLowEndDevice() ? 30 : 45;
-      const targetInterval = 1000 / targetFps;
-
       if (elapsed >= targetInterval) {
         lastFrameTime = timestamp - (elapsed % targetInterval);
         renderFrame();
