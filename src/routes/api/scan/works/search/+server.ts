@@ -16,9 +16,9 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     return json({ error: 'scan_id é obrigatório' }, { status: 400 });
   }
 
-  // 2. Strict RBAC: only scan OWNER, scan ADMIN, or global site ADMIN can search works to request
-  const isGlobalAdmin = locals.role === 'ADMIN';
-  if (!isGlobalAdmin) {
+  // 2. Strict RBAC: scan OWNER, scan ADMIN, or global site ADMIN / STAFF_SITE can search works to request
+  const isAuthorizedGlobal = locals.role === 'ADMIN' || locals.role === 'STAFF_SITE';
+  if (!isAuthorizedGlobal) {
     const permRes = await executeYugabyteSql<{ role: string }>(
       `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
       [scanId, locals.user.id],
@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ locals, url, platform }) => {
     const userScanRole = permRes.rows[0]?.role;
     if (!userScanRole || !['OWNER', 'ADMIN'].includes(userScanRole)) {
       return json(
-        { error: 'Apenas o Dono ou Administradores da scan possuem permissão para solicitar obras do catálogo.' },
+        { error: 'Apenas a liderança da scan (Dono ou Administradores) possui permissão para pesquisar e solicitar obras do catálogo.' },
         { status: 403 }
       );
     }

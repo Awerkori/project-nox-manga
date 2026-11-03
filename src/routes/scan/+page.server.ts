@@ -1771,9 +1771,9 @@ export const actions: Actions = {
       return fail(400, { message: 'Identificadores da scan e da obra são obrigatórios.' });
     }
 
-    // 1. Strict Server-Side RBAC Guard: only scan OWNER, scan ADMIN, or global site ADMIN
-    const isGlobalAdmin = locals.role === 'ADMIN';
-    if (!isGlobalAdmin) {
+    // 1. Strict Server-Side RBAC Guard: scan OWNER, scan ADMIN, or global site ADMIN / STAFF_SITE
+    const isAuthorizedGlobal = locals.role === 'ADMIN' || locals.role === 'STAFF_SITE';
+    if (!isAuthorizedGlobal) {
       const permRes = await executeYugabyteSql<{ role: string }>(
         `SELECT role FROM public.scan_members WHERE scan_id = $1 AND user_id = $2`,
         [scanId, locals.user.id],
@@ -1783,7 +1783,7 @@ export const actions: Actions = {
       const userScanRole = permRes.rows[0]?.role;
       if (!userScanRole || !['OWNER', 'ADMIN'].includes(userScanRole)) {
         return fail(403, {
-          message: 'Apenas o Dono ou Administradores da scan possuem permissão para solicitar obras do catálogo.'
+          message: 'Apenas a liderança da scan (Dono ou Administradores) possui permissão para solicitar obras do catálogo.'
         });
       }
     }

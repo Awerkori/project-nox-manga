@@ -441,8 +441,15 @@
   let projectHasSearched = $state(false);
   let projectMessage = $state('');
   let projectSubmitting = $state(false);
+  let failedCoverIds = $state(new Set<string>());
   let projectSearchAbortController: AbortController | null = null;
   let projectSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function markCoverFailed(id: string) {
+    const next = new Set(failedCoverIds);
+    next.add(id);
+    failedCoverIds = next;
+  }
 
   function handleProjectSearchInput(value: string) {
     projectSearchQuery = value;
@@ -514,6 +521,7 @@
     projectSearchError = null;
     projectHasSearched = false;
     projectMessage = '';
+    failedCoverIds = new Set<string>();
     if (projectSearchAbortController) {
       projectSearchAbortController.abort();
       projectSearchAbortController = null;
@@ -2666,10 +2674,10 @@
 
             {#if !selectedWork}
               <div class="search-input-wrap">
-                <Search size={16} class="search-icon text-muted" />
+                <Search size={16} class="search-icon text-muted" aria-hidden="true" />
                 <input
                   id="proj-search-input"
-                  type="search"
+                  type="text"
                   class="smart-search-input"
                   placeholder="Digite o título ou nome alternativo da obra..."
                   value={projectSearchQuery}
@@ -2706,11 +2714,19 @@
                       onclick={() => selectProjectWork(w)}
                     >
                       <div class="result-cover-box">
-                        {#if w.cover_id}
-                          <img src="/media/{w.cover_id}" alt="Capa de {w.title}" class="result-cover-img" />
+                        {#if w.cover_id && !failedCoverIds.has(w.id)}
+                          <img
+                            src="/media/{w.cover_id}?size=thumb&v=3"
+                            alt="Capa de {w.title}"
+                            class="result-cover-img"
+                            loading="lazy"
+                            decoding="async"
+                            onerror={() => markCoverFailed(w.id)}
+                          />
                         {:else}
                           <div class="result-cover-fallback">
-                            <BookOpen size={16} />
+                            <BookOpen size={16} class="fallback-icon" />
+                            <span class="fallback-brand">NOX</span>
                           </div>
                         {/if}
                       </div>
@@ -2746,11 +2762,19 @@
               <div class="selected-work-highlight">
                 <div class="selected-work-left">
                   <div class="selected-work-cover-box">
-                    {#if selectedWork.cover_id}
-                      <img src="/media/{selectedWork.cover_id}" alt="Capa de {selectedWork.title}" class="selected-work-cover" />
+                    {#if selectedWork.cover_id && !failedCoverIds.has(selectedWork.id)}
+                      <img
+                        src="/media/{selectedWork.cover_id}?size=thumb&v=3"
+                        alt="Capa de {selectedWork.title}"
+                        class="selected-work-cover"
+                        loading="lazy"
+                        decoding="async"
+                        onerror={() => markCoverFailed(selectedWork.id)}
+                      />
                     {:else}
                       <div class="result-cover-fallback">
-                        <BookOpen size={18} />
+                        <BookOpen size={18} class="fallback-icon" />
+                        <span class="fallback-brand">NOX</span>
                       </div>
                     {/if}
                   </div>
@@ -5024,58 +5048,117 @@
   .project-search-modal {
     max-width: 580px;
     width: 94%;
-    max-height: 90vh;
+    max-height: min(90vh, 720px);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(6, 182, 212, 0.15);
+    overflow: hidden;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 92, 246, 0.15);
+    background: #0b0f17;
+    border-radius: 14px;
+    padding: 0;
+  }
+  .project-search-modal .modal-header {
+    padding: 1.25rem 1.25rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
   }
   .modal-subtitle {
-    margin: -0.75rem 0 1.25rem 0;
+    margin: 0;
+    padding: 0.5rem 1.25rem 0;
     font-size: 13px;
     color: #94a3b8;
     line-height: 1.45;
+    flex-shrink: 0;
   }
   .modal-title-wrap {
     display: flex;
     align-items: center;
     gap: 8px;
   }
+  .project-search-modal .modal-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem 1.25rem 1.25rem;
+    gap: 1.1rem;
+  }
+  .project-search-modal .modal-actions {
+    position: sticky;
+    bottom: 0;
+    background: #0b0f17;
+    padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  /* Robust Specificity & Search Field Architecture */
+  .form-field .search-input-wrap,
   .search-input-wrap {
     position: relative;
     display: flex;
     align-items: center;
     width: 100%;
   }
-  .smart-search-input {
-    width: 100%;
-    padding: 10px 14px 10px 38px;
-    border-radius: 9px;
-    background: #0f1420;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #ffffff;
-    font-size: 13.5px;
-    outline: none;
-    transition: all 0.15s ease;
-  }
-  .smart-search-input:focus {
-    border-color: rgba(6, 182, 212, 0.6);
-    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
-  }
+
+  .form-field .search-input-wrap .search-icon,
   .search-input-wrap .search-icon {
     position: absolute;
-    left: 12px;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     pointer-events: none;
+    z-index: 2;
+    color: #8c899e;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
+
+  .form-field .search-input-wrap input.smart-search-input,
+  .form-field input.smart-search-input,
+  .smart-search-input {
+    width: 100%;
+    height: 44px;
+    box-sizing: border-box;
+    padding: 0 44px 0 44px !important;
+    border-radius: 9px;
+    background: #0f1420;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff;
+    font-size: 14px;
+    line-height: 44px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .form-field .search-input-wrap input.smart-search-input:focus,
+  .form-field input.smart-search-input:focus,
+  .smart-search-input:focus {
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25) !important;
+    outline: none;
+  }
+
   .search-spinner-pill {
     position: absolute;
-    right: 10px;
+    right: 12px;
     font-size: 11px;
-    color: #22d3ee;
-    background: rgba(6, 182, 212, 0.15);
+    color: #c084fc;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.25);
     padding: 2px 8px;
     border-radius: 999px;
+    pointer-events: none;
   }
 
   .search-feedback-box {
@@ -5103,11 +5186,12 @@
     margin-top: 8px;
     max-height: 250px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     gap: 6px;
     border-radius: 10px;
-    background: rgba(10, 14, 22, 0.8);
+    background: rgba(10, 14, 22, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.08);
     padding: 6px;
   }
@@ -5125,62 +5209,84 @@
     width: 100%;
   }
   .search-result-item:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(6, 182, 212, 0.3);
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.3);
   }
   .search-result-item:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
   .result-cover-box {
-    width: 40px;
+    width: 44px;
     aspect-ratio: 3 / 4;
     border-radius: 6px;
     overflow: hidden;
     flex-shrink: 0;
     background: #090c13;
+    position: relative;
   }
   .result-cover-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+    font-size: 0;
+    color: transparent;
   }
   .result-cover-fallback {
     width: 100%;
     height: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: #1e293b;
-    color: #64748b;
+    background: linear-gradient(135deg, #111827 0%, #1e1b4b 100%);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    gap: 2px;
+  }
+  .result-cover-fallback .fallback-icon {
+    color: #a5b4fc;
+  }
+  .result-cover-fallback .fallback-brand {
+    font-size: 7.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #818cf8;
   }
   .result-info-box {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
   }
   .result-top-line {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
+    width: 100%;
   }
   .result-title {
     font-size: 13.5px;
     font-weight: 700;
     color: #f1f5f9;
-    white-space: nowrap;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
+    flex: 1;
+    min-width: 0;
   }
   .result-badge {
     font-size: 10px;
     font-weight: 700;
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: 4px;
     white-space: nowrap;
+    flex-shrink: 0;
   }
   .result-badge.available {
     background: rgba(34, 197, 94, 0.15);
@@ -5215,6 +5321,26 @@
     color: #475569;
   }
 
+  @media (max-width: 520px) {
+    .result-top-line {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+    }
+    .result-badge {
+      font-size: 9.5px;
+      padding: 1px 6px;
+    }
+    .project-search-modal {
+      width: 96%;
+      max-height: calc(100dvh - 24px);
+      border-radius: 12px;
+    }
+    .form-field .search-input-wrap input.smart-search-input {
+      font-size: 13.5px;
+    }
+  }
+
   .selected-work-highlight {
     display: flex;
     align-items: center;
@@ -5243,6 +5369,9 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+    font-size: 0;
+    color: transparent;
   }
   .selected-work-details {
     display: flex;
@@ -5261,9 +5390,12 @@
     font-size: 14px;
     font-weight: 750;
     color: #f8fafc;
-    white-space: nowrap;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
   }
   .selected-work-meta {
     display: flex;
@@ -5273,7 +5405,8 @@
     color: #94a3b8;
   }
   .btn-change-work {
-    padding: 5px 10px;
+    padding: 6px 12px;
+    min-height: 36px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);

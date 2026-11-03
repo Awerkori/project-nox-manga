@@ -449,7 +449,9 @@
                     <span class="nav-badge alert">{(data.pendingModerationCount ?? 0)}</span>
                   {/if}
                 </a>
+              {/if}
 
+              {#if isAdmin || role === 'STAFF_SITE' || role === 'GERENTE'}
                 <a
                   href="/admin/tickets?tab=obras"
                   class="nav-link"

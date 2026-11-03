@@ -3497,13 +3497,14 @@
 
     .search-input-box {
       max-width: 100%;
+      width: 100%;
     }
 
     .filter-controls-row {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.65rem;
       width: 100%;
     }
 
@@ -3517,8 +3518,7 @@
       white-space: nowrap;
       flex-wrap: nowrap;
       padding-bottom: 2px;
-      flex: 1;
-      min-width: 0;
+      width: 100%;
     }
 
     .status-pills-strip::-webkit-scrollbar {
@@ -3526,7 +3526,13 @@
     }
 
     .sorter-select-box {
+      width: 100%;
       flex-shrink: 0;
+    }
+
+    .sorter-select {
+      width: 100%;
+      box-sizing: border-box;
     }
   }
 
@@ -3536,6 +3542,41 @@
 
     .obras-page-header {
       padding: 0.85rem 1rem;
+    }
+
+    /* 4 KPIs em grade 2x2 no mobile */
+    .kpi-metrics-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.65rem;
+    }
+
+    .kpi-metric-card {
+      padding: 0.75rem 0.85rem;
+    }
+
+    .kpi-label {
+      font-size: 0.7rem;
+    }
+
+    .kpi-value {
+      font-size: 1.15rem;
+    }
+
+    .kpi-sub {
+      font-size: 0.65rem;
+    }
+
+    /* 4 Controles de status em grade 2x2 no mobile */
+    .status-options-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.65rem;
+    }
+
+    .status-radio-card {
+      min-height: 44px;
+      padding: 0.6rem 0.75rem;
+      box-sizing: border-box;
+      font-size: 0.8rem;
     }
 
     .form-grid-two-col {
@@ -3645,6 +3686,8 @@
     .status-radio-card {
       font-size: 0.76rem;
       padding: 0.5rem;
+      min-height: 44px;
+      box-sizing: border-box;
     }
   }
 </style>

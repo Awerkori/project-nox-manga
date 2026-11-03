@@ -505,7 +505,9 @@
             <span class="tab-badge alert">{(data.moderationStatusCounts?.NOVO ?? 0)}</span>
           {/if}
         </a>
+      {/if}
 
+      {#if data.isAdmin || data.isSiteManager}
         <a
           href="/admin/tickets?tab=obras"
           class="tab-btn"
@@ -1765,8 +1767,8 @@
     </section>
   {/if}
 
-  <!-- TAB 4: ADESÃO DE OBRAS (ADMIN ONLY) -->
-  {#if activeTab === 'obras' && data.isAdmin}
+  <!-- TAB 4: ADESÃO DE OBRAS (ADMIN OU GERENTE AUTORIZADO) -->
+  {#if activeTab === 'obras' && (data.isAdmin || data.isSiteManager)}
     <section class="tab-panel" aria-label="Adesão de Obras de Scans">
       <!-- Status Filters & Search Bar -->
       <div class="toolbar-bar">
