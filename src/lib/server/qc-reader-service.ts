@@ -243,7 +243,7 @@ async function internalGetQcChapterManifest(
       (cached.byteSize === undefined || cached.byteSize === file.byte_size) &&
       (Date.now() - cached.cachedAt) < CACHE_TTL_MS
     ) {
-      const isIncomplete = file.file_key === 'prod_type_85_v2_1789173310574' || file.id === '64f6372d-7f27-46b6-9b5c-8a2dfb97d8c3' || Boolean(file.is_incomplete_typeset);
+      const isIncomplete = Boolean(file.is_incomplete_typeset);
       return {
         chapterId,
         workTitle,
@@ -285,7 +285,7 @@ async function internalGetQcChapterManifest(
           chapterNumber,
           pages: cachedPages
         });
-        const isIncomplete = file.file_key === 'prod_type_85_v2_1789173310574' || file.id === '64f6372d-7f27-46b6-9b5c-8a2dfb97d8c3' || Boolean(file.is_incomplete_typeset);
+        const isIncomplete = Boolean(file.is_incomplete_typeset);
         return {
           chapterId,
           workTitle,
@@ -353,7 +353,7 @@ async function internalGetQcChapterManifest(
         pages: cachedPages
       });
 
-      const isIncomplete = file.file_key === 'prod_type_85_v2_1789173310574' || file.id === '64f6372d-7f27-46b6-9b5c-8a2dfb97d8c3' || Boolean(file.is_incomplete_typeset);
+      const isIncomplete = Boolean(file.is_incomplete_typeset);
       return {
         chapterId,
         workTitle,

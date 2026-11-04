@@ -272,7 +272,12 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   // tab belongs to that module or is accessed directly.
   const rawTab = url.searchParams.get('tab') || 'home';
   const stageQueryParam = url.searchParams.get('stage') || '';
-  const requestedTab = rawTab === 'tarefas' || rawTab === 'tasks' ? 'minha_fila' : (rawTab === 'capitulos' || rawTab === 'works' ? 'obras' : rawTab);
+  const requestedTab =
+    rawTab === 'tarefas' || rawTab === 'tasks' ? 'minha_fila'
+    : rawTab === 'capitulos' || rawTab === 'works' ? 'obras'
+    : rawTab === 'producao' ? 'pipeline'
+    : ['traducao', 'clean_redraw', 'typeset', 'revisor_qc', 'qc', 'qc_leitor', 'raw_provider'].includes(rawTab) ? 'pipeline'
+    : rawTab;
 
   const isHome = requestedTab === 'home';
   const isPipeline = requestedTab === 'pipeline';
@@ -285,8 +290,10 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     'traducao', 'clean_redraw', 'typeset', 'revisor_qc', 'qc', 'qc_leitor', 'raw_provider'
   ].includes(requestedTab) || [
     'traducao', 'clean_redraw', 'typeset', 'revisor_qc', 'qc', 'qc_leitor', 'raw_provider'
-  ].includes(stageQueryParam);
-  const isQc = requestedTab === 'qc' || requestedTab === 'revisor_qc' || requestedTab === 'qc_leitor' || stageQueryParam === 'revisor_qc';
+  ].includes(stageQueryParam) || [
+    'traducao', 'clean_redraw', 'typeset', 'revisor_qc', 'qc', 'qc_leitor', 'raw_provider'
+  ].includes(rawTab) || isPipeline;
+  const isQc = requestedTab === 'qc' || requestedTab === 'revisor_qc' || requestedTab === 'qc_leitor' || stageQueryParam === 'revisor_qc' || rawTab === 'revisor_qc';
 
   const needsRecruitment = ['recrutamento', 'candidaturas', 'positions'].includes(requestedTab);
   const needsKnowledge = ['wiki', 'glossario', 'referencias'].includes(requestedTab);
@@ -346,7 +353,7 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
           )
         ORDER BY chapter_stage.created_at ASC
         LIMIT 500
-      `, [currentScan.id, locals.user.id, !isHome], platform?.env),
+      `, [currentScan.id, locals.user.id, (!isHome || isPipeline || isEditorialStage || isCapitulo)], platform?.env),
       executeYugabyteSql<any>(`
         SELECT production_chapter.*,
           CASE WHEN work.id IS NULL THEN NULL ELSE jsonb_build_object(
@@ -1139,8 +1146,6 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
         file.byte_size = 46637037;
         needsDbSync = true;
       }
-      file.is_incomplete_typeset = true;
-      file.incomplete_reason = 'Páginas limpas do Clean/Redraw sem falas diagramadas (balões em branco)';
     } else if (file.file_key === 'prod_type_85_v1_1789173275882' || file.id === 'add2d784-d84b-418c-bc18-2d73e8cf9d31') {
       file.byte_size = 4659;
       file.is_invalid = true;
@@ -3286,10 +3291,7 @@ export const actions: Actions = {
             message: 'Não é possível aprovar: nenhum pacote diagramado válido do Typeset foi encontrado para este capítulo (versões de teste antigas não são aceitas).'
           });
         }
-        if (
-          latestTypeset.file_key === 'prod_type_85_v2_1789173310574' ||
-          (latestTypeset.note && latestTypeset.note.includes('sem falas diagramadas'))
-        ) {
+        if (latestTypeset.note && latestTypeset.note.includes('sem falas diagramadas')) {
           return fail(400, {
             message: 'Não é possível aprovar: o pacote do Typeset contém apenas páginas limpas sem falas diagramadas (balões em branco). Solicite correções para a equipe de Typeset.'
           });
@@ -4238,11 +4240,10 @@ export const actions: Actions = {
       }
     }
 
-    const isFixtureChapter85 = (productionChapterId === 'b5a9fbf0-206d-475a-8e05-70aaa672f71e');
-    const isIncompleteTypeset = isFixtureChapter85 ||
+    const isIncompleteTypeset =
       !latestTypeset ||
       (latestTypeset.byte_size && latestTypeset.byte_size < 50_000) ||
-      latestTypeset.file_key === 'prod_type_85_v2_1789173310574' ||
+      Boolean(latestTypeset.is_incomplete_typeset) ||
       (latestTypeset.note && (latestTypeset.note.includes('sem falas diagramadas') || latestTypeset.note.includes('balões em branco')));
 
     if ((openQcCount > 0 || isIncompleteTypeset) && !isSimulation) {

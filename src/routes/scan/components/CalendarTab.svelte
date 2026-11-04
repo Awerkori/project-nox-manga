@@ -20,9 +20,12 @@
     X,
     RotateCcw,
     AlertTriangle,
-    Zap
+    Zap,
+    Grid,
+    ListFilter
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
+  import { invalidate } from '$app/navigation';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
 
   interface Props {
@@ -86,7 +89,8 @@
   // Filters State
   let filterStageSlug = $state<string>('ALL');
   let filterAssigneeId = $state<string>('ALL');
-  let filterStatus = $state<string>('ALL'); // ALL | IN_PROGRESS | DONE | OVERDUE | EXTENDED
+  let filterStatus = $state<string>('ALL'); // ALL | IN_PROGRESS | DUE_SOON | DONE | OVERDUE | EXTENDED
+  let showMobileFilterSheet = $state(false);
 
   // Modals & Panels State
   let showDayDrawer = $state(false);
@@ -99,6 +103,25 @@
   let editingNoteId = $state<string | null>(null);
   let noteTextDraft = $state('');
   let isSavingNote = $state(false);
+
+  // Quick filter helper
+  function toggleMineFilter() {
+    if (filterAssigneeId === 'MINE') {
+      filterAssigneeId = 'ALL';
+    } else {
+      filterAssigneeId = 'MINE';
+    }
+  }
+
+  function clearAllFilters() {
+    filterStageSlug = 'ALL';
+    filterAssigneeId = 'ALL';
+    filterStatus = 'ALL';
+  }
+
+  let hasActiveFilters = $derived(
+    filterStageSlug !== 'ALL' || filterAssigneeId !== 'ALL' || filterStatus !== 'ALL'
+  );
 
   // Month navigation
   function prevMonth() {
@@ -132,11 +155,11 @@
     traducao: '#38bdf8',
     clean_redraw: '#34d399',
     clean: '#34d399',
-    typeset: '#a855f7',
-    revisor_qc: '#f59e0b',
-    qc: '#f59e0b',
-    revisao: '#f59e0b',
-    pre_aprovado: '#ec4899',
+    typeset: '#f59e0b',
+    revisor_qc: '#a855f7',
+    qc: '#a855f7',
+    revisao: '#a855f7',
+    pre_aprovado: '#06b6d4',
     publicado: '#10b981'
   };
 
@@ -144,6 +167,18 @@
     if (defaultColor) return defaultColor;
     if (!slug) return '#8b5cf6';
     return STAGE_COLORS[slug.toLowerCase()] || '#8b5cf6';
+  }
+
+  function getCanonicalStageName(slug?: string, defaultName?: string): string {
+    const s = (slug || '').toLowerCase().trim();
+    if (s === 'traducao' || s === 'translation') return 'Tradução';
+    if (s === 'clean_redraw' || s === 'clean' || s === 'redraw') return 'Clean/Redraw';
+    if (s === 'typeset' || s === 'typer') return 'Typeset';
+    if (s === 'revisor_qc' || s === 'qc' || s === 'revisao') return 'Revisor (QC)';
+    if (s === 'raw') return 'Raw Provider';
+    if (s === 'pre_aprovado') return 'Pré-Aprovado';
+    if (s === 'publicado') return 'Publicado';
+    return defaultName || 'Etapa Editorial';
   }
 
   // Map of production chapters by ID
@@ -160,6 +195,7 @@
     const map = new Map<string, any>();
     for (const m of team) {
       map.set(m.id, m);
+      if (m.user_id) map.set(m.user_id, m);
     }
     return map;
   });
@@ -179,7 +215,7 @@
       const pc = prodChaptersMap.get(prodChId);
       const stageObj = cs.stage || stages.find((s: any) => s.id === cs.stage_id);
       const stageSlug = stageObj?.slug || 'etapa';
-      const stageName = stageObj?.name || 'Etapa Editorial';
+      const stageName = getCanonicalStageName(stageSlug, stageObj?.name);
       const stageColor = getStageColor(stageSlug, stageObj?.color);
 
       const workTitle = pc?.work?.title || pc?.chapter_title || 'Obra';
@@ -191,6 +227,7 @@
 
       let dueYMD = '';
       let isOverdue = false;
+      let isDueSoon = false;
       let remainingHours = 0;
       let canExtend = false;
 
@@ -202,12 +239,38 @@
         const diffMs = dueMs - nowMs;
         remainingHours = Math.round(diffMs / (1000 * 60 * 60));
         isOverdue = diffMs < 0 && cs.status !== 'DONE';
+        isDueSoon = !isOverdue && cs.status === 'IN_PROGRESS' && remainingHours <= 24;
 
-        // Extension is available within 24 hours of due date (or if due date was chosen as today)
-        // Only if currently in progress, assigned to current user, and extensionCount === 0
+        // Extension available within 24 hours of due date or if due date is today
         const isMine = cs.assigned_to === currentUserId;
         const extensionCount = Number(cs.extension_count || 0);
         canExtend = isMine && cs.status === 'IN_PROGRESS' && extensionCount === 0 && (remainingHours <= 24 || dueYMD === todayYMD) && diffMs > -(4 * 60 * 60 * 1000);
+      } else if (cs.completed_at && cs.status === 'DONE') {
+        const compSp = getSaoPauloDate(cs.completed_at);
+        dueYMD = formatYMD(compSp);
+      }
+
+      // Status classification
+      let statusClass = 'in-progress';
+      let statusColor = '#8b5cf6';
+      let statusLabel = 'Em andamento';
+
+      if (cs.status === 'DONE') {
+        statusClass = 'done';
+        statusColor = '#10b981';
+        statusLabel = 'Concluído';
+      } else if (isOverdue) {
+        statusClass = 'overdue';
+        statusColor = '#ef4444';
+        statusLabel = 'Em atraso';
+      } else if (Number(cs.extension_count || 0) > 0) {
+        statusClass = 'extended';
+        statusColor = '#06b6d4';
+        statusLabel = 'Prorrogado (+2d)';
+      } else if (isDueSoon) {
+        statusClass = 'due-soon';
+        statusColor = '#f59e0b';
+        statusLabel = 'Vence em breve';
       }
 
       list.push({
@@ -226,6 +289,9 @@
         assignee: assigneeObj,
         assignedTo: cs.assigned_to,
         status: cs.status, // AVAILABLE, IN_PROGRESS, REWORK, DONE
+        statusClass,
+        statusColor,
+        statusLabel,
         claimedAt: cs.claimed_at,
         dueAt: cs.due_at,
         dueYMD,
@@ -235,6 +301,7 @@
         notes: cs.notes || '',
         completedAt: cs.completed_at,
         isOverdue,
+        isDueSoon,
         remainingHours,
         canExtend
       });
@@ -242,13 +309,33 @@
 
     // 2. Generic Scan Tasks with due_at
     for (const t of tasks) {
-      if (!t.due_at) continue;
-      const dueSp = getSaoPauloDate(t.due_at);
+      if (!t.due_at && !t.completed_at) continue;
+      const targetDate = t.due_at || t.completed_at;
+      const dueSp = getSaoPauloDate(targetDate);
       const dueYMD = formatYMD(dueSp);
       const nowMs = Date.now();
-      const dueMs = new Date(t.due_at).getTime();
+      const dueMs = new Date(targetDate).getTime();
       const diffMs = dueMs - nowMs;
       const isOverdue = diffMs < 0 && t.status !== 'DONE' && t.status !== 'CANCELLED';
+      const isDueSoon = !isOverdue && t.status !== 'DONE' && Math.round(diffMs / (1000 * 60 * 60)) <= 24;
+
+      let statusClass = 'in-progress';
+      let statusColor = '#6366f1';
+      let statusLabel = 'Em andamento';
+
+      if (t.status === 'DONE') {
+        statusClass = 'done';
+        statusColor = '#10b981';
+        statusLabel = 'Concluído';
+      } else if (isOverdue) {
+        statusClass = 'overdue';
+        statusColor = '#ef4444';
+        statusLabel = 'Em atraso';
+      } else if (isDueSoon) {
+        statusClass = 'due-soon';
+        statusColor = '#f59e0b';
+        statusLabel = 'Vence em breve';
+      }
 
       list.push({
         id: t.id,
@@ -256,13 +343,16 @@
         stageSlug: 'tarefa',
         stageName: 'Tarefa Geral',
         stageColor: '#6366f1',
-        workTitle: t.title,
+        workTitle: t.title || 'Tarefa Geral',
         workCoverId: null,
         chapterNumber: null,
         chapterLabel: null,
         assignee: t.assigned_to ? teamMap.get(t.assigned_to) : null,
         assignedTo: t.assigned_to,
         status: t.status,
+        statusClass,
+        statusColor,
+        statusLabel,
         claimedAt: t.created_at,
         dueAt: t.due_at,
         dueYMD,
@@ -272,6 +362,7 @@
         notes: t.description || '',
         completedAt: t.completed_at,
         isOverdue,
+        isDueSoon,
         remainingHours: Math.round(diffMs / (1000 * 60 * 60)),
         canExtend: false
       });
@@ -296,6 +387,8 @@
       // Status filter
       if (filterStatus === 'IN_PROGRESS') {
         if (item.status !== 'IN_PROGRESS') return false;
+      } else if (filterStatus === 'DUE_SOON') {
+        if (!item.isDueSoon) return false;
       } else if (filterStatus === 'DONE') {
         if (item.status !== 'DONE') return false;
       } else if (filterStatus === 'OVERDUE') {
@@ -331,7 +424,7 @@
     return map;
   });
 
-  // Calendar Month Matrix Generation
+  // Calendar Month Matrix Generation (4, 5, or 6 weeks dynamic)
   let monthGridCells = $derived.by(() => {
     const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
     const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -344,12 +437,26 @@
       isToday: boolean;
       isSelected: boolean;
       commitments: any[];
+      uniqueAssignees: any[];
       publications: any[];
       overdueCount: number;
       doneCount: number;
       inProgressCount: number;
       extendedCount: number;
     }> = [];
+
+    // Helper to extract unique assignees for cell avatar stack
+    function getUniqueAssignees(coms: any[]): any[] {
+      const seen = new Set<string>();
+      const list: any[] = [];
+      for (const c of coms) {
+        if (c.assignee && c.assignee.id && !seen.has(c.assignee.id)) {
+          seen.add(c.assignee.id);
+          list.push(c.assignee);
+        }
+      }
+      return list;
+    }
 
     // Leading days from previous month
     for (let i = firstDayIndex - 1; i >= 0; i--) {
@@ -365,6 +472,7 @@
         isToday: ymd === todayYMD,
         isSelected: ymd === selectedDateYMD,
         commitments: coms,
+        uniqueAssignees: getUniqueAssignees(coms),
         publications: pubs,
         overdueCount: coms.filter((c) => c.isOverdue).length,
         doneCount: coms.filter((c) => c.status === 'DONE').length,
@@ -386,6 +494,7 @@
         isToday: ymd === todayYMD,
         isSelected: ymd === selectedDateYMD,
         commitments: coms,
+        uniqueAssignees: getUniqueAssignees(coms),
         publications: pubs,
         overdueCount: coms.filter((c) => c.isOverdue).length,
         doneCount: coms.filter((c) => c.status === 'DONE').length,
@@ -394,27 +503,30 @@
       });
     }
 
-    // Trailing days from next month
-    const totalSlots = cells.length <= 35 ? 35 : 42;
-    const remaining = totalSlots - cells.length;
-    for (let day = 1; day <= remaining; day++) {
-      const nextDate = new Date(currentYear, currentMonth + 1, day);
-      const ymd = formatYMD(nextDate);
-      const coms = commitmentsByDateMap.get(ymd) || [];
-      const pubs = publicationsByDateMap.get(ymd) || [];
-      cells.push({
-        dayNumber: day,
-        ymd,
-        isCurrentMonth: false,
-        isToday: ymd === todayYMD,
-        isSelected: ymd === selectedDateYMD,
-        commitments: coms,
-        publications: pubs,
-        overdueCount: coms.filter((c) => c.isOverdue).length,
-        doneCount: coms.filter((c) => c.status === 'DONE').length,
-        inProgressCount: coms.filter((c) => c.status === 'IN_PROGRESS' && !c.isOverdue).length,
-        extendedCount: coms.filter((c) => c.extensionCount > 0).length
-      });
+    // Trailing days from next month to complete the row
+    const remainder = cells.length % 7;
+    if (remainder > 0) {
+      const trailingCount = 7 - remainder;
+      for (let day = 1; day <= trailingCount; day++) {
+        const nextDate = new Date(currentYear, currentMonth + 1, day);
+        const ymd = formatYMD(nextDate);
+        const coms = commitmentsByDateMap.get(ymd) || [];
+        const pubs = publicationsByDateMap.get(ymd) || [];
+        cells.push({
+          dayNumber: day,
+          ymd,
+          isCurrentMonth: false,
+          isToday: ymd === todayYMD,
+          isSelected: ymd === selectedDateYMD,
+          commitments: coms,
+          uniqueAssignees: getUniqueAssignees(coms),
+          publications: pubs,
+          overdueCount: coms.filter((c) => c.isOverdue).length,
+          doneCount: coms.filter((c) => c.status === 'DONE').length,
+          inProgressCount: coms.filter((c) => c.status === 'IN_PROGRESS' && !c.isOverdue).length,
+          extendedCount: coms.filter((c) => c.extensionCount > 0).length
+        });
+      }
     }
 
     return cells;
@@ -428,12 +540,13 @@
     if (!selectedDateYMD) return '';
     const [y, m, d] = selectedDateYMD.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
-    return dateObj.toLocaleDateString('pt-BR', {
+    const formatted = dateObj.toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   });
 
   // Upcoming items for current user (Minhas Próximas Entregas)
@@ -448,17 +561,28 @@
   let overdueDeliveries = $derived.by(() => {
     return allCommitments
       .filter((c) => c.isOverdue)
-      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
-      .slice(0, 6);
+      .sort((a, b) => (new Date(a.dueAt || 0).getTime()) - (new Date(b.dueAt || 0).getTime()))
+      .slice(0, 5);
   });
 
-  // Selection handler
+  // Handler for Day Cell Click
   function handleSelectDay(ymd: string) {
     selectedDateYMD = ymd;
     showDayDrawer = true;
   }
 
-  // Extension Modal Handler
+  // Notes editing helpers
+  function startEditingNote(item: any) {
+    editingNoteId = item.id;
+    noteTextDraft = item.notes || '';
+  }
+
+  function cancelEditingNote() {
+    editingNoteId = null;
+    noteTextDraft = '';
+  }
+
+  // Extension Modal Handlers
   function openExtensionModal(item: any) {
     extensionTargetItem = item;
     extensionFeedback = null;
@@ -469,160 +593,186 @@
     showExtensionModal = false;
     extensionTargetItem = null;
     extensionFeedback = null;
-  }
-
-  // Calculate projected new due date for modal
-  let projectedExtensionDate = $derived.by(() => {
-    if (!extensionTargetItem?.dueAt) return '';
-    const curDue = getSaoPauloDate(extensionTargetItem.dueAt);
-    curDue.setDate(curDue.getDate() + 2);
-    return curDue.toLocaleDateString('pt-BR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-  });
-
-  let currentDueFormatted = $derived.by(() => {
-    if (!extensionTargetItem?.dueAt) return '';
-    const curDue = getSaoPauloDate(extensionTargetItem.dueAt);
-    return curDue.toLocaleDateString('pt-BR', {
-      day: 'numeric',
-      month: 'long'
-    });
-  });
-
-  // Notes editing trigger
-  function startEditingNote(item: any) {
-    editingNoteId = item.id;
-    noteTextDraft = item.notes || '';
-  }
-
-  function cancelEditingNote() {
-    editingNoteId = null;
-    noteTextDraft = '';
+    isExtending = false;
   }
 </script>
 
-<div class="calendar-workspace-tab">
-  <!-- 1. TOP HEADER & FILTER BAR -->
-  <header class="calendar-main-header">
-    <div class="header-titles">
-      <div class="header-icon-badge purple">
-        <CalendarIcon size={22} />
+<div class="scan-calendar-hub">
+  <!-- 1. COMPACT PREMIUM HEADER -->
+  <header class="calendar-top-header">
+    <div class="header-branding-block">
+      <div class="calendar-icon-orb">
+        <CalendarIcon size={20} />
       </div>
-      <div>
-        <h2 class="calendar-title">Calendário & Prazos da Equipe</h2>
-        <p class="calendar-subtitle">
-          Gerenciamento inteligente de entregas editoriais, compromissos, notas e prorrogações automáticas.
-        </p>
+      <div class="branding-text">
+        <h1 class="calendar-title">Calendário da Scan</h1>
+        <p class="calendar-subtitle">Acompanhe os prazos e compromissos editoriais da equipe.</p>
       </div>
     </div>
 
-    <!-- Navigation Bar: Month/Year Controls + Today + View Switcher -->
-    <div class="calendar-controls-row">
-      <div class="month-selector-group">
-        <button type="button" class="btn-ctrl-arrow" onclick={prevMonth} aria-label="Mês anterior" title="Mês anterior">
-          <ChevronLeft size={18} />
+    <!-- Month Navigation Lockup (Compact & Central) -->
+    <div class="month-nav-cluster">
+      <div class="nav-btn-group">
+        <button
+          type="button"
+          class="btn-month-nav"
+          onclick={prevMonth}
+          aria-label="Mês anterior"
+          title="Mês anterior"
+        >
+          <ChevronLeft size={16} />
         </button>
 
-        <h3 class="current-month-display">
-          {MONTH_NAMES[currentMonth]} {currentYear}
-        </h3>
+        <span class="current-month-display">
+          {MONTH_NAMES[currentMonth]} <span class="year-num">{currentYear}</span>
+        </span>
 
-        <button type="button" class="btn-ctrl-arrow" onclick={nextMonth} aria-label="Próximo mês" title="Próximo mês">
-          <ChevronRight size={18} />
-        </button>
-
-        <button type="button" class="btn-today-pill" onclick={goToToday} title="Ir para a data de hoje">
-          Hoje
+        <button
+          type="button"
+          class="btn-month-nav"
+          onclick={nextMonth}
+          aria-label="Próximo mês"
+          title="Próximo mês"
+        >
+          <ChevronRight size={16} />
         </button>
       </div>
 
-      <!-- View Switcher (Mês / Agenda) -->
-      <div class="view-mode-toggle" role="group" aria-label="Modo de visualização">
+      <button
+        type="button"
+        class="btn-today-pill"
+        onclick={goToToday}
+        title="Voltar para a data de hoje"
+      >
+        Hoje
+      </button>
+
+      <!-- View Mode Switch: Month Grid vs Agenda List -->
+      <div class="view-toggle-segmented" role="radiogroup" aria-label="Visualização">
         <button
           type="button"
-          class="btn-toggle-view"
+          class="toggle-opt-btn"
           class:active={activeViewMode === 'MONTH'}
           onclick={() => (activeViewMode = 'MONTH')}
+          title="Visão Mensal"
         >
-          <CalendarIcon size={14} />
-          <span>Mês</span>
+          <Grid size={14} />
+          <span class="desktop-only-txt">Mês</span>
         </button>
         <button
           type="button"
-          class="btn-toggle-view"
+          class="toggle-opt-btn"
           class:active={activeViewMode === 'AGENDA'}
           onclick={() => (activeViewMode = 'AGENDA')}
+          title="Visão Agenda / Lista"
         >
           <Layers size={14} />
-          <span>Agenda</span>
+          <span class="desktop-only-txt">Agenda</span>
         </button>
       </div>
     </div>
+  </header>
 
-    <!-- 2. QUICK FILTER STRIP -->
-    <div class="filters-action-strip">
-      <div class="filter-group">
-        <span class="filter-label">
-          <Filter size={13} />
-          Etapa:
-        </span>
-        <select bind:value={filterStageSlug} class="filter-select">
+  <!-- 2. STREAMLINED HORIZONTAL FILTER BAR (Desktop & Mobile Chips) -->
+  <section class="calendar-filters-bar" aria-label="Filtros do Calendário">
+    <div class="filters-left-group">
+      <!-- Quick Filter: Minhas Entregas -->
+      <button
+        type="button"
+        class="chip-filter-btn"
+        class:is-active={filterAssigneeId === 'MINE'}
+        onclick={toggleMineFilter}
+      >
+        <User size={13} />
+        <span>Minhas entregas</span>
+      </button>
+
+      <!-- Stage Filter -->
+      <div class="filter-select-wrapper">
+        <select
+          bind:value={filterStageSlug}
+          class="filter-native-select"
+          aria-label="Filtrar por etapa"
+        >
           <option value="ALL">Todas as etapas</option>
           <option value="traducao">Tradução</option>
-          <option value="clean_redraw">Clean / Redraw</option>
+          <option value="clean_redraw">Clean/Redraw</option>
           <option value="typeset">Typeset</option>
           <option value="revisor_qc">Revisor (QC)</option>
-          <option value="raw">Raw Provider</option>
-          <option value="pre_aprovado">Pré-Aprovado</option>
+          <option value="tarefa">Tarefas gerais</option>
         </select>
       </div>
 
-      <div class="filter-group">
-        <span class="filter-label">Responsável:</span>
-        <select bind:value={filterAssigneeId} class="filter-select">
+      <!-- Assignee Filter -->
+      <div class="filter-select-wrapper">
+        <select
+          bind:value={filterAssigneeId}
+          class="filter-native-select"
+          aria-label="Filtrar por responsável"
+        >
           <option value="ALL">Toda a equipe</option>
-          <option value="MINE">Minhas entregas</option>
+          <option value="MINE">Apenas minhas entregas</option>
           {#each team as member}
             <option value={member.id}>{member.display_name || member.username}</option>
           {/each}
         </select>
       </div>
 
-      <div class="filter-group">
-        <span class="filter-label">Situação:</span>
-        <select bind:value={filterStatus} class="filter-select">
+      <!-- Status Filter -->
+      <div class="filter-select-wrapper">
+        <select
+          bind:value={filterStatus}
+          class="filter-native-select"
+          aria-label="Filtrar por situação"
+        >
           <option value="ALL">Todas as situações</option>
           <option value="IN_PROGRESS">Em andamento</option>
+          <option value="DUE_SOON">Próximo do vencimento (&le;24h)</option>
           <option value="DONE">Concluídos</option>
           <option value="OVERDUE">Em atraso</option>
           <option value="EXTENDED">Prorrogados (+2d)</option>
         </select>
       </div>
+
+      {#if hasActiveFilters}
+        <button
+          type="button"
+          class="btn-clear-filters"
+          onclick={clearAllFilters}
+          title="Limpar todos os filtros"
+        >
+          <X size={13} />
+          <span>Limpar</span>
+        </button>
+      {/if}
     </div>
-  </header>
+
+    <!-- Active Count Counter -->
+    <div class="filters-right-meta">
+      <span class="commitments-stat-pill">
+        <strong>{filteredCommitments.length}</strong> compromisso{filteredCommitments.length === 1 ? '' : 's'}
+      </span>
+    </div>
+  </section>
 
   <!-- 3. MAIN WORKSPACE SPLIT LAYOUT -->
-  <div class="calendar-workspace-grid">
+  <div class="calendar-workspace-layout">
     <!-- LEFT / MAIN: MONTH GRID OR AGENDA VIEW -->
-    <div class="calendar-primary-pane">
+    <main class="calendar-primary-container">
       {#if activeViewMode === 'MONTH'}
-        <div class="calendar-grid-card">
+        <div class="calendar-monthly-card">
           <!-- Weekday Headers -->
-          <div class="weekday-header-row">
+          <div class="weekday-labels-row">
             {#each WEEK_DAYS as wd, idx}
-              <div class="weekday-header-cell" class:weekend={idx === 0 || idx === 6}>
+              <div class="weekday-label-cell" class:weekend={idx === 0 || idx === 6}>
                 <span>{wd}</span>
               </div>
             {/each}
           </div>
 
           <!-- 7-Column Days Grid -->
-          <div class="days-matrix-grid">
+          <div class="monthly-days-grid">
             {#each monthGridCells as cell}
-              {@const hasItems = cell.commitments.length > 0 || cell.publications.length > 0}
               <button
                 type="button"
                 class="matrix-day-cell"
@@ -632,71 +782,76 @@
                 class:has-deliveries={cell.commitments.length > 0}
                 onclick={() => handleSelectDay(cell.ymd)}
               >
-                <!-- Day Cell Header: Number + Status Dots -->
-                <div class="day-cell-header">
-                  <span class="day-cell-number">{cell.dayNumber}</span>
+                <!-- Day Cell Header: Number + "Hoje" Badge -->
+                <div class="cell-top-bar">
+                  <span class="cell-day-num">{cell.dayNumber}</span>
                   {#if cell.isToday}
-                    <span class="badge-today-label">Hoje</span>
+                    <span class="cell-today-pill">Hoje</span>
                   {/if}
-
-                  <!-- Mobile Status Dots (visible under 768px) -->
-                  <div class="mobile-dots-strip">
-                    {#if cell.overdueCount > 0}
-                      <span class="m-dot overdue" title="{cell.overdueCount} em atraso"></span>
-                    {/if}
-                    {#if cell.inProgressCount > 0}
-                      <span class="m-dot in-progress" title="{cell.inProgressCount} em andamento"></span>
-                    {/if}
-                    {#if cell.extendedCount > 0}
-                      <span class="m-dot extended" title="{cell.extendedCount} prorrogado"></span>
-                    {/if}
-                    {#if cell.doneCount > 0}
-                      <span class="m-dot done" title="{cell.doneCount} concluído"></span>
-                    {/if}
-                    {#if cell.publications.length > 0}
-                      <span class="m-dot publication" title="{cell.publications.length} publicado"></span>
-                    {/if}
-                  </div>
                 </div>
 
-                <!-- Desktop Commitments Event Pills -->
-                <div class="cell-events-list">
-                  {#each cell.commitments.slice(0, 3) as item}
+                <!-- DESKTOP EVENT CARDS (Real Avatars + Stage + Chapter) -->
+                <div class="desktop-events-stack">
+                  {#each cell.commitments.slice(0, 2) as item}
                     <div
-                      class="event-pill"
-                      class:overdue={item.isOverdue}
-                      class:done={item.status === 'DONE'}
-                      class:extended={item.extensionCount > 0 && item.status !== 'DONE'}
-                      style="--pill-color: {item.stageColor}"
-                      title="{item.workTitle} - Cap. #{item.chapterNumber} ({item.stageName}) - {item.assignee?.display_name || 'Membro'}"
+                      class="day-event-card {item.statusClass}"
+                      style="--stage-accent: {item.stageColor}"
+                      title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || 'Membro'}"
                     >
-                      <span class="pill-dot" style="background: {item.stageColor}"></span>
-                      <span class="pill-text">
-                        {item.workTitle.slice(0, 14)} #{item.chapterNumber} • {item.stageName}
-                      </span>
+                      <div class="event-card-avatar-wrap">
+                        <UserAvatar user={item.assignee} size={18} />
+                      </div>
+                      <div class="event-card-info-cluster">
+                        <span class="event-card-work-line">{item.workTitle.slice(0, 14)} #{item.chapterNumber}</span>
+                        <span class="event-card-stage-pill">{item.stageName}</span>
+                      </div>
                       {#if item.extensionCount > 0 && item.status !== 'DONE'}
-                        <span class="pill-ext-badge">+2d</span>
+                        <span class="event-card-ext-badge">+2d</span>
                       {/if}
                       {#if item.status === 'DONE'}
-                        <Check size={10} class="pill-done-ico" />
+                        <Check size={10} class="event-card-done-ico" />
                       {/if}
                     </div>
                   {/each}
 
-                  <!-- Overflow Counter if > 3 items -->
-                  {#if cell.commitments.length > 3}
-                    <div class="event-overflow-pill">
-                      <span>+{cell.commitments.length - 3} mais</span>
+                  <!-- Overflow indicator if > 2 items -->
+                  {#if cell.commitments.length > 2}
+                    <div class="event-overflow-badge">
+                      <span>+{cell.commitments.length - 2} entrega{cell.commitments.length - 2 === 1 ? '' : 's'}</span>
                     </div>
                   {/if}
 
-                  <!-- Publications Indicator -->
+                  <!-- Publication pill (if chapter was published on this day) -->
                   {#each cell.publications.slice(0, 1) as pub}
-                    <div class="publication-pill" title="Publicado no site: {pub.works?.title || 'Obra'} #{pub.number}">
+                    <div class="publication-badge-pill" title="Publicado: {pub.works?.title || 'Obra'} #{pub.number}">
                       <Sparkles size={10} />
                       <span>Pub. #{pub.number}</span>
                     </div>
                   {/each}
+                </div>
+
+                <!-- ANDROID / MOBILE AVATARS STRIP (Visible under 768px) -->
+                <div class="mobile-day-cell-content">
+                  {#if cell.uniqueAssignees.length > 0}
+                    <div class="mobile-avatars-row">
+                      {#each cell.uniqueAssignees.slice(0, 2) as assignee}
+                        <div class="mobile-cell-avatar">
+                          <UserAvatar user={assignee} size={16} />
+                        </div>
+                      {/each}
+                      {#if cell.commitments.length > 2}
+                        <span class="mobile-overflow-count">+{cell.commitments.length - 2}</span>
+                      {/if}
+                    </div>
+                  {/if}
+
+                  {#if cell.commitments.length > 0}
+                    <div class="mobile-pips-strip">
+                      {#each cell.commitments.slice(0, 3) as item}
+                        <span class="mobile-stage-pip" style="background: {item.statusColor}"></span>
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               </button>
             {/each}
@@ -704,212 +859,216 @@
         </div>
       {:else}
         <!-- AGENDA / CHRONOLOGICAL VIEW -->
-        <div class="agenda-view-card calendar-agenda-view">
-          <div class="agenda-header">
-            <Layers size={18} class="cyan" />
-            <h3>Próximas Entregas em Ordem Cronológica ({filteredCommitments.length})</h3>
+        <div class="agenda-view-wrapper">
+          <div class="agenda-header-strip">
+            <div class="agenda-header-left">
+              <Layers size={17} class="text-cyan-400" />
+              <h2 class="agenda-heading">Próximos Compromissos em Ordem Cronológica</h2>
+            </div>
+            <span class="agenda-count-badge">{filteredCommitments.length} entregas</span>
           </div>
 
           {#if filteredCommitments.length === 0}
-            <div class="empty-state-box">
-              <CheckCircle2 size={36} class="emerald" />
+            <div class="agenda-empty-state">
+              <CheckCircle2 size={36} class="text-emerald-400" />
               <p>Nenhuma entrega encontrada para os filtros selecionados.</p>
             </div>
           {:else}
-            <div class="agenda-items-list">
+            <div class="agenda-list-stack">
               {#each filteredCommitments as item}
-                <div
-                  class="agenda-row-card"
-                  class:is-overdue={item.isOverdue}
-                  class:is-done={item.status === 'DONE'}
-                  class:is-extended={item.extensionCount > 0}
+                <article
+                  class="agenda-item-card {item.statusClass}"
+                  onclick={() => handleSelectDay(item.dueYMD || todayYMD)}
                 >
-                  <div class="agenda-date-badge">
-                    <span class="badge-day">{item.dueYMD ? item.dueYMD.split('-')[2] : '--'}</span>
-                    <span class="badge-month">
+                  <div class="agenda-date-block">
+                    <span class="agenda-date-day">{item.dueYMD ? item.dueYMD.split('-')[2] : '--'}</span>
+                    <span class="agenda-date-month">
                       {item.dueYMD ? MONTH_NAMES[Number(item.dueYMD.split('-')[1]) - 1].slice(0, 3) : ''}
                     </span>
                   </div>
 
-                  <div class="agenda-details-col">
-                    <div class="agenda-top-line">
-                      <span class="agenda-work-name">{item.workTitle}</span>
+                  <div class="agenda-item-body">
+                    <div class="agenda-work-head">
+                      <span class="agenda-work-title">{item.workTitle}</span>
                       {#if item.chapterNumber}
-                        <span class="agenda-ch-pill">Cap. #{item.chapterNumber}</span>
+                        <span class="agenda-chapter-badge">Cap. #{item.chapterNumber}</span>
                       {/if}
-                      <span class="agenda-stage-pill" style="--stage-c: {item.stageColor}">
-                        <span class="dot"></span>
+                      <span class="agenda-stage-badge" style="--st-c: {item.stageColor}">
+                        <span class="st-dot"></span>
                         {item.stageName}
                       </span>
                     </div>
 
-                    <div class="agenda-meta-line">
+                    <div class="agenda-meta-row">
                       {#if item.assignee}
-                        <div class="agenda-user-inline">
-                          <UserAvatar user={item.assignee} size={16} />
-                          <span>{item.assignee.display_name || item.assignee.username}</span>
+                        <div class="agenda-user-lockup">
+                          <UserAvatar user={item.assignee} size={18} />
+                          <span class="agenda-username">{item.assignee.display_name || item.assignee.username}</span>
                         </div>
                       {/if}
 
-                      {#if item.isOverdue}
-                        <span class="status-tag overdue">Atrasado</span>
-                      {:else if item.status === 'DONE'}
-                        <span class="status-tag done">Concluído</span>
-                      {:else}
-                        <span class="status-tag in-progress">Em andamento ({item.remainingHours}h)</span>
-                      {/if}
+                      <span class="agenda-status-pill {item.statusClass}">
+                        {item.statusLabel}
+                      </span>
 
                       {#if item.extensionCount > 0}
-                        <span class="status-tag extended">Prorrogado (+2 dias)</span>
+                        <span class="agenda-ext-pill">Prorrogado (+2d)</span>
                       {/if}
                     </div>
 
                     {#if item.notes}
-                      <p class="agenda-notes-quote">"{item.notes}"</p>
+                      <p class="agenda-note-excerpt">"{item.notes}"</p>
                     {/if}
                   </div>
 
-                  <div class="agenda-actions-col">
+                  <div class="agenda-action-cell">
                     {#if item.canExtend}
                       <button
                         type="button"
-                        class="btn-quick-extend"
-                        onclick={() => openExtensionModal(item)}
-                        title="Prorrogar prazo +2 dias sem aprovação"
+                        class="btn-agenda-extend"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          openExtensionModal(item);
+                        }}
+                        title="Prorrogar prazo +2 dias sem necessidade de aprovação"
                       >
                         <Zap size={13} />
                         <span>+2 dias</span>
                       </button>
                     {/if}
 
-                    <button
-                      type="button"
-                      class="btn-open-detail"
-                      onclick={() => handleSelectDay(item.dueYMD || todayYMD)}
-                    >
-                      <span>Detalhes</span>
-                      <ArrowRight size={13} />
-                    </button>
+                    <span class="agenda-arrow-icon">
+                      <ArrowRight size={14} />
+                    </span>
                   </div>
-                </div>
+                </article>
               {/each}
             </div>
           {/if}
         </div>
       {/if}
-    </div>
+    </main>
 
-    <!-- RIGHT: COMPLEMENTARY SIDE PANELS -->
-    <aside class="calendar-sidebar-pane">
-      <!-- Panel 1: Minhas Próximas Entregas (Quick Access) -->
-      <div class="side-panel-card">
-        <div class="panel-header">
-          <Clock size={16} class="cyan" />
-          <h4>Minhas Próximas Entregas ({myUpcomingDeliveries.length})</h4>
-        </div>
+    <!-- RIGHT: COMPLEMENTARY SIDE PANELS (Desktop) -->
+    <aside class="calendar-side-column">
+      <!-- Panel 1: Minhas Próximas Entregas -->
+      <section class="side-widget-card">
+        <header class="widget-header">
+          <Clock size={15} class="text-cyan-400" />
+          <h3 class="widget-title">Minhas Próximas Entregas ({myUpcomingDeliveries.length})</h3>
+        </header>
 
         {#if myUpcomingDeliveries.length === 0}
-          <div class="side-empty-state">
-            <CheckCircle2 size={24} class="emerald" />
-            <p>Você não possui entregas pendentes no momento.</p>
+          <div class="widget-empty-box">
+            <CheckCircle2 size={22} class="text-emerald-400" />
+            <p>Você não possui entregas pendentes.</p>
           </div>
         {:else}
-          <div class="side-deliveries-list">
+          <div class="widget-items-stack">
             {#each myUpcomingDeliveries as item}
-              <div class="my-delivery-item" class:is-overdue={item.isOverdue}>
-                <div class="my-item-info">
-                  <span class="my-item-work">{item.workTitle} #{item.chapterNumber}</span>
-                  <div class="my-item-meta">
-                    <span class="my-stage-badge" style="--stage-c: {item.stageColor}">{item.stageName}</span>
-                    <span class="my-due-text">Prazo: {item.dueYMD.split('-')[2]}/{item.dueYMD.split('-')[1]} às 23:59</span>
+              <div
+                class="widget-delivery-item"
+                class:is-overdue={item.isOverdue}
+                onclick={() => handleSelectDay(item.dueYMD)}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD); }}
+              >
+                <div class="delivery-item-left">
+                  <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                  <div class="delivery-tags-row">
+                    <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                    <span class="delivery-due-tag">
+                      Prazo: {item.dueYMD.split('-')[2]}/{item.dueYMD.split('-')[1]}
+                    </span>
                   </div>
                 </div>
 
-                <div class="my-item-actions">
+                <div class="delivery-item-right">
                   {#if item.canExtend}
                     <button
                       type="button"
-                      class="btn-extend-badge"
-                      onclick={() => openExtensionModal(item)}
-                      title="Prorrogar prazo +2 dias automaticamente"
+                      class="btn-widget-extend"
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        openExtensionModal(item);
+                      }}
+                      title="Prorrogar +2 dias"
                     >
-                      <Zap size={12} />
-                      <span>Prorrogar +2d</span>
+                      <Zap size={11} />
+                      <span>+2d</span>
                     </button>
                   {/if}
-                  <button
-                    type="button"
-                    class="btn-mini-view"
-                    onclick={() => handleSelectDay(item.dueYMD)}
-                    title="Ver no calendário"
-                  >
-                    <ArrowRight size={13} />
-                  </button>
+                  <span class="widget-arrow"><ArrowRight size={13} /></span>
                 </div>
               </div>
             {/each}
           </div>
         {/if}
-      </div>
+      </section>
 
-      <!-- Panel 2: Entregas em Atraso (se houver) -->
+      <!-- Panel 2: Atrasos da Scan -->
       {#if overdueDeliveries.length > 0}
-        <div class="side-panel-card alert-panel">
-          <div class="panel-header">
-            <AlertTriangle size={16} class="red" />
-            <h4 class="text-red">Entregas em Atraso ({overdueDeliveries.length})</h4>
-          </div>
+        <section class="side-widget-card alert-card">
+          <header class="widget-header">
+            <AlertTriangle size={15} class="text-rose-400" />
+            <h3 class="widget-title text-rose-400">Entregas em Atraso ({overdueDeliveries.length})</h3>
+          </header>
 
-          <div class="side-deliveries-list">
+          <div class="widget-items-stack">
             {#each overdueDeliveries as item}
-              <div class="overdue-item-row">
-                <div class="overdue-info">
-                  <span class="overdue-work">{item.workTitle} #{item.chapterNumber} • {item.stageName}</span>
-                  <span class="overdue-assignee">Resp: {item.assignee?.display_name || item.assignee?.username || 'Membro'}</span>
+              <div
+                class="widget-delivery-item overdue"
+                onclick={() => handleSelectDay(item.dueYMD || todayYMD)}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD || todayYMD); }}
+              >
+                <div class="delivery-item-left">
+                  <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                  <div class="delivery-tags-row">
+                    <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                    <span class="delivery-overdue-assignee">
+                      {item.assignee?.display_name || item.assignee?.username || 'Membro'}
+                    </span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  class="btn-mini-view"
-                  onclick={() => handleSelectDay(item.dueYMD || todayYMD)}
-                  title="Ver detalhes"
-                >
-                  <ArrowRight size={13} />
-                </button>
+                <span class="widget-arrow"><ArrowRight size={13} /></span>
               </div>
             {/each}
           </div>
-        </div>
+        </section>
       {/if}
 
       <!-- Panel 3: Disponibilidade dos Membros -->
-      <div class="side-panel-card">
-        <div class="panel-header">
-          <User size={16} class="purple" />
-          <h4>Disponibilidade da Equipe</h4>
-        </div>
+      <section class="side-widget-card">
+        <header class="widget-header">
+          <User size={15} class="text-purple-400" />
+          <h3 class="widget-title">Disponibilidade da Equipe</h3>
+        </header>
 
-        <div class="team-avail-list">
+        <div class="team-avail-grid">
           {#each team.slice(0, 8) as member}
-            <div class="avail-member-row">
-              <div class="avail-user-group">
-                <span class="avail-dot {member.availability_status?.toLowerCase() || 'active'}"></span>
-                <span class="avail-name">{member.display_name || member.username}</span>
+            <div class="team-avail-row">
+              <div class="member-lockup">
+                <UserAvatar user={member} size={18} />
+                <span class="member-name">{member.display_name || member.username}</span>
               </div>
               <span class="avail-badge {member.availability_status?.toLowerCase() || 'active'}">
                 {member.availability_status === 'BUSY' ? 'Ocupado' :
                  member.availability_status === 'AWAY' ? 'Ausente' :
-                 member.availability_status === 'HIATUS' ? 'Em Hiato' : 'Disponível'}
+                 member.availability_status === 'HIATUS' ? 'Hiato' : 'Disponível'}
               </span>
             </div>
           {/each}
         </div>
-      </div>
+      </section>
     </aside>
   </div>
 </div>
 
 <!-- ========================================================================= -->
-<!-- 4. DAY DETAILS DRAWER / MODAL (Opens on date click, Desktop & Android)    -->
+<!-- 4. DAY DETAILS DRAWER / BOTTOM SHEET (Desktop Drawer & Android Sheet)     -->
 <!-- ========================================================================= -->
 {#if showDayDrawer}
   <div
@@ -924,144 +1083,133 @@
     <div class="day-drawer-panel">
       <!-- Drawer Header -->
       <header class="drawer-header">
-        <div class="drawer-header-info">
-          <span class="drawer-header-kicker">Compromissos e Entregas</span>
+        <div class="drawer-header-left">
+          <span class="drawer-header-eyebrow">Compromissos e Entregas</span>
           <h3 class="drawer-date-title">{formattedSelectedDayHeader}</h3>
         </div>
         <button
           type="button"
           class="btn-close-drawer"
           onclick={() => (showDayDrawer = false)}
-          aria-label="Fechar gaveta de detalhes"
+          aria-label="Fechar gaveta"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
       </header>
 
       <!-- Drawer Content -->
-      <div class="drawer-body">
-        <!-- 4.1 Commitments on this Day -->
-        <div class="drawer-section">
-          <h4 class="section-title">
-            <Clock size={16} class="cyan" />
-            <span>Prazos e Entregas Deste Dia ({selectedDayCommitments.length})</span>
-          </h4>
+      <div class="drawer-scroll-body">
+        <!-- Commitments Section -->
+        <section class="drawer-section">
+          <div class="section-title-strip">
+            <Clock size={15} class="text-cyan-400" />
+            <h4 class="section-heading">Entregas Previstas ({selectedDayCommitments.length})</h4>
+          </div>
 
           {#if selectedDayCommitments.length === 0}
-            <div class="drawer-empty-box">
-              <CheckCircle2 size={32} class="emerald" />
+            <div class="drawer-empty-placeholder">
+              <CheckCircle2 size={30} class="text-emerald-400" />
               <p>Nenhuma entrega agendada para esta data.</p>
             </div>
           {:else}
-            <div class="commitments-cards-stack">
+            <div class="drawer-cards-stack">
               {#each selectedDayCommitments as item}
-                <article
-                  class="commitment-detail-card"
-                  class:is-overdue={item.isOverdue}
-                  class:is-done={item.status === 'DONE'}
-                  class:is-extended={item.extensionCount > 0}
-                >
-                  <!-- Card Header: Work + Stage + Status -->
-                  <div class="card-head-row">
-                    <div class="work-thumb-cluster">
+                <article class="drawer-commitment-card {item.statusClass}">
+                  <!-- Card Header: Cover + Work + Stage + Status -->
+                  <div class="card-hero-row">
+                    <div class="work-cover-thumb-box">
                       {#if item.workCoverId}
-                        <img src="/media/{item.workCoverId}" alt={item.workTitle} class="work-mini-cover" />
+                        <img
+                          src="/media/{item.workCoverId}"
+                          alt={item.workTitle}
+                          class="work-cover-img"
+                          loading="lazy"
+                        />
                       {:else}
-                        <div class="work-mini-cover fallback">
+                        <div class="work-cover-img fallback">
                           <Briefcase size={16} />
                         </div>
                       {/if}
+                    </div>
 
-                      <div class="work-identity">
-                        <span class="work-title-text">{item.workTitle}</span>
-                        <div class="pills-cluster">
-                          {#if item.chapterNumber}
-                            <span class="pill-ch">Capítulo #{item.chapterNumber}</span>
-                          {/if}
-                          <span class="pill-stage" style="--stage-color: {item.stageColor}">
-                            <span class="dot"></span>
-                            {item.stageName}
-                          </span>
-                        </div>
+                    <div class="hero-text-col">
+                      <span class="hero-work-title">{item.workTitle}</span>
+                      <div class="hero-pills-row">
+                        {#if item.chapterNumber}
+                          <span class="hero-chapter-pill">Capítulo #{item.chapterNumber}</span>
+                        {/if}
+                        <span class="hero-stage-pill" style="--st-c: {item.stageColor}">
+                          <span class="st-dot"></span>
+                          {item.stageName}
+                        </span>
                       </div>
                     </div>
 
-                    <!-- Status Tag -->
-                    <div class="status-badge-wrap">
-                      {#if item.status === 'DONE'}
-                        <span class="detail-badge done">
-                          <Check size={12} />
-                          Concluído
-                        </span>
-                      {:else if item.isOverdue}
-                        <span class="detail-badge overdue">
-                          <AlertTriangle size={12} />
-                          Atrasado
-                        </span>
-                      {:else}
-                        <span class="detail-badge in-progress">
-                          <Clock size={12} />
-                          Em Andamento
-                        </span>
-                      {/if}
-
-                      {#if item.extensionCount > 0}
-                        <span class="detail-badge extended">
-                          <Sparkles size={11} />
-                          Prorrogado (+2d)
-                        </span>
-                      {/if}
+                    <!-- Status Pill -->
+                    <div class="hero-status-box">
+                      <span class="hero-status-tag {item.statusClass}">
+                        {#if item.status === 'DONE'}
+                          <Check size={11} />
+                        {:else if item.isOverdue}
+                          <AlertTriangle size={11} />
+                        {:else}
+                          <Clock size={11} />
+                        {/if}
+                        {item.statusLabel}
+                      </span>
                     </div>
                   </div>
 
-                  <!-- Assignee + Deadlines Meta Row -->
-                  <div class="card-meta-grid">
-                    <div class="meta-field">
-                      <span class="meta-field-label">Responsável:</span>
-                      <div class="meta-user-wrap">
+                  <!-- Assignee + Due Date Details -->
+                  <div class="card-details-grid">
+                    <div class="detail-cell">
+                      <span class="detail-label">Responsável:</span>
+                      <div class="detail-user-pill">
                         <UserAvatar user={item.assignee} size={20} />
-                        <span class="meta-user-name">{item.assignee?.display_name || item.assignee?.username || 'Membro da equipe'}</span>
+                        <span class="detail-user-name">
+                          {item.assignee?.display_name || item.assignee?.username || 'Membro da equipe'}
+                        </span>
                       </div>
                     </div>
 
-                    <div class="meta-field">
-                      <span class="meta-field-label">Prazo vigente:</span>
-                      <span class="meta-due-val cyan">
+                    <div class="detail-cell">
+                      <span class="detail-label">Prazo vigente:</span>
+                      <strong class="detail-due-val text-cyan-400">
                         {item.dueYMD ? `${item.dueYMD.split('-')[2]}/${item.dueYMD.split('-')[1]}/${item.dueYMD.split('-')[0]}` : '--'} às 23:59
-                      </span>
+                      </strong>
                     </div>
 
                     {#if item.originalDueAt && item.extensionCount > 0}
-                      <div class="meta-field">
-                        <span class="meta-field-label">Prazo original:</span>
-                        <span class="meta-due-orig">
+                      <div class="detail-cell">
+                        <span class="detail-label">Prazo original:</span>
+                        <span class="detail-orig-due">
                           {formatYMD(getSaoPauloDate(item.originalDueAt)).split('-')[2]}/{formatYMD(getSaoPauloDate(item.originalDueAt)).split('-')[1]}
                         </span>
                       </div>
                     {/if}
                   </div>
 
-                  <!-- Observations / Notes Section -->
-                  <div class="notes-display-box">
-                    <div class="notes-header">
-                      <span class="notes-title">
-                        <FileText size={13} />
-                        Observações do Responsável:
+                  <!-- Notes & Inline Note Editing -->
+                  <div class="notes-block">
+                    <div class="notes-header-row">
+                      <span class="notes-label-text">
+                        <FileText size={12} />
+                        <span>Observações do Responsável:</span>
                       </span>
                       {#if (item.assignedTo === currentUserId || ['OWNER', 'ADMIN'].includes(userRole)) && editingNoteId !== item.id}
                         <button
                           type="button"
-                          class="btn-edit-note"
+                          class="btn-edit-note-trigger"
                           onclick={() => startEditingNote(item)}
                         >
-                          <Edit3 size={12} />
+                          <Edit3 size={11} />
                           <span>{item.notes ? 'Editar nota' : 'Adicionar nota'}</span>
                         </button>
                       {/if}
                     </div>
 
                     {#if editingNoteId === item.id}
-                      <!-- Inline Note Edit Form -->
+                      <!-- Form to edit note with YSQL persistence -->
                       <form
                         method="POST"
                         action="?/updateStageNotes"
@@ -1073,10 +1221,11 @@
                               item.notes = noteTextDraft;
                               editingNoteId = null;
                               await update();
+                              invalidate('scan:workspace');
                             }
                           };
                         }}
-                        class="note-edit-form"
+                        class="note-editor-form"
                       >
                         <input type="hidden" name="chapter_stage_id" value={item.id} />
                         <textarea
@@ -1084,13 +1233,13 @@
                           bind:value={noteTextDraft}
                           maxlength="500"
                           rows="2"
-                          class="note-textarea"
-                          placeholder="Digite anotações ou atualizações do progresso..."
+                          class="note-editor-textarea"
+                          placeholder="Digite anotações sobre o andamento..."
                         ></textarea>
-                        <div class="note-edit-actions">
+                        <div class="note-editor-buttons">
                           <button
                             type="button"
-                            class="btn-cancel-note"
+                            class="btn-note-cancel"
                             onclick={cancelEditingNote}
                             disabled={isSavingNote}
                           >
@@ -1098,52 +1247,50 @@
                           </button>
                           <button
                             type="submit"
-                            class="btn-save-note"
+                            class="btn-note-save"
                             disabled={isSavingNote}
                           >
                             {#if isSavingNote}
                               <span>Salvando...</span>
                             {:else}
-                              <Check size={13} />
+                              <Check size={12} />
                               <span>Salvar nota</span>
                             {/if}
                           </button>
                         </div>
                       </form>
                     {:else}
-                      <p class="notes-content-text" class:empty={!item.notes}>
+                      <p class="notes-body-text" class:is-empty={!item.notes}>
                         {item.notes ? `"${item.notes}"` : 'Nenhuma observação registrada.'}
                       </p>
                     {/if}
                   </div>
 
-                  <!-- Card Action Buttons -->
-                  <div class="card-footer-actions">
-                    <!-- Extension Action (+2 Days) -->
+                  <!-- Actions: Extend +2 days / Open in Production -->
+                  <div class="card-actions-bar">
                     {#if item.canExtend}
                       <button
                         type="button"
-                        class="btn-trigger-extension"
+                        class="btn-extend-action"
                         onclick={() => openExtensionModal(item)}
-                        title="Prorrogar prazo +2 dias corridos sem necessidade de aprovação"
+                        title="Prorrogar prazo +2 dias sem aprovação"
                       >
-                        <Zap size={14} />
+                        <Zap size={13} />
                         <span>Prorrogar prazo +2 dias</span>
                       </button>
                     {/if}
 
-                    <!-- Jump to Stage / Chapter Workspace -->
                     {#if item.productionChapter && onOpenChapter}
                       <button
                         type="button"
-                        class="btn-jump-chapter"
+                        class="btn-open-production"
                         onclick={() => {
                           showDayDrawer = false;
                           onOpenChapter(item.productionChapter);
                         }}
                       >
                         <span>Abrir na Produção</span>
-                        <ArrowRight size={14} />
+                        <ArrowRight size={13} />
                       </button>
                     {/if}
                   </div>
@@ -1151,41 +1298,39 @@
               {/each}
             </div>
           {/if}
-        </div>
+        </section>
 
-        <!-- 4.2 Publications on this Day -->
+        <!-- Publications Section -->
         {#if selectedDayPublications.length > 0}
-          <div class="drawer-section mt">
-            <h4 class="section-title">
-              <Sparkles size={16} class="cyan" />
-              <span>Capítulos Publicados no Site ({selectedDayPublications.length})</span>
-            </h4>
+          <section class="drawer-section mt-pub">
+            <div class="section-title-strip">
+              <Sparkles size={15} class="text-cyan-400" />
+              <h4 class="section-heading">Publicações no Site ({selectedDayPublications.length})</h4>
+            </div>
 
-            <div class="publications-cards-list">
+            <div class="publications-list-stack">
               {#each selectedDayPublications as pub}
-                <div class="pub-card-row">
-                  <div class="pub-icon-orb">
-                    <Sparkles size={16} />
+                <div class="pub-row-card">
+                  <div class="pub-icon-cell">
+                    <Sparkles size={15} />
                   </div>
-                  <div class="pub-info-col">
-                    <span class="pub-work-title">{pub.works?.title || 'Obra'}</span>
-                    <span class="pub-sub-desc">
-                      Capítulo #{pub.number} {pub.title ? `— ${pub.title}` : ''}
-                    </span>
+                  <div class="pub-info-cell">
+                    <span class="pub-work-name">{pub.works?.title || 'Obra'}</span>
+                    <span class="pub-ch-num">Capítulo #{pub.number} {pub.title ? `— ${pub.title}` : ''}</span>
                   </div>
                   <a
                     href="/ler/{pub.id}"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="btn-view-reader"
+                    class="btn-open-reader"
                   >
-                    <Eye size={13} />
-                    <span>Ver no site</span>
+                    <span>Ler</span>
+                    <ArrowRight size={12} />
                   </a>
                 </div>
               {/each}
             </div>
-          </div>
+          </section>
         {/if}
       </div>
     </div>
@@ -1193,7 +1338,7 @@
 {/if}
 
 <!-- ========================================================================= -->
-<!-- 5. AUTOMATIC 2-DAY EXTENSION CONFIRMATION MODAL                           -->
+<!-- 5. EXTENSION CONFIRMATION MODAL (+2 DIAS)                                 -->
 <!-- ========================================================================= -->
 {#if showExtensionModal && extensionTargetItem}
   <div
@@ -1205,17 +1350,25 @@
     aria-modal="true"
     aria-labelledby="ext-modal-title"
   >
-    <div class="modal-card-small">
+    <div class="extension-modal-card">
       <header class="ext-modal-header">
-        <div class="ext-orb amber">
-          <Zap size={22} />
+        <div class="ext-header-left">
+          <div class="ext-icon-orb">
+            <Zap size={18} />
+          </div>
+          <div>
+            <h3 id="ext-modal-title" class="ext-modal-title">Prorrogar prazo em +2 dias</h3>
+            <p class="ext-modal-subtitle">Adicione 2 dias corridos à sua data limite atual.</p>
+          </div>
         </div>
-        <div>
-          <h3 id="ext-modal-title" class="ext-modal-title">Prorrogar prazo +2 dias</h3>
-          <p class="ext-modal-sub">Prorrogação automática instantânea, sem aprovação e sem justificativa.</p>
-        </div>
-        <button type="button" class="btn-close-modal" onclick={closeExtensionModal} disabled={isExtending}>
-          <X size={18} />
+        <button
+          type="button"
+          class="btn-close-modal"
+          onclick={closeExtensionModal}
+          disabled={isExtending}
+          aria-label="Fechar"
+        >
+          <X size={16} />
         </button>
       </header>
 
@@ -1234,43 +1387,47 @@
               };
             } else if (result.type === 'success') {
               await update();
+              invalidate('scan:workspace');
               closeExtensionModal();
             }
           };
         }}
-        class="ext-form-body"
+        class="ext-modal-body"
       >
         <input type="hidden" name="chapter_stage_id" value={extensionTargetItem.id} />
 
         {#if extensionFeedback}
-          <div class="alert-banner error">
-            <AlertCircle size={15} />
+          <div class="alert-banner {extensionFeedback.type}" role="alert">
+            <AlertCircle size={14} />
             <span>{extensionFeedback.message}</span>
           </div>
         {/if}
 
-        <div class="ext-projection-box">
-          <div class="ext-flow-row">
-            <div class="ext-point">
-              <span class="ext-point-label">Prazo Atual</span>
-              <strong class="ext-point-val">{currentDueFormatted}</strong>
-            </div>
-            <div class="ext-arrow">
-              <ArrowRight size={18} />
-              <span class="plus-days">+2 dias</span>
-            </div>
-            <div class="ext-point">
-              <span class="ext-point-label">Novo Prazo Final</span>
-              <strong class="ext-point-val emerald">{projectedExtensionDate}</strong>
-            </div>
-          </div>
-          <p class="ext-hint-text">
-            O novo prazo de entrega será registrado até 23h59min59s (horário de Brasília).
-            Lembre-se: é permitida <strong>uma única prorrogação automática</strong> por atribuição.
-          </p>
+        <div class="ext-context-box">
+          <span class="ext-work-title">
+            {extensionTargetItem.workTitle} — Cap. #{extensionTargetItem.chapterNumber}
+          </span>
+          <span class="ext-stage-pill" style="--st-c: {extensionTargetItem.stageColor}">
+            {extensionTargetItem.stageName}
+          </span>
         </div>
 
-        <footer class="ext-actions-footer">
+        <div class="ext-rules-card">
+          <div class="rule-line">
+            <Check size={14} class="text-emerald-400" />
+            <span>Prorrogação automática sem necessidade de aprovação.</span>
+          </div>
+          <div class="rule-line">
+            <Check size={14} class="text-emerald-400" />
+            <span>Acrescenta 2 dias corridos ao prazo vigente.</span>
+          </div>
+          <div class="rule-line info">
+            <Info size={14} class="text-cyan-400" />
+            <span>Permitido apenas 1 vez por atribuição.</span>
+          </div>
+        </div>
+
+        <footer class="ext-modal-footer">
           <button
             type="button"
             class="btn-cancel"
@@ -1281,15 +1438,15 @@
           </button>
           <button
             type="submit"
-            class="btn-confirm-extension"
+            class="btn-confirm-extend"
             disabled={isExtending}
           >
             {#if isExtending}
-              <span class="spinner"></span>
+              <span class="spinner-mini"></span>
               <span>Prorrogando...</span>
             {:else}
               <Zap size={15} />
-              <span>Confirmar Prorrogação</span>
+              <span>Confirmar +2 dias</span>
             {/if}
           </button>
         </footer>
@@ -1299,91 +1456,95 @@
 {/if}
 
 <style>
-  .calendar-workspace-tab {
+  /* ========================================================================= */
+  /* DESIGN SYSTEM: PROJECT NOX PREMIUM EDITORIAL CALENDAR                     */
+  /* ========================================================================= */
+  .scan-calendar-hub {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.85rem;
     width: 100%;
+    color: #f1f5f9;
   }
 
-  /* 1. Header & Controls */
-  .calendar-main-header {
-    background: rgba(15, 23, 42, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
-    padding: 1.25rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  }
-
-  .header-titles {
+  /* 1. TOP HEADER */
+  .calendar-top-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.15rem;
+    background: #090d16;
+    border: 1px solid rgba(139, 92, 246, 0.22);
+    border-radius: 0.95rem;
     gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   }
 
-  .header-icon-badge {
-    width: 44px;
-    height: 44px;
-    border-radius: 0.85rem;
+  .header-branding-block {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .calendar-icon-orb {
+    width: 36px;
+    height: 36px;
+    border-radius: 0.65rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(139, 92, 246, 0.15);
+    background: rgba(139, 92, 246, 0.16);
     color: #c084fc;
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.35);
     flex-shrink: 0;
   }
 
+  .branding-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
   .calendar-title {
-    font-size: 1.35rem;
-    font-weight: 800;
+    font-size: 1.05rem;
+    font-weight: 700;
     color: #f8fafc;
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.25;
     letter-spacing: -0.01em;
   }
 
   .calendar-subtitle {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     color: #94a3b8;
-    margin: 0.25rem 0 0;
+    margin: 0;
+    line-height: 1.25;
   }
 
-  .calendar-controls-row {
+  .month-nav-cluster {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.6rem;
     flex-wrap: wrap;
-    gap: 1rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .month-selector-group {
-    display: flex;
+  .nav-btn-group {
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.55rem;
+    padding: 0.15rem;
   }
 
-  .current-month-display {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #f1f5f9;
-    margin: 0 0.5rem;
-    min-width: 170px;
-    text-align: center;
-  }
-
-  .btn-ctrl-arrow {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #cbd5e1;
-    width: 34px;
-    height: 34px;
-    border-radius: 0.5rem;
+  .btn-month-nav {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    width: 28px;
+    height: 28px;
+    border-radius: 0.4rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1391,763 +1552,861 @@
     transition: all 0.15s ease;
   }
 
-  .btn-ctrl-arrow:hover {
-    background: rgba(255, 255, 255, 0.14);
+  .btn-month-nav:hover {
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
-    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .current-month-display {
+    padding: 0 0.65rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.01em;
+  }
+
+  .current-month-display .year-num {
+    color: #8b5cf6;
+    font-weight: 600;
   }
 
   .btn-today-pill {
-    background: rgba(139, 92, 246, 0.15);
+    background: rgba(139, 92, 246, 0.12);
     border: 1px solid rgba(139, 92, 246, 0.3);
     color: #c084fc;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    padding: 0.4rem 0.85rem;
+    padding: 0.35rem 0.75rem;
     border-radius: 0.5rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .btn-today-pill:hover {
-    background: rgba(139, 92, 246, 0.25);
+    background: rgba(139, 92, 246, 0.22);
     color: #fff;
   }
 
-  .view-mode-toggle {
-    display: flex;
-    background: rgba(15, 23, 42, 0.8);
+  .view-toggle-segmented {
+    display: inline-flex;
+    background: rgba(15, 23, 42, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.6rem;
-    padding: 0.2rem;
-    gap: 0.2rem;
+    border-radius: 0.55rem;
+    padding: 0.15rem;
   }
 
-  .btn-toggle-view {
-    display: flex;
+  .toggle-opt-btn {
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.85rem;
-    border-radius: 0.45rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #94a3b8;
+    gap: 0.35rem;
     background: transparent;
     border: none;
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.4rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-toggle-view.active {
-    background: #8b5cf6;
+  .toggle-opt-btn.active {
+    background: #7c3aed;
     color: #fff;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
   }
 
-  /* Filters */
-  .filters-action-strip {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 0.6rem 0.9rem;
-    border-radius: 0.75rem;
-  }
-
-  .filter-group {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.8rem;
-  }
-
-  .filter-label {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    color: #94a3b8;
-    font-weight: 500;
-  }
-
-  .filter-select {
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #f1f5f9;
-    padding: 0.35rem 0.65rem;
-    border-radius: 0.45rem;
-    font-size: 0.8rem;
-    font-family: inherit;
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s ease;
-  }
-
-  .filter-select:focus {
-    border-color: #8b5cf6;
-  }
-
-  /* 2. Primary Layout Grid */
-  .calendar-workspace-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-
-  @media (min-width: 1080px) {
-    .calendar-workspace-grid {
-      grid-template-columns: 1fr 340px;
-    }
-  }
-
-  /* 3. Monthly Calendar Grid Card */
-  .calendar-grid-card {
-    background: rgba(15, 23, 42, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  }
-
-  .weekday-header-row {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    background: rgba(0, 0, 0, 0.3);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    text-align: center;
-  }
-
-  .weekday-header-cell {
-    padding: 0.75rem 0.25rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .weekday-header-cell.weekend {
-    color: #64748b;
-  }
-
-  .days-matrix-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 1px;
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .matrix-day-cell {
-    background: #080c16;
-    min-height: 100px;
-    display: flex;
-    flex-direction: column;
-    padding: 0.45rem;
-    text-align: left;
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    outline: none;
-    position: relative;
-  }
-
-  .matrix-day-cell:hover {
-    background: #0f172a;
-  }
-
-  .matrix-day-cell.is-other-month {
-    background: rgba(6, 10, 19, 0.5);
-    opacity: 0.4;
-  }
-
-  .matrix-day-cell.is-today {
-    background: rgba(139, 92, 246, 0.06);
-    border: 1px solid rgba(139, 92, 246, 0.35);
-  }
-
-  .matrix-day-cell.is-selected {
-    box-shadow: inset 0 0 0 2px #8b5cf6;
-    background: rgba(139, 92, 246, 0.12);
-  }
-
-  .day-cell-header {
+  /* 2. HORIZONTAL FILTER BAR */
+  .calendar-filters-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.35rem;
+    padding: 0.55rem 0.95rem;
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 0.75rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
-  .day-cell-number {
-    font-size: 0.85rem;
-    font-weight: 700;
+  .filters-left-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .chip-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: #cbd5e1;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0.32rem 0.65rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
 
-  .matrix-day-cell.is-today .day-cell-number {
+  .chip-filter-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  .chip-filter-btn.is-active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
     color: #c084fc;
   }
 
-  .badge-today-label {
+  .filter-select-wrapper {
+    position: relative;
+  }
+
+  .filter-native-select {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    font-size: 0.76rem;
+    font-weight: 500;
+    padding: 0.32rem 0.65rem;
+    border-radius: 0.45rem;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-native-select:focus {
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+
+  .btn-clear-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.5rem;
+    border-radius: 0.35rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-clear-filters:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+
+  .commitments-stat-pill {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .commitments-stat-pill strong {
+    color: #c084fc;
+  }
+
+  /* 3. WORKSPACE LAYOUT (Main Grid + Side Widgets) */
+  .calendar-workspace-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 0.85rem;
+    align-items: start;
+  }
+
+  .calendar-primary-container {
+    min-width: 0;
+  }
+
+  /* Monthly Grid Card */
+  .calendar-monthly-card {
+    background: #090d16;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 0.95rem;
+    overflow: hidden;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4);
+  }
+
+  .weekday-labels-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: rgba(15, 23, 42, 0.9);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .weekday-label-cell {
+    padding: 0.55rem 0.4rem;
+    text-align: center;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .weekday-label-cell.weekend {
+    color: #64748b;
+  }
+
+  .monthly-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: rgba(255, 255, 255, 0.05);
+    gap: 1px;
+  }
+
+  .matrix-day-cell {
+    background: #090d16;
+    min-height: 105px;
+    max-height: 135px;
+    padding: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    text-align: left;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    overflow: hidden;
+  }
+
+  .matrix-day-cell:hover {
+    background: rgba(139, 92, 246, 0.08);
+  }
+
+  .matrix-day-cell.is-other-month {
+    background: #060910;
+    opacity: 0.45;
+  }
+
+  .matrix-day-cell.is-today {
+    background: rgba(139, 92, 246, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.45);
+  }
+
+  .matrix-day-cell.is-selected {
+    box-shadow: inset 0 0 0 2px #a855f7;
+    background: rgba(139, 92, 246, 0.18);
+  }
+
+  .cell-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .cell-day-num {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    line-height: 1;
+  }
+
+  .matrix-day-cell.is-today .cell-day-num {
+    color: #c084fc;
+  }
+
+  .cell-today-pill {
     font-size: 0.62rem;
     font-weight: 700;
-    background: #8b5cf6;
+    background: #7c3aed;
     color: #fff;
     padding: 0.1rem 0.35rem;
     border-radius: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
-  /* Mobile Dots Strip */
-  .mobile-dots-strip {
-    display: none;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .m-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-  }
-
-  .m-dot.overdue { background: #ef4444; }
-  .m-dot.in-progress { background: #38bdf8; }
-  .m-dot.extended { background: #a855f7; }
-  .m-dot.done { background: #10b981; }
-  .m-dot.publication { background: #06b6d4; }
-
-  /* Cell Events List (Desktop) */
-  .cell-events-list {
+  /* Desktop Events Stack: Real Avatars + Stage + Chapter */
+  .desktop-events-stack {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    width: 100%;
     overflow: hidden;
-    flex: 1;
   }
 
-  .event-pill {
-    background: rgba(255, 255, 255, 0.05);
-    border-left: 3px solid var(--pill-color, #8b5cf6);
-    border-radius: 0.3rem;
-    padding: 0.2rem 0.35rem;
+  .day-event-card {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-    font-size: 0.7rem;
-    color: #e2e8f0;
+    gap: 0.35rem;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid var(--stage-accent, #8b5cf6);
+    border-radius: 0.35rem;
+    padding: 0.22rem 0.35rem;
+    overflow: hidden;
+    transition: transform 0.1s ease, border-color 0.1s ease;
+  }
+
+  .day-event-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .day-event-card.in-progress {
+    background: rgba(139, 92, 246, 0.1);
+  }
+
+  .day-event-card.due-soon {
+    background: rgba(245, 158, 11, 0.12);
+    border-left-color: #f59e0b;
+  }
+
+  .day-event-card.done {
+    background: rgba(16, 185, 129, 0.1);
+    border-left-color: #10b981;
+  }
+
+  .day-event-card.overdue {
+    background: rgba(239, 68, 68, 0.12);
+    border-left-color: #ef4444;
+  }
+
+  .day-event-card.extended {
+    background: rgba(6, 182, 212, 0.1);
+    border-left-color: #06b6d4;
+  }
+
+  .event-card-avatar-wrap {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .event-card-info-cluster {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    line-height: 1.15;
+  }
+
+  .event-card-work-line {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #f1f5f9;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: transform 0.1s ease;
   }
 
-  .event-pill:hover {
-    transform: scale(1.02);
+  .event-card-stage-pill {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .event-pill.overdue {
-    background: rgba(239, 68, 68, 0.15);
-    border-left-color: #ef4444;
-    color: #fca5a5;
-  }
-
-  .event-pill.done {
-    background: rgba(16, 185, 129, 0.12);
-    border-left-color: #10b981;
-    color: #6ee7b7;
-  }
-
-  .event-pill.extended {
-    border-left-color: #a855f7;
-  }
-
-  .pill-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
+  .event-card-ext-badge {
+    font-size: 0.58rem;
+    font-weight: 700;
+    background: rgba(6, 182, 212, 0.25);
+    color: #22d3ee;
+    padding: 0.05rem 0.25rem;
+    border-radius: 0.25rem;
     flex-shrink: 0;
   }
 
-  .pill-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-  }
-
-  .pill-ext-badge {
-    font-size: 0.6rem;
-    font-weight: 700;
-    color: #c084fc;
-    background: rgba(139, 92, 246, 0.25);
-    padding: 0.05rem 0.25rem;
-    border-radius: 0.25rem;
-  }
-
-  :global(.pill-done-ico) {
+  .event-card-done-ico {
     color: #10b981;
     flex-shrink: 0;
   }
 
-  .event-overflow-pill {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: #94a3b8;
-    padding: 0.1rem 0.25rem;
-    border-radius: 0.25rem;
+  .event-overflow-badge {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.12);
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    text-align: center;
   }
 
-  .publication-pill {
-    background: rgba(6, 182, 212, 0.12);
-    border-left: 3px solid #06b6d4;
-    color: #22d3ee;
-    border-radius: 0.3rem;
-    padding: 0.2rem 0.35rem;
-    font-size: 0.68rem;
-    font-weight: 600;
-    display: flex;
+  .publication-badge-pill {
+    display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  /* Agenda View */
-  .agenda-view-card {
-    background: rgba(15, 23, 42, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
-    padding: 1.5rem;
+  /* Mobile Day Content: Avatars + Pips (Hidden on desktop, shown on mobile) */
+  .mobile-day-cell-content {
+    display: none;
+  }
+
+  /* Agenda View Styling */
+  .agenda-view-wrapper {
+    background: #090d16;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 0.95rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.85rem;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4);
   }
 
-  .agenda-header {
+  .agenda-header-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .agenda-header-left {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 1rem;
-    color: #f1f5f9;
   }
 
-  .agenda-header h3 {
-    margin: 0;
-    font-size: 1rem;
+  .agenda-heading {
+    font-size: 0.925rem;
     font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
   }
 
-  .agenda-items-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+  .agenda-count-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(139, 92, 246, 0.15);
+    color: #c084fc;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.4rem;
   }
 
-  .agenda-row-card {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 0.85rem;
-    padding: 0.9rem 1.15rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    transition: all 0.15s ease;
-  }
-
-  .agenda-row-card:hover {
-    border-color: rgba(255, 255, 255, 0.15);
-    background: rgba(0, 0, 0, 0.4);
-  }
-
-  .agenda-row-card.is-overdue {
-    border-color: rgba(239, 68, 68, 0.35);
-    background: rgba(239, 68, 68, 0.05);
-  }
-
-  .agenda-row-card.is-done {
-    border-color: rgba(16, 185, 129, 0.3);
-  }
-
-  .agenda-date-badge {
-    width: 48px;
-    height: 48px;
-    border-radius: 0.6rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  .agenda-empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 3rem 1rem;
+    gap: 0.6rem;
+    color: #94a3b8;
+    text-align: center;
+  }
+
+  .agenda-list-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .agenda-item-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.65rem;
+    padding: 0.75rem 0.95rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .agenda-item-card:hover {
+    background: rgba(15, 23, 42, 0.95);
+    border-color: rgba(139, 92, 246, 0.35);
+    transform: translateX(2px);
+  }
+
+  .agenda-item-card.overdue {
+    border-left: 3px solid #ef4444;
+  }
+
+  .agenda-item-card.done {
+    border-left: 3px solid #10b981;
+  }
+
+  .agenda-item-card.extended {
+    border-left: 3px solid #06b6d4;
+  }
+
+  .agenda-date-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 0.5rem;
     flex-shrink: 0;
   }
 
-  .badge-day {
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #f8fafc;
+  .agenda-date-day {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f1f5f9;
     line-height: 1;
   }
 
-  .badge-month {
-    font-size: 0.65rem;
+  .agenda-date-month {
+    font-size: 0.62rem;
     font-weight: 700;
-    color: #94a3b8;
+    color: #c084fc;
     text-transform: uppercase;
   }
 
-  .agenda-details-col {
+  .agenda-item-body {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
-    flex: 1;
+    gap: 0.25rem;
     min-width: 0;
+    flex: 1;
   }
 
-  .agenda-top-line {
+  .agenda-work-head {
     display: flex;
     align-items: center;
     gap: 0.45rem;
     flex-wrap: wrap;
   }
 
-  .agenda-work-name {
-    font-size: 0.92rem;
+  .agenda-work-title {
+    font-size: 0.9rem;
     font-weight: 700;
-    color: #f1f5f9;
+    color: #f8fafc;
   }
 
-  .agenda-ch-pill {
+  .agenda-chapter-badge {
     font-size: 0.72rem;
+    font-weight: 600;
     background: rgba(255, 255, 255, 0.08);
     color: #cbd5e1;
     padding: 0.1rem 0.4rem;
     border-radius: 0.3rem;
   }
 
-  .agenda-stage-pill {
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: rgba(139, 92, 246, 0.15);
-    color: var(--stage-c, #a855f7);
-    border: 1px solid color-mix(in srgb, var(--stage-c, #a855f7) 35%, transparent);
-    padding: 0.1rem 0.45rem;
-    border-radius: 0.3rem;
+  .agenda-stage-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--st-c, #a855f7) 16%, transparent);
+    color: var(--st-c, #a855f7);
+    border: 1px solid color-mix(in srgb, var(--st-c, #a855f7) 35%, transparent);
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.3rem;
   }
 
-  .agenda-stage-pill .dot {
-    width: 5px;
-    height: 5px;
+  .agenda-stage-badge .st-dot {
+    width: 4px;
+    height: 4px;
     border-radius: 50%;
     background: currentColor;
   }
 
-  .agenda-meta-line {
+  .agenda-meta-row {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.65rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
     flex-wrap: wrap;
-    font-size: 0.78rem;
   }
 
-  .agenda-user-inline {
+  .agenda-user-lockup {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    color: #cbd5e1;
+    color: #e2e8f0;
+    font-weight: 500;
   }
 
-  .status-tag {
+  .agenda-status-pill {
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 600;
     padding: 0.1rem 0.4rem;
     border-radius: 0.3rem;
   }
 
-  .status-tag.in-progress { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
-  .status-tag.overdue { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-  .status-tag.done { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-  .status-tag.extended { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
-
-  .agenda-notes-quote {
-    font-size: 0.78rem;
-    color: #94a3b8;
-    margin: 0.2rem 0 0;
-    font-style: italic;
+  .agenda-status-pill.in-progress {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c084fc;
   }
 
-  .agenda-actions-col {
+  .agenda-status-pill.due-soon {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+  }
+
+  .agenda-status-pill.done {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
+
+  .agenda-status-pill.overdue {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+  }
+
+  .agenda-ext-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: rgba(6, 182, 212, 0.2);
+    color: #22d3ee;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.3rem;
+  }
+
+  .agenda-note-excerpt {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin: 0.15rem 0 0;
+  }
+
+  .agenda-action-cell {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     flex-shrink: 0;
   }
 
-  .btn-quick-extend {
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    color: #fbbf24;
-    padding: 0.4rem 0.75rem;
-    border-radius: 0.5rem;
-    font-size: 0.75rem;
+  .btn-agenda-extend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    color: #22d3ee;
+    font-size: 0.74rem;
     font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.4rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-quick-extend:hover {
-    background: rgba(245, 158, 11, 0.25);
+  .btn-agenda-extend:hover {
+    background: rgba(6, 182, 212, 0.25);
     color: #fff;
   }
 
-  .btn-open-detail {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
-    padding: 0.4rem 0.75rem;
-    border-radius: 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
+  .agenda-arrow-icon {
+    color: #64748b;
   }
 
-  .btn-open-detail:hover {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-  }
-
-  /* 4. Side Panels */
-  .calendar-sidebar-pane {
+  /* SIDEBAR PANELS (Widgets) */
+  .calendar-side-column {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.85rem;
   }
 
-  .side-panel-card {
-    background: rgba(15, 23, 42, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
-    padding: 1.15rem;
+  .side-widget-card {
+    background: #090d16;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 0.85rem;
+    padding: 0.85rem 0.95rem;
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    gap: 0.65rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   }
 
-  .side-panel-card.alert-panel {
-    border-color: rgba(239, 68, 68, 0.3);
+  .side-widget-card.alert-card {
+    border-color: rgba(239, 68, 68, 0.35);
     background: rgba(239, 68, 68, 0.04);
   }
 
-  .panel-header {
+  .widget-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .panel-header h4 {
-    margin: 0;
-    font-size: 0.88rem;
+  .widget-title {
+    font-size: 0.825rem;
     font-weight: 700;
     color: #f1f5f9;
+    margin: 0;
   }
 
-  .text-red { color: #f87171 !important; }
-
-  .side-deliveries-list {
+  .widget-empty-box {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem 0.5rem;
+    gap: 0.45rem;
+    color: #94a3b8;
+    text-align: center;
+    font-size: 0.78rem;
   }
 
-  .my-delivery-item {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 0.75rem;
-    padding: 0.65rem 0.8rem;
+  .widget-items-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .widget-delivery-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-  }
-
-  .my-delivery-item.is-overdue {
-    border-color: rgba(239, 68, 68, 0.3);
-  }
-
-  .my-item-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .my-item-work {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #f1f5f9;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .my-item-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-  }
-
-  .my-stage-badge {
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--stage-c, #a855f7);
-  }
-
-  .my-due-text {
-    font-size: 0.68rem;
-    color: #94a3b8;
-  }
-
-  .my-item-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-shrink: 0;
-  }
-
-  .btn-extend-badge {
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    color: #fbbf24;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.4rem;
-    font-size: 0.68rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.65rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-extend-badge:hover {
-    background: rgba(245, 158, 11, 0.25);
-    color: #fff;
+  .widget-delivery-item:hover {
+    background: rgba(15, 23, 42, 0.95);
+    border-color: rgba(139, 92, 246, 0.3);
   }
 
-  .btn-mini-view {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #cbd5e1;
-    width: 26px;
-    height: 26px;
-    border-radius: 0.4rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
+  .widget-delivery-item.overdue {
+    border-left: 3px solid #ef4444;
   }
 
-  .btn-mini-view:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-  }
-
-  .overdue-item-row {
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: 0.65rem;
-    padding: 0.55rem 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-
-  .overdue-info {
+  .delivery-item-left {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
     min-width: 0;
   }
 
-  .overdue-work {
-    font-size: 0.8rem;
+  .delivery-work-title {
+    font-size: 0.78rem;
     font-weight: 700;
-    color: #fca5a5;
+    color: #f8fafc;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .overdue-assignee {
+  .delivery-tags-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .delivery-stage-tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--st-c, #a855f7);
+  }
+
+  .delivery-due-tag {
     font-size: 0.68rem;
     color: #94a3b8;
   }
 
-  /* Team Availability */
-  .team-avail-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  .delivery-overdue-assignee {
+    font-size: 0.68rem;
+    color: #fca5a5;
   }
 
-  .avail-member-row {
+  .delivery-item-right {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+
+  .btn-widget-extend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    background: rgba(6, 182, 212, 0.2);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    color: #22d3ee;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.3rem;
+    cursor: pointer;
+  }
+
+  .widget-arrow {
+    color: #64748b;
+  }
+
+  .team-avail-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .team-avail-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.78rem;
+    padding: 0.25rem 0.35rem;
   }
 
-  .avail-user-group {
+  .member-lockup {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
+    min-width: 0;
   }
 
-  .avail-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
+  .member-name {
+    font-size: 0.74rem;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-
-  .avail-dot.active { background: #10b981; }
-  .avail-dot.busy { background: #f59e0b; }
-  .avail-dot.away { background: #64748b; }
-  .avail-dot.hiatus { background: #ef4444; }
-
-  .avail-name { color: #e2e8f0; font-weight: 500; }
 
   .avail-badge {
-    font-size: 0.7rem;
+    font-size: 0.64rem;
     font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    flex-shrink: 0;
   }
 
-  .avail-badge.active { color: #10b981; }
-  .avail-badge.busy { color: #f59e0b; }
-  .avail-badge.away { color: #64748b; }
-  .avail-badge.hiatus { color: #ef4444; }
+  .avail-badge.active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
 
-  .side-empty-state {
-    text-align: center;
-    padding: 1.5rem 0.5rem;
+  .avail-badge.busy {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+  }
+
+  .avail-badge.away, .avail-badge.hiatus {
+    background: rgba(100, 116, 139, 0.15);
     color: #94a3b8;
-    font-size: 0.8rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
   }
 
   /* ========================================================================= */
-  /* DAY DETAIL DRAWER / MODAL (Desktop & Android)                             */
+  /* 4. DAY DETAILS DRAWER (DESKTOP) & BOTTOM SHEET (MOBILE)                    */
   /* ========================================================================= */
   .drawer-backdrop {
     position: fixed;
@@ -2157,59 +2416,68 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     display: flex;
-    align-items: center;
     justify-content: flex-end;
   }
 
   .day-drawer-panel {
-    background: #090e1a;
-    border-left: 1px solid rgba(139, 92, 246, 0.25);
+    background: #090d16;
+    border-left: 1px solid rgba(139, 92, 246, 0.3);
+    box-shadow: -15px 0 45px rgba(0, 0, 0, 0.7);
     width: 100%;
-    max-width: 520px;
+    max-width: 480px;
     height: 100%;
     display: flex;
     flex-direction: column;
-    box-shadow: -15px 0 45px rgba(0, 0, 0, 0.6);
-    animation: drawerSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+    animation: drawerSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  @keyframes drawerSlide {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+  @keyframes drawerSlideIn {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
   }
 
   .drawer-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1.25rem 1.5rem;
+    padding: 1.15rem 1.25rem 0.95rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(15, 23, 42, 0.6);
+    gap: 0.75rem;
   }
 
-  .drawer-header-kicker {
-    font-size: 0.72rem;
+  .drawer-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .drawer-header-eyebrow {
+    font-size: 0.7rem;
     font-weight: 700;
-    color: #a855f7;
+    color: #8b5cf6;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
   }
 
   .drawer-date-title {
-    font-size: 1.15rem;
-    font-weight: 800;
+    font-size: 1.05rem;
+    font-weight: 700;
     color: #f8fafc;
-    margin: 0.15rem 0 0;
-    text-transform: capitalize;
+    margin: 0;
   }
 
   .btn-close-drawer {
     background: transparent;
     border: none;
     color: #64748b;
-    padding: 0.5rem;
-    border-radius: 0.5rem;
     cursor: pointer;
+    padding: 0.45rem;
+    border-radius: 0.45rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2221,728 +2489,827 @@
     color: #fff;
   }
 
-  .drawer-body {
-    padding: 1.5rem;
+  .drawer-scroll-body {
+    flex: 1;
     overflow-y: auto;
+    padding: 1.15rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    flex: 1;
+    gap: 1.25rem;
   }
 
   .drawer-section {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 0.75rem;
   }
 
-  .section-title {
+  .section-title-strip {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
+    gap: 0.45rem;
+  }
+
+  .section-heading {
+    font-size: 0.85rem;
     font-weight: 700;
-    color: #f1f5f9;
+    color: #e2e8f0;
     margin: 0;
   }
 
-  .commitments-cards-stack {
+  .drawer-empty-placeholder {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1rem;
+    gap: 0.5rem;
+    color: #94a3b8;
+    text-align: center;
+    font-size: 0.82rem;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
   }
 
-  .commitment-detail-card {
+  .drawer-cards-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .drawer-commitment-card {
     background: rgba(15, 23, 42, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1rem;
-    padding: 1.15rem;
+    border-radius: 0.85rem;
+    padding: 0.95rem;
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  }
-
-  .commitment-detail-card.is-overdue {
-    border-color: rgba(239, 68, 68, 0.35);
-    background: rgba(239, 68, 68, 0.05);
-  }
-
-  .commitment-detail-card.is-done {
-    border-color: rgba(16, 185, 129, 0.35);
-  }
-
-  .card-head-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
     gap: 0.75rem;
+    transition: border-color 0.15s ease;
   }
 
-  .work-thumb-cluster {
+  .drawer-commitment-card:hover {
+    border-color: rgba(139, 92, 246, 0.35);
+  }
+
+  .drawer-commitment-card.overdue {
+    border-left: 3px solid #ef4444;
+  }
+
+  .drawer-commitment-card.done {
+    border-left: 3px solid #10b981;
+  }
+
+  .drawer-commitment-card.extended {
+    border-left: 3px solid #06b6d4;
+  }
+
+  .card-hero-row {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    min-width: 0;
   }
 
-  .work-mini-cover {
-    width: 40px;
-    height: 52px;
-    border-radius: 0.4rem;
-    object-fit: cover;
+  .work-cover-thumb-box {
+    width: 44px;
+    height: 60px;
+    border-radius: 0.45rem;
+    overflow: hidden;
     background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .work-mini-cover.fallback {
+  .work-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .work-cover-img.fallback {
     display: flex;
     align-items: center;
     justify-content: center;
     color: #64748b;
   }
 
-  .work-identity {
+  .hero-text-col {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
     min-width: 0;
+    flex: 1;
   }
 
-  .work-title-text {
+  .hero-work-title {
     font-size: 0.95rem;
     font-weight: 700;
     color: #f8fafc;
+    line-height: 1.25;
+  }
+
+  .hero-pills-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .hero-chapter-pill {
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.35rem;
+  }
+
+  .hero-stage-pill {
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--st-c, #a855f7) 16%, transparent);
+    color: var(--st-c, #a855f7);
+    border: 1px solid color-mix(in srgb, var(--st-c, #a855f7) 35%, transparent);
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .hero-stage-pill .st-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .hero-status-box {
+    flex-shrink: 0;
+  }
+
+  .hero-status-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.4rem;
+  }
+
+  .hero-status-tag.in-progress {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+  }
+
+  .hero-status-tag.due-soon {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+  }
+
+  .hero-status-tag.done {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .hero-status-tag.overdue {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+
+  .hero-status-tag.extended {
+    background: rgba(6, 182, 212, 0.18);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+  }
+
+  .card-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.55rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .detail-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .detail-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .detail-user-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .detail-user-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #e2e8f0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .pills-cluster {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-  }
-
-  .pill-ch {
-    font-size: 0.7rem;
-    background: rgba(255, 255, 255, 0.08);
-    color: #cbd5e1;
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.3rem;
-  }
-
-  .pill-stage {
-    font-size: 0.7rem;
-    font-weight: 600;
-    background: rgba(139, 92, 246, 0.15);
-    color: var(--stage-color, #a855f7);
-    border: 1px solid color-mix(in srgb, var(--stage-color, #a855f7) 35%, transparent);
-    padding: 0.1rem 0.45rem;
-    border-radius: 0.3rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-  }
-
-  .pill-stage .dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-
-  .status-badge-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.25rem;
-  }
-
-  .detail-badge {
-    font-size: 0.7rem;
+  .detail-due-val {
+    font-size: 0.8rem;
     font-weight: 700;
-    padding: 0.2rem 0.5rem;
-    border-radius: 0.35rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
   }
 
-  .detail-badge.in-progress { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
-  .detail-badge.overdue { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-  .detail-badge.done { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-  .detail-badge.extended { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+  .detail-orig-due {
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
 
-  /* Meta Grid */
-  .card-meta-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 0.75rem;
+  /* Notes Block */
+  .notes-block {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 0.75rem;
-    border-radius: 0.65rem;
-  }
-
-  .meta-field {
+    border-radius: 0.55rem;
+    padding: 0.65rem 0.75rem;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.35rem;
   }
 
-  .meta-field-label {
-    font-size: 0.68rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-
-  .meta-user-wrap {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .meta-user-name {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #f1f5f9;
-  }
-
-  .meta-due-val.cyan {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #22d3ee;
-  }
-
-  .meta-due-orig {
-    font-size: 0.78rem;
-    color: #64748b;
-    text-decoration: line-through;
-  }
-
-  /* Notes */
-  .notes-display-box {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 0.65rem;
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .notes-header {
+  .notes-header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .notes-title {
-    display: flex;
+  .notes-label-text {
+    display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #cbd5e1;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #94a3b8;
   }
 
-  .btn-edit-note {
+  .btn-edit-note-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     background: transparent;
     border: none;
     color: #a855f7;
     font-size: 0.72rem;
     font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
     cursor: pointer;
-    padding: 0.15rem 0.4rem;
-    border-radius: 0.3rem;
   }
 
-  .btn-edit-note:hover {
-    background: rgba(168, 85, 247, 0.15);
+  .btn-edit-note-trigger:hover {
+    color: #c084fc;
+    text-decoration: underline;
   }
 
-  .notes-content-text {
-    font-size: 0.8rem;
-    color: #f1f5f9;
-    margin: 0;
+  .notes-body-text {
+    font-size: 0.78rem;
+    color: #e2e8f0;
     font-style: italic;
-    line-height: 1.4;
+    line-height: 1.35;
+    margin: 0;
   }
 
-  .notes-content-text.empty {
+  .notes-body-text.is-empty {
     color: #64748b;
     font-style: normal;
   }
 
-  .note-edit-form {
+  .note-editor-form {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    margin-top: 0.3rem;
+    gap: 0.45rem;
+    margin-top: 0.25rem;
   }
 
-  .note-textarea {
+  .note-editor-textarea {
     width: 100%;
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.5rem;
-    padding: 0.5rem 0.65rem;
-    font-size: 0.8rem;
-    color: #f1f5f9;
-    box-sizing: border-box;
-    font-family: inherit;
-    resize: none;
-  }
-
-  .note-edit-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-  }
-
-  .btn-cancel-note {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
-    padding: 0.3rem 0.65rem;
-    border-radius: 0.4rem;
-    font-size: 0.72rem;
-    cursor: pointer;
-  }
-
-  .btn-save-note {
-    background: #8b5cf6;
-    border: none;
-    color: #fff;
-    padding: 0.3rem 0.75rem;
-    border-radius: 0.4rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    cursor: pointer;
-  }
-
-  /* Card Footer Actions */
-  .card-footer-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    flex-wrap: wrap;
-  }
-
-  .btn-trigger-extension {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.2));
-    border: 1px solid rgba(245, 158, 11, 0.4);
-    color: #fbbf24;
-    padding: 0.55rem 0.95rem;
-    border-radius: 0.55rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
-    transition: all 0.15s ease;
-  }
-
-  .btn-trigger-extension:hover {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(217, 119, 6, 0.3));
-    color: #fff;
-    transform: translateY(-1px);
-  }
-
-  .btn-jump-chapter {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #f1f5f9;
-    padding: 0.55rem 0.95rem;
-    border-radius: 0.55rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-jump-chapter:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  .drawer-empty-box {
-    text-align: center;
-    padding: 2.5rem 1rem;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 0.85rem;
-    color: #94a3b8;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.85rem;
-  }
-
-  /* Publications in Drawer */
-  .publications-cards-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .pub-card-row {
-    background: rgba(6, 182, 212, 0.08);
-    border: 1px solid rgba(6, 182, 212, 0.25);
-    border-radius: 0.75rem;
-    padding: 0.75rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  .pub-icon-orb {
-    width: 34px;
-    height: 34px;
-    border-radius: 0.5rem;
-    background: rgba(6, 182, 212, 0.15);
-    color: #06b6d4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .pub-info-col {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .pub-work-title {
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: #f1f5f9;
-  }
-
-  .pub-sub-desc {
-    font-size: 0.75rem;
-    color: #22d3ee;
-  }
-
-  .btn-view-reader {
-    background: rgba(6, 182, 212, 0.15);
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    color: #22d3ee;
-    padding: 0.35rem 0.65rem;
+    background: #060910;
+    border: 1px solid rgba(139, 92, 246, 0.4);
     border-radius: 0.45rem;
-    font-size: 0.72rem;
+    padding: 0.45rem 0.6rem;
+    color: #f1f5f9;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    resize: none;
+    outline: none;
+  }
+
+  .note-editor-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+  }
+
+  .btn-note-cancel {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    font-size: 0.74rem;
     font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 0.4rem;
+    cursor: pointer;
+  }
+
+  .btn-note-save {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    text-decoration: none;
+    background: #7c3aed;
+    border: none;
+    color: #fff;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 0.3rem 0.7rem;
+    border-radius: 0.4rem;
+    cursor: pointer;
+  }
+
+  /* Actions Bar */
+  .card-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-extend-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    color: #22d3ee;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-view-reader:hover {
+  .btn-extend-action:hover {
     background: rgba(6, 182, 212, 0.25);
     color: #fff;
   }
 
+  .btn-open-production {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c084fc;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-open-production:hover {
+    background: rgba(139, 92, 246, 0.22);
+    color: #fff;
+  }
+
+  /* Publications List in Drawer */
+  .publications-list-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .pub-row-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 0.55rem;
+    padding: 0.55rem 0.75rem;
+    gap: 0.65rem;
+  }
+
+  .pub-icon-cell {
+    color: #34d399;
+  }
+
+  .pub-info-cell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .pub-work-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+
+  .pub-ch-num {
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+
+  .btn-open-reader {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.25rem 0.55rem;
+    border-radius: 0.35rem;
+    text-decoration: none;
+  }
+
+  .btn-open-reader:hover {
+    background: rgba(16, 185, 129, 0.35);
+    color: #fff;
+  }
+
   /* ========================================================================= */
-  /* EXTENSION MODAL STYLES                                                    */
+  /* 5. EXTENSION CONFIRMATION MODAL (+2 DIAS)                                 */
   /* ========================================================================= */
   .modal-backdrop {
     position: fixed;
     inset: 0;
     z-index: 9999;
-    background: rgba(4, 7, 18, 0.8);
+    background: rgba(4, 7, 18, 0.82);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: max(1rem, env(safe-area-inset-top, 1rem)) 1rem max(1rem, env(safe-area-inset-bottom, 1rem));
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    padding: 1rem;
   }
 
-  .modal-card-small {
-    background: #0b0f19;
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 1.25rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(245, 158, 11, 0.15);
+  .extension-modal-card {
+    background: #090d16;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    border-radius: 1.15rem;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 30px rgba(6, 182, 212, 0.15);
     width: 100%;
     max-width: 440px;
-    margin: auto 0;
-    display: flex;
-    flex-direction: column;
     overflow: hidden;
-    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .ext-modal-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    padding: 1.25rem 1.25rem 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 1.1rem 1.15rem 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 0.75rem;
   }
 
-  .ext-orb {
-    width: 42px;
-    height: 42px;
-    border-radius: 0.75rem;
+  .ext-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+  }
+
+  .ext-icon-orb {
+    width: 36px;
+    height: 36px;
+    border-radius: 0.65rem;
+    background: rgba(6, 182, 212, 0.18);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.35);
     flex-shrink: 0;
   }
 
   .ext-modal-title {
-    font-size: 1.05rem;
-    font-weight: 800;
+    font-size: 1rem;
+    font-weight: 700;
     color: #f8fafc;
     margin: 0;
   }
 
-  .ext-modal-sub {
-    font-size: 0.78rem;
+  .ext-modal-subtitle {
+    font-size: 0.76rem;
     color: #94a3b8;
     margin: 0.15rem 0 0;
   }
 
-  .ext-form-body {
-    padding: 1.25rem;
+  .ext-modal-body {
     display: flex;
     flex-direction: column;
-    gap: 1.15rem;
+    gap: 0.85rem;
+    padding: 1rem 1.15rem 1.15rem;
   }
 
-  .ext-projection-box {
-    background: rgba(245, 158, 11, 0.06);
-    border: 1px solid rgba(245, 158, 11, 0.25);
-    border-radius: 0.85rem;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .ext-flow-row {
+  .ext-context-box {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    text-align: center;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.55rem;
+    padding: 0.65rem 0.85rem;
+    gap: 0.5rem;
   }
 
-  .ext-point {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .ext-point-label {
-    font-size: 0.7rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-
-  .ext-point-val {
-    font-size: 0.88rem;
+  .ext-work-title {
+    font-size: 0.84rem;
+    font-weight: 700;
     color: #f1f5f9;
   }
 
-  .ext-point-val.emerald {
-    color: #10b981;
-    font-size: 0.95rem;
+  .ext-stage-pill {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--st-c, #a855f7);
+    background: color-mix(in srgb, var(--st-c, #a855f7) 16%, transparent);
+    padding: 0.12rem 0.45rem;
+    border-radius: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--st-c, #a855f7) 35%, transparent);
   }
 
-  .ext-arrow {
+  .ext-rules-card {
+    background: rgba(6, 182, 212, 0.06);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    border-radius: 0.6rem;
+    padding: 0.75rem;
     display: flex;
     flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .rule-line {
+    display: flex;
     align-items: center;
-    color: #fbbf24;
-    gap: 0.1rem;
+    gap: 0.45rem;
+    font-size: 0.76rem;
+    color: #cbd5e1;
   }
 
-  .plus-days {
-    font-size: 0.68rem;
-    font-weight: 800;
-    color: #fbbf24;
-  }
-
-  .ext-hint-text {
-    font-size: 0.75rem;
+  .rule-line.info {
     color: #94a3b8;
-    line-height: 1.4;
-    margin: 0;
   }
 
-  .ext-actions-footer {
+  .ext-modal-footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.75rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    padding-top: 0.75rem;
+    gap: 0.55rem;
+    margin-top: 0.25rem;
   }
 
-  .btn-confirm-extension {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    border: none;
-    color: #fff;
-    padding: 0.6rem 1.15rem;
-    border-radius: 0.6rem;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
+  .btn-confirm-extend {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.35);
+    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0.55rem 1.15rem;
+    border-radius: 0.55rem;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(6, 182, 212, 0.35);
     transition: all 0.15s ease;
   }
 
-  .btn-confirm-extension:hover:not(:disabled) {
+  .btn-confirm-extend:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.45);
+    box-shadow: 0 6px 20px rgba(6, 182, 212, 0.5);
   }
 
-  .btn-confirm-extension:disabled {
+  .btn-confirm-extend:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  /* Global utility classes */
-  .cyan { color: #06b6d4 !important; }
-  .purple { color: #a855f7 !important; }
-  .emerald { color: #10b981 !important; }
-  .amber { color: #f59e0b !important; }
-  .red { color: #ef4444 !important; }
+  .spinner-mini {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
 
-  /* Responsive Mobile Overrides */
-  @media (max-width: 768px) {
-    .calendar-main-header {
-      padding: 1rem;
-      gap: 1rem;
-      border-radius: 1rem;
+  /* ========================================================================= */
+  /* RESPONSIVE DESIGN (Android 320px - 430px & Tablets)                       */
+  /* ========================================================================= */
+  @media (max-width: 1024px) {
+    .calendar-workspace-layout {
+      grid-template-columns: 1fr;
     }
-    .calendar-title {
-      font-size: 1.15rem;
-    }
-    .calendar-subtitle {
-      font-size: 0.78rem;
-    }
-    .current-month-display {
-      font-size: 1rem;
-      min-width: 140px;
-    }
-    .cell-events-list {
-      display: none; /* Hide bulky pills on mobile */
-    }
-    .mobile-dots-strip {
-      display: flex; /* Show dots on mobile */
-    }
-    .matrix-day-cell {
-      min-height: 48px;
-      padding: 0.25rem 0.2rem;
-      align-items: center;
-    }
-    .day-cell-header {
-      flex-direction: column;
-      gap: 0.2rem;
-      align-items: center;
-      margin: 0;
-    }
-    .day-drawer-panel {
-      max-width: 100%;
-      height: 85vh;
-      border-radius: 1.25rem 1.25rem 0 0;
-      border-left: none;
-      border-top: 1px solid rgba(139, 92, 246, 0.3);
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      animation: drawerSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes drawerSlideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
-    }
-    .agenda-row-card {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.75rem;
-    }
-    .agenda-actions-col {
-      width: 100%;
-      justify-content: flex-end;
+
+    .calendar-side-column {
+      display: none; /* Complementary widgets collapse on tablet/mobile */
     }
   }
 
-  @media (max-width: 480px) {
-    .calendar-controls-row {
+  @media (max-width: 768px) {
+    .scan-calendar-hub {
+      gap: 0.55rem;
+    }
+
+    .calendar-top-header {
+      padding: 0.65rem 0.85rem;
       flex-direction: column;
       align-items: stretch;
+      gap: 0.65rem;
     }
-    .month-selector-group {
+
+    .header-branding-block {
       justify-content: space-between;
     }
-    .view-mode-toggle {
+
+    .calendar-subtitle {
+      display: none; /* Hide subtitle on mobile for maximum vertical efficiency */
+    }
+
+    .calendar-icon-orb {
+      width: 30px;
+      height: 30px;
+    }
+
+    .calendar-title {
+      font-size: 0.95rem;
+    }
+
+    .month-nav-cluster {
+      justify-content: space-between;
       width: 100%;
-      justify-content: center;
     }
-    .filters-action-strip {
-      flex-direction: column;
-      align-items: stretch;
+
+    .desktop-only-txt {
+      display: none;
     }
-    .filter-group {
-      justify-content: space-between;
+
+    .current-month-display {
+      padding: 0 0.4rem;
+      font-size: 0.82rem;
     }
+
+    /* Filters: Compact horizontal scrollable row */
+    .calendar-filters-bar {
+      padding: 0.45rem 0.65rem;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .calendar-filters-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filters-left-group {
+      flex-wrap: nowrap;
+    }
+
+    .filters-right-meta {
+      display: none;
+    }
+
+    /* Grid adjustments for mobile */
     .matrix-day-cell {
-      min-height: 42px;
+      min-height: 52px;
+      max-height: 70px;
+      padding: 0.25rem 0.2rem;
+      gap: 0.15rem;
     }
-    .day-cell-number {
-      font-size: 0.75rem;
+
+    .cell-day-num {
+      font-size: 0.72rem;
     }
-    .weekday-header-cell {
-      font-size: 0.68rem;
-      padding: 0.5rem 0.1rem;
+
+    .cell-today-pill {
+      font-size: 0.55rem;
+      padding: 0.05rem 0.25rem;
     }
-    .modal-card-small {
-      border-radius: 1rem;
-      max-width: 100%;
+
+    /* Hide desktop multi-line cards on mobile */
+    .desktop-events-stack {
+      display: none;
     }
-    .ext-actions-footer {
-      flex-direction: column-reverse;
-      gap: 0.5rem;
-    }
-    .btn-cancel, .btn-confirm-extension {
+
+    /* SHOW MOBILE AVATARS STRIP ON MOBILE */
+    .mobile-day-cell-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
       width: 100%;
+      margin-top: auto;
+    }
+
+    .mobile-avatars-row {
+      display: flex;
+      align-items: center;
       justify-content: center;
+      gap: 0.15rem;
+    }
+
+    .mobile-cell-avatar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .mobile-overflow-count {
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: #c084fc;
+      line-height: 1;
+    }
+
+    .mobile-pips-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.15rem;
+    }
+
+    .mobile-stage-pip {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+    }
+
+    /* Day Drawer becomes Bottom Sheet on Android */
+    .drawer-backdrop {
+      align-items: flex-end;
+    }
+
+    .day-drawer-panel {
+      max-width: 100%;
+      height: auto;
+      max-height: 85vh;
+      border-left: none;
+      border-top: 1px solid rgba(139, 92, 246, 0.35);
+      border-radius: 1.15rem 1.15rem 0 0;
+      animation: sheetSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes sheetSlideUp {
+      from {
+        transform: translateY(100%);
+      }
+      to {
+        transform: translateY(0);
+      }
+    }
+
+    .drawer-header {
+      padding: 1rem 1rem 0.75rem;
+    }
+
+    .drawer-scroll-body {
+      padding: 0.85rem 1rem max(1rem, env(safe-area-inset-bottom, 1rem));
+    }
+
+    .card-details-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .matrix-day-cell {
+      min-height: 48px;
+      padding: 0.2rem 0.15rem;
+    }
+
+    .cell-day-num {
+      font-size: 0.68rem;
     }
   }
 </style>

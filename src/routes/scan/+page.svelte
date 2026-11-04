@@ -300,6 +300,9 @@
       window.history.pushState(window.history.state, '', url.pathname + url.search);
       lastNavigatedHref = window.location.href;
       triggerModuleLoadForTab(tab);
+      if (tab === 'pipeline' || tab === 'calendario' || tab === 'minha_fila') {
+        invalidate('scan:workspace');
+      }
     }
   }
 

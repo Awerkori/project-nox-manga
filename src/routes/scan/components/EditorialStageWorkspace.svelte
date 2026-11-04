@@ -271,9 +271,9 @@
     claimModalStageItem = {
       id: cs.id,
       stage: {
-        name: config?.label || 'Etapa Editorial',
+        name: config?.title || config?.name || (stageConfig as any)[cSlug]?.title || 'Etapa Editorial',
         slug: cSlug,
-        color: config?.color || '#8b5cf6'
+        color: config?.accentColor || config?.color || '#8b5cf6'
       },
       chapter: {
         chapter_number: ch?.chapter_number || '1',
@@ -361,7 +361,7 @@
       const rawTypesetFiles = files.filter((f: any) => matchesStageSlug(f.stage_slug || f.stage?.slug, 'typeset'));
       const typesetFiles = rawTypesetFiles.map((f: any) => {
         const isInvalid = (f.byte_size && f.byte_size < 50_000) || f.file_key === 'prod_type_85_v1_1789173275882' || f.is_invalid;
-        const isIncomplete = !isInvalid && (f.is_incomplete_typeset || f.file_key === 'prod_type_85_v2_1789173310574' || f.id === '64f6372d-7f27-46b6-9b5c-8a2dfb97d8c3' || (f.note && f.note.includes('sem falas diagramadas')));
+        const isIncomplete = !isInvalid && (f.is_incomplete_typeset || (f.note && f.note.includes('sem falas diagramadas')));
         return {
           ...f,
           is_invalid: isInvalid,

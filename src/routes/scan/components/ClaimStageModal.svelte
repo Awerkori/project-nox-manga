@@ -8,7 +8,6 @@
     Info,
     ChevronLeft,
     ChevronRight,
-    Sparkles,
     Briefcase
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
@@ -50,6 +49,30 @@
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
+
+  // Canonical Stage Names & Colors helper (Guarantees NEVER "Etapa Editorial")
+  function getCanonicalStageName(stage: any): string {
+    const slug = (stage?.slug || '').toLowerCase().trim();
+    const name = (stage?.name || '').trim();
+    if (slug === 'traducao' || slug === 'translation' || name.toLowerCase().includes('tradu')) return 'Tradução';
+    if (slug === 'clean_redraw' || slug === 'clean' || slug === 'redraw' || name.toLowerCase().includes('clean')) return 'Clean/Redraw';
+    if (slug === 'typeset' || slug === 'typer' || name.toLowerCase().includes('type')) return 'Typeset';
+    if (slug === 'revisor_qc' || slug === 'qc' || slug === 'revisao' || name.toLowerCase().includes('qc') || name.toLowerCase().includes('revis')) return 'Revisor (QC)';
+    if (name && name !== 'Etapa Editorial') return name;
+    return 'Tradução';
+  }
+
+  function getCanonicalStageColor(stage: any): string {
+    const slug = (stage?.slug || '').toLowerCase().trim();
+    if (slug === 'traducao' || slug === 'translation') return '#38bdf8';
+    if (slug === 'clean_redraw' || slug === 'clean') return '#34d399';
+    if (slug === 'typeset' || slug === 'typer') return '#f59e0b';
+    if (slug === 'revisor_qc' || slug === 'qc' || slug === 'revisao') return '#a855f7';
+    return stage?.color || '#8b5cf6';
+  }
+
+  let stageDisplayName = $derived(getCanonicalStageName(stageItem?.stage));
+  let stageDisplayColor = $derived(getCanonicalStageColor(stageItem?.stage));
 
   let spToday = $derived(getSaoPauloDate());
   let todayYMD = $derived(formatYMD(spToday));
@@ -128,7 +151,7 @@
     }
   }
 
-  // Days matrix for the calendar month
+  // Days matrix for the calendar month: dynamic number of weeks (4, 5, or 6 only if needed)
   let monthCells = $derived.by(() => {
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -172,20 +195,22 @@
       });
     }
 
-    // Trailing days from next month to fill 7 columns (up to 35 or 42 cells)
-    const totalCells = cells.length <= 35 ? 35 : 42;
-    const remaining = totalCells - cells.length;
-    for (let day = 1; day <= remaining; day++) {
-      const nextDate = new Date(viewYear, viewMonth + 1, day);
-      const ymd = formatYMD(nextDate);
-      cells.push({
-        day,
-        ymd,
-        isCurrentMonth: false,
-        isToday: ymd === todayYMD,
-        isSelected: ymd === selectedYMD,
-        isAllowed: allowedYMDs.has(ymd)
-      });
+    // Trailing days from next month to complete the last week (multiple of 7)
+    const remainder = cells.length % 7;
+    if (remainder > 0) {
+      const trailingCount = 7 - remainder;
+      for (let day = 1; day <= trailingCount; day++) {
+        const nextDate = new Date(viewYear, viewMonth + 1, day);
+        const ymd = formatYMD(nextDate);
+        cells.push({
+          day,
+          ymd,
+          isCurrentMonth: false,
+          isToday: ymd === todayYMD,
+          isSelected: ymd === selectedYMD,
+          isAllowed: allowedYMDs.has(ymd)
+        });
+      }
     }
 
     return cells;
@@ -202,19 +227,13 @@
     if (!selectedYMD) return '';
     const [y, m, d] = selectedYMD.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
-    return dateObj.toLocaleDateString('pt-BR', {
+    const formatted = dateObj.toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     });
-  });
-
-  let formattedMax = $derived.by(() => {
-    return spMaxDate.toLocaleDateString('pt-BR', {
-      day: 'numeric',
-      month: 'long'
-    });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   });
 
   function handleKeydown(e: KeyboardEvent) {
@@ -237,15 +256,17 @@
     aria-labelledby="claim-modal-title"
   >
     <div class="modal-card">
-      <!-- Modal Header -->
+      <!-- Modal Header (Compact & Welcoming) -->
       <header class="modal-header">
         <div class="header-title-row">
           <div class="icon-orb purple">
-            <CalendarIcon size={20} />
+            <CalendarIcon size={18} />
           </div>
-          <div>
-            <h2 id="claim-modal-title" class="modal-title">Assumir etapa e definir prazo</h2>
-            <p class="modal-subtitle">Escolha sua data de entrega. Prazo máximo: 3 dias.</p>
+          <div class="header-text-cluster">
+            <h2 id="claim-modal-title" class="modal-title">Quando você pretende entregar esta etapa?</h2>
+            <p class="modal-subtitle">
+              Escolha a data em que pretende concluir seu trabalho. Você tem até 3 dias corridos para realizar a entrega.
+            </p>
           </div>
         </div>
         <button
@@ -259,42 +280,47 @@
         </button>
       </header>
 
-      <!-- Work & Chapter Context Hero -->
-      <section class="stage-context-box">
+      <!-- Assignment Summary Card (Specific stage name, real avatar, matched chapter) -->
+      <section class="assignment-summary-card">
         <div class="work-cover-wrapper">
           {#if stageItem.chapter?.work?.cover_id}
             <img
               src="/media/{stageItem.chapter.work.cover_id}"
               alt={stageItem.chapter?.work?.title || 'Capa'}
               class="work-cover-thumb"
+              loading="lazy"
             />
           {:else}
             <div class="work-cover-fallback">
-              <Briefcase size={22} />
+              <Briefcase size={20} />
             </div>
           {/if}
         </div>
 
-        <div class="stage-info-meta">
-          <span class="stage-work-title">{stageItem.chapter?.work?.title || 'Obra'}</span>
-          <div class="stage-badge-row">
-            <span class="chapter-pill">Capítulo #{stageItem.chapter?.chapter_number || '1'}</span>
-            <span class="stage-pill" style="--stage-color: {stageItem.stage?.color || '#8b5cf6'}">
-              <span class="dot"></span>
-              {stageItem.stage?.name || 'Etapa Editorial'}
+        <div class="assignment-meta-details">
+          <span class="assignment-work-title" title={stageItem.chapter?.work?.title || 'Obra'}>
+            {stageItem.chapter?.work?.title || 'Obra sem título'}
+          </span>
+          <div class="assignment-pills-row">
+            <span class="chapter-number-pill">
+              Capítulo #{stageItem.chapter?.chapter_number || '1'}
+            </span>
+            <span class="stage-tag-pill" style="--stage-c: {stageDisplayColor}">
+              <span class="stage-dot"></span>
+              {stageDisplayName}
             </span>
           </div>
-          <div class="assignee-preview-row">
+          <div class="assignee-row">
             <span class="assignee-label">Responsável:</span>
-            <div class="user-inline-pill">
+            <div class="user-chip">
               <UserAvatar user={currentUser} size={18} />
-              <span class="user-name">{currentUser?.display_name || currentUser?.username || 'Você'}</span>
+              <span class="user-chip-name">{currentUser?.display_name || currentUser?.username || 'Você'}</span>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Form Body with Calendar Picker -->
+      <!-- Form Body with Compact Calendar Picker -->
       <form
         method="POST"
         action="?/claimStage"
@@ -319,66 +345,66 @@
 
         {#if errorMessage}
           <div class="alert-banner error" role="alert">
-            <AlertCircle size={16} />
+            <AlertCircle size={15} />
             <span>{errorMessage}</span>
           </div>
         {/if}
 
-        <!-- Interactive Calendar Component -->
-        <div class="calendar-picker-wrapper">
-          <div class="calendar-header-nav">
-            <span class="calendar-month-label">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-            <div class="nav-arrows">
+        <!-- Compact Calendar Component -->
+        <div class="compact-calendar-wrapper">
+          <div class="calendar-nav-header">
+            <span class="calendar-month-heading">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+            <div class="calendar-arrows">
               <button
                 type="button"
-                class="arrow-btn"
+                class="btn-cal-arrow"
                 onclick={prevMonth}
                 aria-label="Mês anterior"
                 disabled={isSubmitting || !canPrevMonth}
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={15} />
               </button>
               <button
                 type="button"
-                class="arrow-btn"
+                class="btn-cal-arrow"
                 onclick={nextMonth}
                 aria-label="Próximo mês"
                 disabled={isSubmitting || !canNextMonth}
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={15} />
               </button>
             </div>
           </div>
 
-          <!-- Weekday Names -->
-          <div class="week-days-row">
+          <!-- Weekday Headers -->
+          <div class="cal-weekdays-row">
             {#each WEEK_DAYS as wd}
-              <span class="week-day-name">{wd}</span>
+              <span class="cal-weekday-lbl">{wd}</span>
             {/each}
           </div>
 
-          <!-- Days Grid -->
-          <div class="month-grid">
+          <!-- Compact Days Grid -->
+          <div class="cal-days-grid">
             {#each monthCells as cell}
               <button
                 type="button"
-                class="grid-day-cell"
+                class="cal-day-cell"
                 class:is-other-month={!cell.isCurrentMonth}
                 class:is-today={cell.isToday}
                 class:is-selected={cell.isSelected}
                 class:is-allowed={cell.isAllowed}
-                class:is-disabled={!cell.isAllowed}
+                class:is-blocked={!cell.isAllowed}
                 disabled={!cell.isAllowed || isSubmitting}
                 onclick={() => selectDate(cell.ymd, cell.isAllowed)}
-                title={cell.isAllowed ? `Entregar em ${cell.ymd}` : 'Fora do prazo máximo de 3 dias'}
+                title={cell.isAllowed ? `Definir entrega para ${cell.ymd}` : 'Fora do limite de 3 dias corridos'}
               >
-                <span class="day-num">{cell.day}</span>
-                {#if cell.isToday}
-                  <span class="today-marker" title="Hoje"></span>
+                <span class="cell-day-text">{cell.day}</span>
+                {#if cell.isToday && !cell.isSelected}
+                  <span class="cell-today-pip"></span>
                 {/if}
                 {#if cell.isSelected}
-                  <span class="selected-check">
-                    <Check size={10} />
+                  <span class="cell-selected-check">
+                    <Check size={9} />
                   </span>
                 {/if}
               </button>
@@ -386,40 +412,43 @@
           </div>
         </div>
 
-        <!-- Selected Deadline Summary Box -->
-        <div class="deadline-summary-box">
-          <div class="summary-line">
-            <span class="summary-label">
-              <Clock size={14} class="ico-summary cyan" />
-              Previsão de Entrega:
-            </span>
-            <strong class="summary-value cyan">{formattedSelected} às 23:59</strong>
+        <!-- Selected Deadline Summary Box (Refined & Compact) -->
+        <div class="chosen-date-card">
+          <div class="chosen-date-row">
+            <div class="chosen-date-icon">
+              <Clock size={15} />
+            </div>
+            <div class="chosen-date-info">
+              <span class="chosen-date-prefix">Sua entrega está prevista para</span>
+              <strong class="chosen-date-highlight">{formattedSelected}</strong>
+              <span class="chosen-date-time">Até 23h59 — horário de Brasília</span>
+            </div>
           </div>
-          <div class="summary-hint">
-            <Info size={13} class="ico-info" />
-            <span>Horário de Brasília (America/Sao_Paulo). Prazo máximo permitido: {formattedMax}.</span>
+          <div class="extension-micro-hint">
+            <Info size={12} class="hint-icon" />
+            <span>Se precisar de mais tempo, você poderá prorrogar o prazo uma vez por mais 2 dias, próximo ao vencimento.</span>
           </div>
         </div>
 
-        <!-- Optional Observation / Planning Notes Field -->
+        <!-- Optional Planning Notes (Compact) -->
         <div class="notes-field-group">
-          <label for="claim-notes-input" class="notes-label">
-            <span>Observações de planejamento (opcional)</span>
-            <span class="char-count">{notes.length}/500</span>
-          </label>
+          <div class="notes-header-row">
+            <label for="claim-notes-input" class="notes-label">Observações de planejamento (opcional)</label>
+            <span class="notes-char-count">{notes.length}/500</span>
+          </div>
           <textarea
             id="claim-notes-input"
             name="notes"
             bind:value={notes}
             maxlength="500"
             rows="2"
-            placeholder="Ex: Planejo entregar metade das páginas amanhã à noite..."
+            placeholder="Ex.: Pretendo finalizar a tradução até sexta-feira."
             class="notes-textarea"
             disabled={isSubmitting}
           ></textarea>
         </div>
 
-        <!-- Action Buttons -->
+        <!-- Modal Actions Footer -->
         <footer class="modal-actions-footer">
           <button
             type="button"
@@ -431,15 +460,15 @@
           </button>
           <button
             type="submit"
-            class="btn-confirm"
+            class="btn-confirm-claim"
             disabled={!selectedYMD || isSubmitting}
           >
             {#if isSubmitting}
-              <span class="spinner"></span>
-              <span>Registrando compromisso...</span>
+              <span class="submit-spinner"></span>
+              <span>Confirmando atribuição...</span>
             {:else}
               <Check size={16} />
-              <span>Confirmar Compromisso</span>
+              <span>Confirmar e assumir etapa</span>
             {/if}
           </button>
         </footer>
@@ -453,35 +482,35 @@
     position: fixed;
     inset: 0;
     z-index: 9999;
-    background: rgba(4, 7, 18, 0.78);
+    background: rgba(4, 7, 18, 0.82);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: max(1rem, env(safe-area-inset-top, 1rem)) 1rem max(1rem, env(safe-area-inset-bottom, 1rem));
+    padding: max(0.75rem, env(safe-area-inset-top, 0.75rem)) 0.75rem max(0.75rem, env(safe-area-inset-bottom, 0.75rem));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   .modal-card {
-    background: #0b0f19;
-    border: 1px solid rgba(139, 92, 246, 0.25);
-    border-radius: 1.25rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.12);
+    background: #090d16;
+    border: 1px solid rgba(139, 92, 246, 0.28);
+    border-radius: 1.15rem;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 35px rgba(139, 92, 246, 0.12);
     width: 100%;
-    max-width: 480px;
+    max-width: 460px;
     margin: auto 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  @keyframes modalPop {
+  @keyframes modalPopIn {
     from {
       opacity: 0;
-      transform: scale(0.96) translateY(8px);
+      transform: scale(0.97) translateY(6px);
     }
     to {
       opacity: 1;
@@ -491,43 +520,53 @@
 
   .modal-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    padding: 1.25rem 1.25rem 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 1.1rem 1.15rem 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 0.75rem;
   }
 
   .header-title-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.75rem;
   }
 
   .icon-orb {
-    width: 40px;
-    height: 40px;
-    border-radius: 0.75rem;
+    width: 36px;
+    height: 36px;
+    border-radius: 0.65rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(139, 92, 246, 0.15);
+    background: rgba(139, 92, 246, 0.16);
     color: #c084fc;
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.35);
     flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .header-text-cluster {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
   }
 
   .modal-title {
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #f8fafc;
     margin: 0;
-    line-height: 1.25;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
   }
 
   .modal-subtitle {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     color: #94a3b8;
-    margin: 0.2rem 0 0;
+    margin: 0;
+    line-height: 1.35;
   }
 
   .btn-close-modal {
@@ -535,12 +574,13 @@
     border: none;
     color: #64748b;
     cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.5rem;
+    padding: 0.4rem;
+    border-radius: 0.45rem;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
+    flex-shrink: 0;
   }
 
   .btn-close-modal:hover:not(:disabled) {
@@ -548,29 +588,31 @@
     color: #f1f5f9;
   }
 
-  .stage-context-box {
+  /* Assignment Summary Card */
+  .assignment-summary-card {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.9rem 1.25rem;
-    background: rgba(15, 23, 42, 0.6);
+    gap: 0.85rem;
+    padding: 0.75rem 1.15rem;
+    background: rgba(15, 23, 42, 0.65);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .work-cover-wrapper {
-    width: 48px;
-    height: 64px;
-    border-radius: 0.5rem;
+    width: 42px;
+    height: 56px;
+    border-radius: 0.45rem;
     overflow: hidden;
     background: #1e293b;
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .work-cover-thumb {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   }
 
   .work-cover-fallback {
@@ -582,130 +624,138 @@
     color: #64748b;
   }
 
-  .stage-info-meta {
+  .assignment-meta-details {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
     min-width: 0;
+    flex: 1;
   }
 
-  .stage-work-title {
-    font-size: 0.95rem;
+  .assignment-work-title {
+    font-size: 0.925rem;
     font-weight: 700;
     color: #f1f5f9;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
   }
 
-  .stage-badge-row {
+  .assignment-pills-row {
     display: flex;
     align-items: center;
     gap: 0.4rem;
     flex-wrap: wrap;
   }
 
-  .chapter-pill {
+  .chapter-number-pill {
     font-size: 0.72rem;
     font-weight: 600;
-    background: rgba(255, 255, 255, 0.07);
-    color: #cbd5e1;
-    padding: 0.15rem 0.45rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    padding: 0.12rem 0.45rem;
     border-radius: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .stage-pill {
+  .stage-tag-pill {
     font-size: 0.72rem;
     font-weight: 600;
-    background: rgba(139, 92, 246, 0.15);
-    color: var(--stage-color, #a855f7);
-    border: 1px solid color-mix(in srgb, var(--stage-color, #a855f7) 35%, transparent);
-    padding: 0.15rem 0.45rem;
+    background: color-mix(in srgb, var(--stage-c, #a855f7) 16%, transparent);
+    color: var(--stage-c, #a855f7);
+    border: 1px solid color-mix(in srgb, var(--stage-c, #a855f7) 38%, transparent);
+    padding: 0.12rem 0.45rem;
     border-radius: 0.35rem;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
   }
 
-  .stage-pill .dot {
+  .stage-tag-pill .stage-dot {
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: currentColor;
   }
 
-  .assignee-preview-row {
+  .assignee-row {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
+    gap: 0.35rem;
+    font-size: 0.73rem;
     color: #94a3b8;
-    margin-top: 0.1rem;
   }
 
-  .user-inline-pill {
+  .user-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.3rem;
     color: #e2e8f0;
     font-weight: 500;
   }
 
+  .user-chip-name {
+    font-size: 0.75rem;
+  }
+
+  /* Form Body */
   .claim-form-body {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1.25rem;
+    gap: 0.85rem;
+    padding: 1rem 1.15rem 1.15rem;
   }
 
   .alert-banner.error {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.4);
     color: #fca5a5;
-    padding: 0.6rem 0.8rem;
-    border-radius: 0.5rem;
-    font-size: 0.8rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.45rem;
+    font-size: 0.78rem;
     display: flex;
     align-items: center;
+    gap: 0.45rem;
+  }
+
+  /* Compact Calendar Component */
+  .compact-calendar-wrapper {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
   }
 
-  /* Calendar Picker */
-  .calendar-picker-wrapper {
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.85rem;
-    padding: 0.9rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-
-  .calendar-header-nav {
+  .calendar-nav-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .calendar-month-label {
-    font-size: 0.875rem;
+  .calendar-month-heading {
+    font-size: 0.84rem;
     font-weight: 700;
     color: #f1f5f9;
+    letter-spacing: -0.01em;
   }
 
-  .nav-arrows {
+  .calendar-arrows {
     display: flex;
     align-items: center;
     gap: 0.25rem;
   }
 
-  .arrow-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  .btn-cal-arrow {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.09);
     color: #cbd5e1;
-    width: 28px;
-    height: 28px;
-    border-radius: 0.4rem;
+    width: 26px;
+    height: 26px;
+    border-radius: 0.35rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -713,193 +763,222 @@
     transition: all 0.15s ease;
   }
 
-  .arrow-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.12);
+  .btn-cal-arrow:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
     color: #fff;
   }
 
-  .arrow-btn:disabled {
+  .btn-cal-arrow:disabled {
     opacity: 0.25;
     cursor: not-allowed;
   }
 
-  .week-days-row {
+  .cal-weekdays-row {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
     color: #64748b;
-    padding-bottom: 0.2rem;
+    padding-bottom: 0.1rem;
   }
 
-  .month-grid {
+  .cal-days-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 0.25rem;
   }
 
-  .grid-day-cell {
+  .cal-day-cell {
     position: relative;
-    aspect-ratio: 1;
-    border-radius: 0.5rem;
+    height: 36px;
+    border-radius: 0.45rem;
     border: 1px solid transparent;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.02);
     color: #475569;
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: not-allowed;
-    transition: all 0.15s ease;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     padding: 0;
   }
 
-  .grid-day-cell.is-other-month {
+  .cal-day-cell.is-other-month {
     opacity: 0.25;
   }
 
-  .grid-day-cell.is-allowed {
+  .cal-day-cell.is-blocked {
+    opacity: 0.35;
+  }
+
+  .cal-day-cell.is-allowed {
     background: rgba(139, 92, 246, 0.08);
-    border-color: rgba(139, 92, 246, 0.2);
-    color: #cbd5e1;
-    font-weight: 600;
+    border-color: rgba(139, 92, 246, 0.25);
+    color: #f1f5f9;
     cursor: pointer;
   }
 
-  .grid-day-cell.is-allowed:hover:not(:disabled) {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: rgba(139, 92, 246, 0.45);
+  .cal-day-cell.is-allowed:hover:not(.is-selected) {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.5);
     color: #fff;
     transform: translateY(-1px);
   }
 
-  .grid-day-cell.is-selected {
-    background: #8b5cf6 !important;
-    border-color: #a78bfa !important;
-    color: #fff !important;
-    font-weight: 700;
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+  .cal-day-cell.is-today:not(.is-selected) {
+    border-color: rgba(6, 182, 212, 0.45);
+    color: #38bdf8;
   }
 
-  .grid-day-cell.is-today .day-num {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .today-marker {
+  .cell-today-pip {
     position: absolute;
     bottom: 3px;
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: #06b6d4;
+    background: #38bdf8;
   }
 
-  .selected-check {
+  .cal-day-cell.is-selected {
+    background: #7c3aed !important;
+    border-color: #a855f7 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 14px rgba(124, 58, 237, 0.55);
+    font-weight: 700;
+  }
+
+  .cell-selected-check {
     position: absolute;
     top: 2px;
     right: 2px;
-    color: #fff;
-    opacity: 0.85;
+    color: #ffffff;
+    opacity: 0.9;
   }
 
-  .grid-day-cell.is-disabled {
-    opacity: 0.35;
-    pointer-events: none;
-  }
-
-  /* Summary Box */
-  .deadline-summary-box {
-    background: rgba(6, 182, 212, 0.06);
-    border: 1px solid rgba(6, 182, 212, 0.2);
-    border-radius: 0.75rem;
-    padding: 0.75rem 0.9rem;
+  /* Chosen Date Summary Card */
+  .chosen-date-card {
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 0.65rem;
+    padding: 0.75rem 0.85rem;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.5rem;
   }
 
-  .summary-line {
+  .chosen-date-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    font-size: 0.82rem;
-    flex-wrap: wrap;
-    gap: 0.3rem;
+    gap: 0.65rem;
   }
 
-  .summary-label {
+  .chosen-date-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 0.5rem;
+    background: rgba(139, 92, 246, 0.2);
+    color: #c084fc;
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .chosen-date-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .chosen-date-prefix {
+    font-size: 0.7rem;
     color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
   }
 
-  :global(.ico-summary.cyan) {
-    color: #06b6d4;
-  }
-
-  .summary-value.cyan {
-    color: #22d3ee;
+  .chosen-date-highlight {
+    font-size: 0.88rem;
     font-weight: 700;
-    font-size: 0.85rem;
+    color: #f1f5f9;
+    letter-spacing: -0.01em;
   }
 
-  .summary-hint {
+  .chosen-date-time {
+    font-size: 0.73rem;
+    color: #38bdf8;
+    font-weight: 500;
+  }
+
+  .extension-micro-hint {
     display: flex;
     align-items: flex-start;
     gap: 0.35rem;
-    font-size: 0.72rem;
-    color: #64748b;
+    font-size: 0.71rem;
+    color: #94a3b8;
     line-height: 1.35;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 0.45rem;
   }
 
-  :global(.ico-info) {
-    color: #64748b;
+  .hint-icon {
     flex-shrink: 0;
-    margin-top: 1px;
+    margin-top: 0.1rem;
+    color: #8b5cf6;
   }
 
-  /* Notes field */
+  /* Notes Field */
   .notes-field-group {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.3rem;
   }
 
-  .notes-label {
+  .notes-header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.75rem;
+  }
+
+  .notes-label {
+    font-size: 0.74rem;
+    font-weight: 600;
     color: #94a3b8;
   }
 
-  .char-count {
+  .notes-char-count {
     font-size: 0.7rem;
     color: #64748b;
   }
 
   .notes-textarea {
     width: 100%;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.6rem;
-    padding: 0.6rem 0.75rem;
-    font-size: 0.82rem;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 0.55rem;
+    padding: 0.5rem 0.65rem;
     color: #f1f5f9;
+    font-size: 0.8rem;
+    line-height: 1.35;
     resize: none;
-    box-sizing: border-box;
-    font-family: inherit;
-    transition: border-color 0.15s ease;
+    outline: none;
+    transition: all 0.15s ease;
   }
 
   .notes-textarea:focus {
-    outline: none;
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+    background: rgba(15, 23, 42, 0.95);
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+  }
+
+  .notes-textarea::placeholder {
+    color: #64748b;
+    font-size: 0.78rem;
   }
 
   /* Actions Footer */
@@ -907,133 +986,106 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.75rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    gap: 0.6rem;
+    margin-top: 0.35rem;
   }
 
   .btn-cancel {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #94a3b8;
-    padding: 0.6rem 1rem;
-    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #cbd5e1;
     font-size: 0.82rem;
     font-weight: 600;
+    padding: 0.55rem 0.95rem;
+    border-radius: 0.55rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .btn-cancel:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.06);
-    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
   }
 
-  .btn-confirm {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-    border: none;
+  .btn-confirm-claim {
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+    border: 1px solid rgba(139, 92, 246, 0.4);
     color: #fff;
-    padding: 0.6rem 1.15rem;
-    border-radius: 0.6rem;
     font-size: 0.82rem;
     font-weight: 700;
+    padding: 0.55rem 1.15rem;
+    border-radius: 0.55rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.35);
-    transition: all 0.15s ease;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35);
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .btn-confirm:hover:not(:disabled) {
+  .btn-confirm-claim:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.45);
-    filter: brightness(1.05);
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
   }
 
-  .btn-confirm:disabled {
+  .btn-confirm-claim:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    box-shadow: none;
   }
 
-  .spinner {
+  .submit-spinner {
     width: 14px;
     height: 14px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-top-color: #fff;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.6s linear infinite;
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   @media (max-width: 480px) {
-    .modal-backdrop {
-      padding: 0.75rem 0.6rem;
-    }
     .modal-card {
-      border-radius: 1rem;
-      max-width: 100%;
-      margin: auto 0;
+      max-height: 94vh;
+      overflow-y: auto;
     }
-    .modal-header {
-      padding: 0.85rem 1rem 0.75rem;
-    }
-    .icon-orb {
-      width: 36px;
-      height: 36px;
-    }
-    .modal-title {
-      font-size: 0.95rem;
-    }
-    .stage-context-box {
-      padding: 0.65rem 0.85rem;
-      gap: 0.75rem;
-    }
-    .work-cover-wrapper {
-      width: 40px;
-      height: 54px;
-    }
-    .stage-work-title {
-      font-size: 0.88rem;
-    }
-    .claim-form-body {
-      padding: 0.85rem;
-      gap: 0.7rem;
-    }
-    .calendar-picker-wrapper {
-      padding: 0.65rem;
-      gap: 0.45rem;
-    }
-    .grid-day-cell {
-      min-height: 34px;
+
+    .cal-day-cell {
+      height: 34px;
       font-size: 0.78rem;
     }
-    .deadline-summary-box {
-      padding: 0.55rem 0.75rem;
+
+    .modal-header {
+      padding: 0.9rem 1rem 0.8rem;
     }
+
+    .claim-form-body {
+      padding: 0.85rem 1rem 1rem;
+      gap: 0.75rem;
+    }
+
+    .assignment-summary-card {
+      padding: 0.65rem 1rem;
+    }
+
+    .btn-confirm-claim {
+      width: 100%;
+      justify-content: center;
+    }
+
     .modal-actions-footer {
-      flex-direction: row;
+      flex-direction: column-reverse;
       gap: 0.5rem;
-      padding-top: 0.5rem;
     }
+
     .btn-cancel {
-      flex: 1;
-      padding: 0.65rem 0.75rem;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-    }
-    .btn-confirm {
-      flex: 2;
-      padding: 0.65rem 0.75rem;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      width: 100%;
       text-align: center;
     }
   }

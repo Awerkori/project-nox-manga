@@ -324,7 +324,7 @@
     if (!typesetFile) return true;
     const size = typesetFile.byte_size || typesetFile.file_size || 0;
     if (size < 50_000) return true;
-    if (typesetFile.file_key === 'prod_type_85_v2_1789173310574') return true;
+    if (Boolean(typesetFile.is_incomplete_typeset)) return true;
     if (typesetFile.note && (typesetFile.note.includes('sem falas diagramadas') || typesetFile.note.includes('balões em branco'))) return true;
     return false;
   }
