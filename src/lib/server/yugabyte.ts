@@ -107,6 +107,10 @@ export async function withYugabyteLkg<T>(
 }
 
 const YUGABYTE_READ_SESSION_KEY = Symbol.for('nox.yugabyte.readSession');
+// The platform object may be reused by workerd and browser tests. Keep the
+// original environment alongside a request-scoped session wrapper so a later
+// request never inherits a session that was closed by the earlier one.
+const YUGABYTE_BASE_ENV_KEY = Symbol.for('nox.yugabyte.baseEnv');
 
 class YugabyteReadSession {
   private readonly maxConcurrency: number;
@@ -123,6 +127,10 @@ class YugabyteReadSession {
   constructor(connectionString: string, maxConcurrency = 1) {
     this.connectionString = connectionString;
     this.maxConcurrency = Math.max(1, Math.min(2, maxConcurrency));
+  }
+
+  isClosed(): boolean {
+    return this.closed;
   }
 
   private async acquire(): Promise<{ client: Client; connectDur: number }> {
@@ -264,14 +272,25 @@ export async function withYugabyteReadSession<T>(
   operation: (scopedEnv: any) => Promise<T>,
   maxConcurrency = 1
 ): Promise<T> {
-  const connectionString = platformEnv?.HYPERDRIVE?.connectionString;
-  if (!connectionString || platformEnv?.[YUGABYTE_READ_SESSION_KEY]) {
+  const existingSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
+  if (existingSession && !existingSession.isClosed()) {
     return operation(platformEnv);
   }
+  const baseEnv = platformEnv?.[YUGABYTE_BASE_ENV_KEY] ?? platformEnv;
+  const connectionString = baseEnv?.HYPERDRIVE?.connectionString;
+  if (!connectionString) {
+    return operation(baseEnv);
+  }
   const session = new YugabyteReadSession(connectionString, maxConcurrency);
-  const scopedEnv = Object.create(platformEnv, {
+  const scopedEnv = Object.create(baseEnv, {
     [YUGABYTE_READ_SESSION_KEY]: {
       value: session,
+      enumerable: false,
+      configurable: false,
+      writable: false
+    },
+    [YUGABYTE_BASE_ENV_KEY]: {
+      value: baseEnv,
       enumerable: false,
       configurable: false,
       writable: false
@@ -320,6 +339,11 @@ export async function executeYugabyteSql<T = any>(
 ): Promise<SqlResponse<T>> {
   const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
   if (activeSession) {
+    if (activeSession.isClosed()) {
+      // A response timeout may leave asynchronous work running. Never open a
+      // fallback connection after its request-scoped session has been closed.
+      throw new Error('YUGABYTE_READ_SESSION_CLOSED');
+    }
     return activeSession.query<T>(query, params);
   }
 
@@ -1295,6 +1319,16 @@ export async function fetchCatalogFromYugabyte(
   if (rawQ.length > 0 && q.length === 0) {
     return { works: [], total: 0, hasMore: false };
   }
+  // A phrase can make the Yugabyte trigram index produce thousands of false
+  // positives that must be rechecked. For multi-word input, first use its
+  // longest word to narrow the GIN scan, then validate the original phrase on
+  // those IDs. The latter is logically redundant (a phrase contains that word)
+  // and therefore cannot alter search results.
+  const searchTerms = q.match(/\S+/gu) || [];
+  const searchAnchor = searchTerms.length > 1
+    ? searchTerms.reduce((longest, term) => term.length > longest.length ? term : longest)
+    : '';
+  const searchAnchorLiteral = searchAnchor.replace(/'/g, "''");
 
   const kind = (options.kind || '').trim().toUpperCase();
   const status = (options.status || '').trim().toUpperCase();
@@ -1365,14 +1399,53 @@ export async function fetchCatalogFromYugabyte(
         params.push(offset);
         const offsetIdx = params.length;
 
-        const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
-    FROM works WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
-    ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
-    LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
+        // The trigram index can return thousands of candidates for a negative
+        // phrase. Keep its recheck narrow and fetch the wide catalog row only
+        // after sorting/paginating those candidate IDs.
+        const buildIndexedSql = (searchExpr: string) => `WITH ${searchAnchor ? `candidates AS MATERIALIZED (
+          SELECT works.id, works.${sortCol}
+          FROM works
+          WHERE ${[...where.slice(0, 1), `works.search_text ILIKE '%${searchAnchorLiteral}%'`, ...where.slice(1)].join(' AND ')}
+        ), ` : ''}matched AS MATERIALIZED (
+          SELECT works.id, works.${sortCol}
+          FROM ${searchAnchor ? 'candidates JOIN works ON works.id = candidates.id' : 'works'}
+          WHERE ${searchAnchor ? searchExpr : [...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
+        ), paged AS MATERIALIZED (
+          SELECT id, ${sortCol}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
+          FROM matched
+          ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+          LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        )
+        SELECT works.id, works.slug, works.title, works.aliases, works.synopsis, works.description, works.author, works.artist,
+               works.kind, works.status, works.year, works.age_rating, works.published, works.featured, works.cover_id,
+               works.updated_at, works.created_at, works.content_rating, works.views_total${includeTotal ? ', paged.total_count' : ''}
+        FROM paged
+        JOIN works ON works.id = paged.id
+        ORDER BY paged.${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, paged.id ASC`;
+
+        // Keep the alias/accent fallback from materializing the wide work row
+        // for every candidate. In particular, a negative search must not read
+        // synopsis/description while scanning the catalogue.
+        const buildFallbackSql = (searchExpr: string) => `WITH matched AS MATERIALIZED (
+          SELECT works.id, works.${sortCol}
+          FROM works
+          WHERE ${[...where.slice(0, 1), 'works.search_text IS NULL', searchExpr, ...where.slice(1)].join(' AND ')}
+        ), paged AS MATERIALIZED (
+          SELECT id, ${sortCol}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
+          FROM matched
+          ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+          LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        )
+        SELECT works.id, works.slug, works.title, works.aliases, works.synopsis, works.description, works.author, works.artist,
+               works.kind, works.status, works.year, works.age_rating, works.published, works.featured, works.cover_id,
+               works.updated_at, works.created_at, works.content_rating, works.views_total${includeTotal ? ', paged.total_count' : ''}
+        FROM paged
+        JOIN works ON works.id = paged.id
+        ORDER BY paged.${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, paged.id ASC`;
 
         // 1. Try search_text first (fast indexed path)
         let res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-          buildSql(`search_text ILIKE $${qParamIdx}`),
+          buildIndexedSql(`search_text ILIKE $${qParamIdx}`),
           params,
           platformEnv
         );
@@ -1382,14 +1455,14 @@ export async function fetchCatalogFromYugabyte(
         // text. The EXISTS remains necessary to reject cross-alias matches.
         if (res.rows.length === 0) {
           res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-            buildSql(`(
+            buildFallbackSql(`(
               title ILIKE $${qParamIdx} OR CASE
                 WHEN array_to_string(COALESCE(works.aliases, ARRAY[]::text[]), ' ') ILIKE $${qParamIdx}
                 THEN EXISTS (
                   SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
                   WHERE work_alias.alias_text ILIKE $${qParamIdx}
                 ) ELSE false END
-              OR translate(lower(COALESCE(works.search_text, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIKE translate(lower($${qParamIdx}), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
+              OR translate(lower(concat_ws(' ', works.title, works.author, works.artist, array_to_string(COALESCE(works.aliases, ARRAY[]::text[]), ' '))), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIKE translate(lower($${qParamIdx}), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
             )`),
             params,
             platformEnv
@@ -1415,22 +1488,44 @@ export async function fetchCatalogFromYugabyte(
       }
       if (tag) {
         params.push(tag);
-        where.push(`EXISTS (
-        SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
-        WHERE wt.work_id=works.id AND t.slug=$${params.length}
-      )`);
+        // The correlated EXISTS becomes a non-batched primary-key lookup per
+        // tag match in YugabyteDB. Materialize the tag IDs as one array so the
+        // matched CTE can use a batched lookup before fetching wide work rows.
+        where.push(`works.id = ANY(ARRAY(
+        SELECT wt.work_id FROM work_tags wt JOIN tags t ON t.id=wt.tag_id
+        WHERE t.slug=$${params.length}
+      ))`);
       }
       params.push(queryLimit);
       const limitIdx = params.length;
       params.push(offset);
       const offsetIdx = params.length;
 
+      const sql = tag
+        ? `WITH matched AS MATERIALIZED (
+             SELECT works.id, works.${sortCol}
+             FROM works
+             WHERE ${where.join(' AND ')}
+           ), paged AS MATERIALIZED (
+             SELECT id, ${sortCol}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
+             FROM matched
+             ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+             LIMIT $${limitIdx} OFFSET $${offsetIdx}
+           )
+           SELECT works.id, works.slug, works.title, works.aliases, works.synopsis, works.description, works.author, works.artist,
+                  works.kind, works.status, works.year, works.age_rating, works.published, works.featured, works.cover_id,
+                  works.updated_at, works.created_at, works.content_rating, works.views_total${includeTotal ? ', paged.total_count' : ''}
+           FROM paged
+           JOIN works ON works.id = paged.id
+           ORDER BY paged.${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, paged.id ASC`
+        : `SELECT ${WORK_SELECT_COLUMNS}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
+           FROM works
+           WHERE ${where.join(' AND ')}
+           ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+           LIMIT $${limitIdx} OFFSET $${offsetIdx};`;
+
       const res = await executeYugabyteSql<YugabyteWork & { total_count?: number }>(
-        `SELECT ${WORK_SELECT_COLUMNS}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
-         FROM works
-         WHERE ${where.join(' AND ')}
-         ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
-         LIMIT $${limitIdx} OFFSET $${offsetIdx};`,
+        sql,
         params,
         platformEnv
       );
