@@ -20,6 +20,13 @@ export const GET = async ({ url, platform }: any) => {
     platform?.env
   );
 
+  if (result.isDegraded) {
+    return json({ error: 'Catálogo temporariamente indisponível' }, {
+      status: 503,
+      headers: { 'cache-control': 'private, no-store' }
+    });
+  }
+
   return json(
     {
       works: result.works,

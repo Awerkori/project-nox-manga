@@ -24,6 +24,13 @@ export const GET = async ({ request, url, platform }: any) => {
     platform?.env
   );
 
+  if (catalogRes.isDegraded) {
+    return json({ error: 'Catálogo temporariamente indisponível' }, {
+      status: 503,
+      headers: { 'cache-control': 'private, no-store' }
+    });
+  }
+
   let works = catalogRes.works;
   if (!allowAdult) {
     works = works.filter((w) => w.content_rating !== 'ADULT_18');
