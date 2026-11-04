@@ -151,25 +151,20 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto(`${LOCAL_URL}/qa-reader`);
-      await page.waitForSelector('.reader-end', { timeout: 15000 });
+      await page.waitForSelector('#chapter-end', { timeout: 15000 });
       await page.waitForTimeout(200);
 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       expect(overflow, `Horizontal overflow on Reader at ${vp.name}`).toBe(false);
 
-      await expect(page.getByRole('button', { name: 'Voltar ao topo' })).toBeAttached();
+      await expect(page.getByRole('link', { name: /voltar para a obra/i })).toBeVisible();
 
       await page.evaluate(() => {
-        document.querySelector('.reader-end')?.scrollIntoView({ behavior: 'instant' });
+        document.querySelector('#chapter-end')?.scrollIntoView({ behavior: 'instant' });
       });
       await page.waitForTimeout(200);
 
-      const readerEndEyebrow = page.locator('.reader-comments .comments .section-heading .eyebrow');
-      await expect(readerEndEyebrow).toContainText('DEPOIS DA ÚLTIMA PÁGINA');
-      const readerEndHeading = page.locator('.reader-comments .comments .section-heading h2');
-      await expect(readerEndHeading).toContainText('O que você achou deste capítulo?');
-
-      await expect(page.locator('.chapter-reactions-cluster')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Qual foi a vibe da leitura?' })).toBeVisible();
 
       await page.screenshot({
         path: `${SCREENSHOT_DIR}/reader-end-supreme-${vp.name}.png`,

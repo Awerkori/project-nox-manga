@@ -64,18 +64,18 @@ test.describe('Cross-Browser Validation: Chromium & Firefox', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/qa-reader');
 
-    await page.waitForSelector('.reader-end');
+    await page.waitForSelector('#chapter-end');
     const isOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(isOverflow).toBe(false);
 
     // Click to open drawer
-    const drawerBtn = page.locator('.btn-nav-drawer').first();
+    const drawerBtn = page.getByRole('button', { name: /lista de capítulos/i }).first();
     if (await drawerBtn.isVisible()) {
       await drawerBtn.click();
-      await page.waitForSelector('.drawer-panel');
+      await page.getByRole('dialog', { name: /todos os capítulos/i }).waitFor();
       const drawerOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       expect(drawerOverflow).toBe(false);
-      await page.locator('.btn-drawer-close').click();
+      await page.getByRole('button', { name: 'Fechar', exact: true }).click();
     }
   });
 
