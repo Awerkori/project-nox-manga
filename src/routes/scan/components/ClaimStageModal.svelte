@@ -36,18 +36,41 @@
 
   const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // Timezone helper: America/Sao_Paulo
-  function getSaoPauloDate(): Date {
-    const now = new Date();
-    const spStr = now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
-    return new Date(spStr);
+  // Timezone helper: America/Sao_Paulo using Intl.DateTimeFormat for locale-independent accuracy
+  const SP_TIMEZONE = 'America/Sao_Paulo';
+
+  function getSaoPauloDateParts(dateInput?: string | Date | number) {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: SP_TIMEZONE,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false,
+      weekday: 'short'
+    });
+    const parts = formatter.formatToParts(d);
+    let year = 2026, month = 1, day = 1, hours = 0, minutes = 0, seconds = 0, weekdayStr = '';
+    for (const p of parts) {
+      if (p.type === 'year') year = parseInt(p.value, 10);
+      else if (p.type === 'month') month = parseInt(p.value, 10);
+      else if (p.type === 'day') day = parseInt(p.value, 10);
+      else if (p.type === 'hour') hours = parseInt(p.value, 10) % 24;
+      else if (p.type === 'minute') minutes = parseInt(p.value, 10);
+      else if (p.type === 'second') seconds = parseInt(p.value, 10);
+      else if (p.type === 'weekday') weekdayStr = p.value;
+    }
+    const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const dayOfWeek = weekdayMap[weekdayStr] ?? 0;
+    return { year, month: month - 1, day, hours, minutes, seconds, ymd, dayOfWeek };
   }
 
-  function formatYMD(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+  function formatYMD(year: number, month: number, day: number): string {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
   // Canonical Stage Names & Colors helper
@@ -74,20 +97,22 @@
   let stageDisplayName = $derived(getCanonicalStageName(stageItem?.stage));
   let stageDisplayColor = $derived(getCanonicalStageColor(stageItem?.stage));
 
-  let spToday = $derived(getSaoPauloDate());
-  let todayYMD = $derived(formatYMD(spToday));
+  let spTodayParts = $derived(getSaoPauloDateParts());
+  let todayYMD = $derived(spTodayParts.ymd);
 
-  // Max allowed is today + 3 calendar days
-  let spMaxDate = $derived.by(() => {
-    const d = new Date(spToday);
-    d.setDate(d.getDate() + 3);
-    return d;
+  // Allowed YMDs set: today, today+1, today+2, today+3 (Max 3 calendar days)
+  let allowedYMDs = $derived.by(() => {
+    const set = new Set<string>();
+    for (let i = 0; i <= 3; i++) {
+      const d = new Date(spTodayParts.year, spTodayParts.month, spTodayParts.day + i);
+      set.add(formatYMD(d.getFullYear(), d.getMonth(), d.getDate()));
+    }
+    return set;
   });
-  let maxYMD = $derived(formatYMD(spMaxDate));
 
-  // Calendar view state
-  let viewYear = $state(new Date().getFullYear());
-  let viewMonth = $state(new Date().getMonth());
+  // Calendar view state initialized from America/Sao_Paulo baseline
+  let viewYear = $state(getSaoPauloDateParts().year);
+  let viewMonth = $state(getSaoPauloDateParts().month);
 
   // Selected date defaults to max permitted (today + 3 days)
   let selectedYMD = $state('');
@@ -98,37 +123,27 @@
   // Sync state whenever modal opens
   $effect(() => {
     if (isOpen) {
-      const nowSp = getSaoPauloDate();
-      viewYear = nowSp.getFullYear();
-      viewMonth = nowSp.getMonth();
-      const defaultMax = new Date(nowSp);
-      defaultMax.setDate(defaultMax.getDate() + 3);
-      selectedYMD = formatYMD(defaultMax);
+      const nowSp = getSaoPauloDateParts();
+      viewYear = nowSp.year;
+      viewMonth = nowSp.month;
+      const defaultMax = new Date(nowSp.year, nowSp.month, nowSp.day + 3);
+      selectedYMD = formatYMD(defaultMax.getFullYear(), defaultMax.getMonth(), defaultMax.getDate());
       notes = '';
       errorMessage = null;
       isSubmitting = false;
     }
   });
 
-  // Allowed YMDs set: today, today+1, today+2, today+3
-  let allowedYMDs = $derived.by(() => {
-    const set = new Set<string>();
-    for (let i = 0; i <= 3; i++) {
-      const d = new Date(spToday);
-      d.setDate(d.getDate() + i);
-      set.add(formatYMD(d));
-    }
-    return set;
-  });
-
   // Month navigation boundary checks
   let canPrevMonth = $derived(
-    viewYear > spToday.getFullYear() ||
-    (viewYear === spToday.getFullYear() && viewMonth > spToday.getMonth())
+    viewYear > spTodayParts.year ||
+    (viewYear === spTodayParts.year && viewMonth > spTodayParts.month)
   );
+
+  let maxAllowedDate = $derived(new Date(spTodayParts.year, spTodayParts.month, spTodayParts.day + 3));
   let canNextMonth = $derived(
-    viewYear < spMaxDate.getFullYear() ||
-    (viewYear === spMaxDate.getFullYear() && viewMonth < spMaxDate.getMonth())
+    viewYear < maxAllowedDate.getFullYear() ||
+    (viewYear === maxAllowedDate.getFullYear() && viewMonth < maxAllowedDate.getMonth())
   );
 
   function prevMonth() {
@@ -155,7 +170,7 @@
   let monthCells = $derived.by(() => {
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+    const daysInPrevMonth = new Date(viewYear, viewMonth + 0, 0).getDate();
 
     const cells: Array<{
       day: number;
@@ -170,7 +185,7 @@
     for (let i = firstDay - 1; i >= 0; i--) {
       const day = daysInPrevMonth - i;
       const prevDate = new Date(viewYear, viewMonth - 1, day);
-      const ymd = formatYMD(prevDate);
+      const ymd = formatYMD(prevDate.getFullYear(), prevDate.getMonth(), prevDate.getDate());
       cells.push({
         day,
         ymd,
@@ -183,8 +198,7 @@
 
     // Days in current month
     for (let day = 1; day <= daysInMonth; day++) {
-      const curDate = new Date(viewYear, viewMonth, day);
-      const ymd = formatYMD(curDate);
+      const ymd = formatYMD(viewYear, viewMonth, day);
       cells.push({
         day,
         ymd,
@@ -201,7 +215,7 @@
       const trailingCount = 7 - remainder;
       for (let day = 1; day <= trailingCount; day++) {
         const nextDate = new Date(viewYear, viewMonth + 1, day);
-        const ymd = formatYMD(nextDate);
+        const ymd = formatYMD(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
         cells.push({
           day,
           ymd,
@@ -404,7 +418,7 @@
             </div>
           </div>
 
-          <!-- SUMMARY LINE: SELECTED DATE -->
+          <!-- SUMMARY LINE: SELECTED DATE (Concise & Clear) -->
           <div class="selected-summary-card">
             <div class="summary-line-left">
               <Clock size={14} class="text-purple-400" />
@@ -412,10 +426,6 @@
                 <span class="summary-sub-txt">Entrega prevista:</span>
                 <strong class="summary-val-txt">{formattedSelected} às 23:59</strong>
               </div>
-            </div>
-            <div class="summary-hint-line">
-              <Info size={11} class="text-cyan-400" />
-              <span>Prorrogação (+2d) disponível nas últimas 24h</span>
             </div>
           </div>
 

@@ -68,26 +68,50 @@
 
   const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // Timezone helper for America/Sao_Paulo
-  function getSaoPauloDate(dateInput?: string | Date | number): Date {
+  // Canonical Timezone: America/Sao_Paulo
+  const SP_TIMEZONE = 'America/Sao_Paulo';
+
+  // Reliable date parts extractor in America/Sao_Paulo timezone
+  function getSaoPauloDateParts(dateInput?: string | Date | number) {
     const d = dateInput ? new Date(dateInput) : new Date();
-    const spStr = d.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
-    return new Date(spStr);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: SP_TIMEZONE,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false,
+      weekday: 'short'
+    });
+    const parts = formatter.formatToParts(d);
+    let year = 2026, month = 1, day = 1, hours = 0, minutes = 0, seconds = 0, weekdayStr = '';
+    for (const p of parts) {
+      if (p.type === 'year') year = parseInt(p.value, 10);
+      else if (p.type === 'month') month = parseInt(p.value, 10);
+      else if (p.type === 'day') day = parseInt(p.value, 10);
+      else if (p.type === 'hour') hours = parseInt(p.value, 10) % 24;
+      else if (p.type === 'minute') minutes = parseInt(p.value, 10);
+      else if (p.type === 'second') seconds = parseInt(p.value, 10);
+      else if (p.type === 'weekday') weekdayStr = p.value;
+    }
+    const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const dayOfWeek = weekdayMap[weekdayStr] ?? 0;
+    return { year, month: month - 1, day, hours, minutes, seconds, ymd, dayOfWeek };
   }
 
-  function formatYMD(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+  function formatYMDFromParts(year: number, month: number, day: number): string {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  const todaySP = getSaoPauloDate();
-  const todayYMD = formatYMD(todaySP);
+  const todaySPParts = getSaoPauloDateParts();
+  const todayYMD = todaySPParts.ymd;
 
   // Calendar View State
-  let currentMonth = $state(todaySP.getMonth());
-  let currentYear = $state(todaySP.getFullYear());
+  let currentMonth = $state(todaySPParts.month);
+  let currentYear = $state(todaySPParts.year);
   let selectedDateYMD = $state(todayYMD);
   let activeViewMode = $state<'MONTH' | 'AGENDA'>('MONTH');
 
@@ -148,10 +172,10 @@
   }
 
   function goToToday() {
-    const now = getSaoPauloDate();
-    currentMonth = now.getMonth();
-    currentYear = now.getFullYear();
-    selectedDateYMD = formatYMD(now);
+    const nowParts = getSaoPauloDateParts();
+    currentMonth = nowParts.month;
+    currentYear = nowParts.year;
+    selectedDateYMD = nowParts.ymd;
   }
 
   // Canonical Stage Colors & Names
@@ -234,15 +258,15 @@
       let isOverdue = false;
       let isDueSoon = false;
       let remainingHours = 0;
-      let extensionState: 'LOCKED' | 'AVAILABLE' | 'EXTENDED' | 'EXPIRED' | 'NONE' = 'NONE';
+      let extensionState: 'LOCKED' | 'AVAILABLE' | 'RESTRICTED_AVAILABLE' | 'EXTENDED' | 'EXPIRED' | 'NONE' = 'NONE';
       let unlockDateTimeStr = '';
       let extendedDateTimeStr = '';
       let isMine = cs.assigned_to === currentUserId;
       let canUserExtend = isMine || ['ADMIN', 'OWNER'].includes(userRole);
 
       if (cs.due_at) {
-        const dueSp = getSaoPauloDate(cs.due_at);
-        dueYMD = formatYMD(dueSp);
+        const dueSpParts = getSaoPauloDateParts(cs.due_at);
+        dueYMD = dueSpParts.ymd;
         const dueMs = new Date(cs.due_at).getTime();
         const diffMs = dueMs - nowMs;
         remainingHours = Math.round(diffMs / (1000 * 60 * 60));
@@ -256,30 +280,30 @@
         } else if (extensionCount > 0) {
           // Estado C: Prorrogação utilizada
           extensionState = 'EXTENDED';
-          const day = String(dueSp.getDate()).padStart(2, '0');
-          const month = String(dueSp.getMonth() + 1).padStart(2, '0');
-          const hours = String(dueSp.getHours()).padStart(2, '0');
-          const minutes = String(dueSp.getMinutes()).padStart(2, '0');
+          const day = String(dueSpParts.day).padStart(2, '0');
+          const month = String(dueSpParts.month + 1).padStart(2, '0');
+          const hours = String(dueSpParts.hours).padStart(2, '0');
+          const minutes = String(dueSpParts.minutes).padStart(2, '0');
           extendedDateTimeStr = `${day}/${month} às ${hours}:${minutes}`;
         } else if (diffMs < -(4 * 60 * 60 * 1000)) {
           extensionState = 'EXPIRED';
         } else if (remainingHours <= 24 || dueYMD === todayYMD) {
           // Estado B: Nas últimas 24 horas (ou vencendo hoje)
-          extensionState = 'AVAILABLE';
+          extensionState = canUserExtend ? 'AVAILABLE' : 'RESTRICTED_AVAILABLE';
         } else {
           // Estado A: Antes das últimas 24 horas
           extensionState = 'LOCKED';
           const unlockMs = dueMs - 24 * 60 * 60 * 1000;
-          const unlockSp = getSaoPauloDate(unlockMs);
-          const ud = String(unlockSp.getDate()).padStart(2, '0');
-          const um = String(unlockSp.getMonth() + 1).padStart(2, '0');
-          const uh = String(unlockSp.getHours()).padStart(2, '0');
-          const umin = String(unlockSp.getMinutes()).padStart(2, '0');
+          const unlockParts = getSaoPauloDateParts(unlockMs);
+          const ud = String(unlockParts.day).padStart(2, '0');
+          const um = String(unlockParts.month + 1).padStart(2, '0');
+          const uh = String(unlockParts.hours).padStart(2, '0');
+          const umin = String(unlockParts.minutes).padStart(2, '0');
           unlockDateTimeStr = `${ud}/${um} às ${uh}:${umin}`;
         }
       } else if (cs.completed_at && cs.status === 'DONE') {
-        const compSp = getSaoPauloDate(cs.completed_at);
-        dueYMD = formatYMD(compSp);
+        const compParts = getSaoPauloDateParts(cs.completed_at);
+        dueYMD = compParts.ymd;
       }
 
       // Status classification
@@ -347,8 +371,8 @@
     for (const t of tasks) {
       if (!t.due_at && !t.completed_at) continue;
       const targetDate = t.due_at || t.completed_at;
-      const dueSp = getSaoPauloDate(targetDate);
-      const dueYMD = formatYMD(dueSp);
+      const dueParts = getSaoPauloDateParts(targetDate);
+      const dueYMD = dueParts.ymd;
       const dueMs = new Date(targetDate).getTime();
       const diffMs = dueMs - nowMs;
       const isOverdue = diffMs < 0 && t.status !== 'DONE' && t.status !== 'CANCELLED';
@@ -410,9 +434,9 @@
     return list;
   });
 
-  // Filtered commitments based on active filters
+  // Filtered commitments based on active filters, strictly sorted chronologically
   let filteredCommitments = $derived.by(() => {
-    return allCommitments.filter((item) => {
+    const list = allCommitments.filter((item) => {
       // Stage filter
       if (filterStageSlug !== 'ALL' && item.stageSlug !== filterStageSlug) {
         return false;
@@ -432,6 +456,13 @@
 
       return true;
     });
+
+    // Chronological order by due date (or completion date)
+    return list.sort((a, b) => {
+      const aTime = a.dueAt ? new Date(a.dueAt).getTime() : (a.completedAt ? new Date(a.completedAt).getTime() : 0);
+      const bTime = b.dueAt ? new Date(b.dueAt).getTime() : (b.completedAt ? new Date(b.completedAt).getTime() : 0);
+      return aTime - bTime;
+    });
   });
 
   // Group commitments by YMD date
@@ -450,8 +481,8 @@
     const map = new Map<string, any[]>();
     for (const ch of chapters) {
       if (!ch.published_at) continue;
-      const pubSp = getSaoPauloDate(ch.published_at);
-      const ymd = formatYMD(pubSp);
+      const pubParts = getSaoPauloDateParts(ch.published_at);
+      const ymd = pubParts.ymd;
       if (!map.has(ymd)) map.set(ymd, []);
       map.get(ymd)!.push(ch);
     }
@@ -491,7 +522,7 @@
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const day = daysInPrevMonth - i;
       const prevDate = new Date(currentYear, currentMonth - 1, day);
-      const ymd = formatYMD(prevDate);
+      const ymd = formatYMDFromParts(prevDate.getFullYear(), prevDate.getMonth(), prevDate.getDate());
       const coms = commitmentsByDateMap.get(ymd) || [];
       const pubs = publicationsByDateMap.get(ymd) || [];
       cells.push({
@@ -508,8 +539,7 @@
 
     // Current month days
     for (let day = 1; day <= daysInCurrentMonth; day++) {
-      const curDate = new Date(currentYear, currentMonth, day);
-      const ymd = formatYMD(curDate);
+      const ymd = formatYMDFromParts(currentYear, currentMonth, day);
       const coms = commitmentsByDateMap.get(ymd) || [];
       const pubs = publicationsByDateMap.get(ymd) || [];
       cells.push({
@@ -530,7 +560,7 @@
       const trailingCount = 7 - remainder;
       for (let day = 1; day <= trailingCount; day++) {
         const nextDate = new Date(currentYear, currentMonth + 1, day);
-        const ymd = formatYMD(nextDate);
+        const ymd = formatYMDFromParts(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
         const coms = commitmentsByDateMap.get(ymd) || [];
         const pubs = publicationsByDateMap.get(ymd) || [];
         cells.push({
@@ -554,7 +584,7 @@
 
   // Formatted date header for selected day
   let formattedSelectedDayHeader = $derived.by(() => {
-    if (!selectedDateYMD) return '';
+    if (!selectedDateYMD) return 'Próxima Entrega Relevante';
     const [y, m, d] = selectedDateYMD.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
     const formatted = dateObj.toLocaleDateString('pt-BR', {
@@ -610,30 +640,41 @@
   // Format due date for clean display
   function formatDueDisplay(dueAt?: string): string {
     if (!dueAt) return '--';
-    const sp = getSaoPauloDate(dueAt);
-    const day = String(sp.getDate()).padStart(2, '0');
-    const month = String(sp.getMonth() + 1).padStart(2, '0');
+    const parts = getSaoPauloDateParts(dueAt);
+    const day = String(parts.day).padStart(2, '0');
+    const month = String(parts.month + 1).padStart(2, '0');
     return `${day}/${month} às 23:59`;
+  }
+
+  // Format timestamp with date and time
+  function formatDateWithTime(dateStr?: string): string {
+    if (!dateStr) return '--';
+    const parts = getSaoPauloDateParts(dateStr);
+    const day = String(parts.day).padStart(2, '0');
+    const month = String(parts.month + 1).padStart(2, '0');
+    const hours = String(parts.hours).padStart(2, '0');
+    const mins = String(parts.minutes).padStart(2, '0');
+    return `${day}/${month} às ${hours}:${mins}`;
   }
 
   // Format completed date for clean display
   function formatCompletedDisplay(completedAt?: string): string {
     if (!completedAt) return 'Concluído';
-    const sp = getSaoPauloDate(completedAt);
-    const day = String(sp.getDate()).padStart(2, '0');
-    const month = String(sp.getMonth() + 1).padStart(2, '0');
+    const parts = getSaoPauloDateParts(completedAt);
+    const day = String(parts.day).padStart(2, '0');
+    const month = String(parts.month + 1).padStart(2, '0');
     return `Concluído em ${day}/${month}`;
   }
 
-  // Format proposed new date (+2 days at 23:59 SP)
+  // Format proposed new date (+2 days at 23:59 SP) with weekday
   function formatProposedExtendedDisplay(dueAt?: string): string {
     if (!dueAt) return '--';
-    const sp = getSaoPauloDate(dueAt);
-    const target = new Date(sp);
-    target.setDate(target.getDate() + 2);
+    const parts = getSaoPauloDateParts(dueAt);
+    const target = new Date(parts.year, parts.month, parts.day + 2);
+    const weekday = target.toLocaleDateString('pt-BR', { weekday: 'short' });
     const day = String(target.getDate()).padStart(2, '0');
     const month = String(target.getMonth() + 1).padStart(2, '0');
-    return `${day}/${month} às 23:59`;
+    return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day}/${month} às 23:59`;
   }
 
   // Active filter chips for quick removal
@@ -964,14 +1005,21 @@
           <!-- 7-Column Days Grid -->
           <div class="monthly-days-grid">
             {#each monthGridCells as cell}
-              <button
-                type="button"
+              <div
                 class="matrix-day-cell"
                 class:is-other-month={!cell.isCurrentMonth}
                 class:is-today={cell.isToday}
                 class:is-selected={cell.isSelected}
                 class:has-deliveries={cell.commitments.length > 0}
+                role="gridcell"
+                tabindex="0"
                 onclick={() => handleSelectDay(cell.ymd)}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelectDay(cell.ymd);
+                  }
+                }}
               >
                 <!-- Day Cell Top Bar -->
                 <div class="cell-top-bar">
@@ -1049,7 +1097,7 @@
                     </div>
                   {/if}
                 </div>
-              </button>
+              </div>
             {/each}
           </div>
 
@@ -1131,7 +1179,7 @@
                   onclick={() => {
                     handleSelectDay(item.dueYMD || todayYMD);
                     contextPanelExpandedId = item.id;
-                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                    if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
                       handleOpenDeliveryBottomSheet(item);
                     }
                   }}
@@ -1280,7 +1328,7 @@
                       {/if}
                     </div>
 
-                    <!-- Section 4: Ação de Prorrogação de Prazo (Strictly States A, B, C) -->
+                    <!-- Section 4: Ação de Prorrogação de Prazo (Strictly States A, B, C & Permanence) -->
                     {#if item.kind === 'EDITORIAL_STAGE'}
                       <div class="ctx-extension-section">
                         {#if item.extensionState === 'EXTENDED'}
@@ -1290,7 +1338,7 @@
                             <span>Prazo prorrogado até {item.extendedDateTimeStr || formatDueDisplay(item.dueAt)}.</span>
                           </div>
                         {:else if item.extensionState === 'AVAILABLE'}
-                          <!-- Estado B: Nas últimas 24 horas (Habilitado) -->
+                          <!-- Estado B: Nas últimas 24 horas (Habilitado para o responsável) -->
                           <button
                             type="button"
                             class="btn-extension-action available"
@@ -1300,6 +1348,23 @@
                             <Zap size={14} />
                             <span>⚡ Prorrogar +2 dias</span>
                           </button>
+                        {:else if item.extensionState === 'RESTRICTED_AVAILABLE'}
+                          <!-- Estado B: Janela ativa, porém restrito ao responsável da etapa -->
+                          <div class="ext-locked-cluster">
+                            <button
+                              type="button"
+                              class="btn-extension-action locked"
+                              disabled
+                              title="Prorrogação disponível apenas para o responsável"
+                            >
+                              <Lock size={13} />
+                              <span>Prorrogar prazo em +2 dias</span>
+                            </button>
+                            <p class="ext-helper-note">
+                              <Info size={11} class="text-amber-400" />
+                              <span>Disponível para {item.assignee?.display_name || item.assignee?.username || 'o responsável'}.</span>
+                            </p>
+                          </div>
                         {:else if item.extensionState === 'LOCKED'}
                           <!-- Estado A: Antes das últimas 24 horas (Desabilitado + Info) -->
                           <div class="ext-locked-cluster">
@@ -1315,6 +1380,23 @@
                             <p class="ext-helper-note">
                               <Info size={11} class="text-cyan-400" />
                               <span>Disponível a partir de {item.unlockDateTimeStr}.</span>
+                            </p>
+                          </div>
+                        {:else if item.extensionState === 'EXPIRED'}
+                          <!-- Estado Expirado: Prazo encerrado -->
+                          <div class="ext-locked-cluster">
+                            <button
+                              type="button"
+                              class="btn-extension-action locked"
+                              disabled
+                              title="Prazo encerrado para prorrogação"
+                            >
+                              <Lock size={13} />
+                              <span>Prorrogação indisponível</span>
+                            </button>
+                            <p class="ext-helper-note">
+                              <AlertCircle size={11} class="text-rose-400" />
+                              <span>Prazo expirado para prorrogação (+2d indisponível).</span>
                             </p>
                           </div>
                         {/if}
@@ -1380,17 +1462,46 @@
                       {/if}
                     </div>
 
-                    <!-- Section 6: Ação Principal e Metadados Secundários -->
-                    <div class="ctx-actions-footer">
+                    <!-- Section 6: Histórico e Informações Secundárias (Level 3 Progressive Disclosure) -->
+                    <div class="ctx-history-meta-box">
+                      <div class="ctx-history-grid">
+                        {#if item.claimedAt}
+                          <div class="ctx-history-item">
+                            <span class="ctx-history-lbl">Atribuído em:</span>
+                            <span class="ctx-history-txt">{formatDateWithTime(item.claimedAt)}</span>
+                          </div>
+                        {/if}
+                        {#if item.originalDueAt && item.originalDueAt !== item.dueAt}
+                          <div class="ctx-history-item">
+                            <span class="ctx-history-lbl">Prazo inicial:</span>
+                            <span class="ctx-history-txt">{formatDueDisplay(item.originalDueAt)}</span>
+                          </div>
+                        {/if}
+                        {#if item.extendedAt}
+                          <div class="ctx-history-item">
+                            <span class="ctx-history-lbl">Prorrogado em:</span>
+                            <span class="ctx-history-txt">{formatDateWithTime(item.extendedAt)}</span>
+                          </div>
+                        {/if}
+                        {#if item.completedAt}
+                          <div class="ctx-history-item">
+                            <span class="ctx-history-lbl">Concluído em:</span>
+                            <span class="ctx-history-txt">{formatDateWithTime(item.completedAt)}</span>
+                          </div>
+                        {/if}
+                      </div>
+
                       {#if item.productionChapter && onOpenChapter}
-                        <button
-                          type="button"
-                          class="btn-open-in-prod"
-                          onclick={() => onOpenChapter(item.productionChapter)}
-                        >
-                          <span>Abrir na Produção</span>
-                          <ArrowRight size={12} />
-                        </button>
+                        <div class="ctx-actions-footer">
+                          <button
+                            type="button"
+                            class="btn-open-in-prod"
+                            onclick={() => onOpenChapter(item.productionChapter)}
+                          >
+                            <span>Abrir na Produção</span>
+                            <ArrowRight size={12} />
+                          </button>
+                        </div>
                       {/if}
                     </div>
                   </div>
@@ -1534,7 +1645,7 @@
           </div>
         </section>
 
-        <!-- 4. Ação de prorrogação (Strictly States A, B, C) -->
+        <!-- 4. Ação de prorrogação (Strictly States A, B, C & Permanence) -->
         {#if bottomSheetItem.kind === 'EDITORIAL_STAGE'}
           <section class="sheet-section">
             <span class="sheet-label">Prorrogação de prazo (+2 dias)</span>
@@ -1546,7 +1657,7 @@
                   <span>Prazo prorrogado até {bottomSheetItem.extendedDateTimeStr || formatDueDisplay(bottomSheetItem.dueAt)}.</span>
                 </div>
               {:else if bottomSheetItem.extensionState === 'AVAILABLE'}
-                <!-- Estado B: Nas últimas 24 horas -->
+                <!-- Estado B: Nas últimas 24 horas (Habilitado para o responsável) -->
                 <button
                   type="button"
                   class="btn-sheet-extend available"
@@ -1555,6 +1666,18 @@
                   <Zap size={14} />
                   <span>⚡ Prorrogar +2 dias</span>
                 </button>
+              {:else if bottomSheetItem.extensionState === 'RESTRICTED_AVAILABLE'}
+                <!-- Estado B: Janela ativa, porém restrito ao responsável da etapa -->
+                <div class="sheet-ext-locked">
+                  <button type="button" class="btn-sheet-extend locked" disabled>
+                    <Lock size={13} />
+                    <span>Prorrogar prazo em +2 dias</span>
+                  </button>
+                  <p class="sheet-ext-note">
+                    <Info size={11} class="text-amber-400" />
+                    <span>Disponível para {bottomSheetItem.assignee?.display_name || bottomSheetItem.assignee?.username || 'o responsável'}.</span>
+                  </p>
+                </div>
               {:else if bottomSheetItem.extensionState === 'LOCKED'}
                 <!-- Estado A: Antes das últimas 24 horas -->
                 <div class="sheet-ext-locked">
@@ -1565,6 +1688,18 @@
                   <p class="sheet-ext-note">
                     <Info size={11} class="text-cyan-400" />
                     <span>Disponível a partir de {bottomSheetItem.unlockDateTimeStr}.</span>
+                  </p>
+                </div>
+              {:else if bottomSheetItem.extensionState === 'EXPIRED'}
+                <!-- Estado Expirado: Prazo encerrado -->
+                <div class="sheet-ext-locked">
+                  <button type="button" class="btn-sheet-extend locked" disabled>
+                    <Lock size={13} />
+                    <span>Prorrogação indisponível</span>
+                  </button>
+                  <p class="sheet-ext-note">
+                    <AlertCircle size={11} class="text-rose-400" />
+                    <span>Prazo expirado para prorrogação (+2d indisponível).</span>
                   </p>
                 </div>
               {/if}
@@ -1633,6 +1768,34 @@
 
         <!-- 6. Histórico e informações secundárias -->
         <section class="sheet-section">
+          <span class="sheet-label">Histórico e Metadados</span>
+          <div class="sheet-history-box">
+            {#if bottomSheetItem.claimedAt}
+              <div class="sheet-history-row">
+                <span class="sheet-history-label">Atribuído em:</span>
+                <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.claimedAt)}</span>
+              </div>
+            {/if}
+            {#if bottomSheetItem.originalDueAt && bottomSheetItem.originalDueAt !== bottomSheetItem.dueAt}
+              <div class="sheet-history-row">
+                <span class="sheet-history-label">Prazo inicial:</span>
+                <span class="sheet-history-val">{formatDueDisplay(bottomSheetItem.originalDueAt)}</span>
+              </div>
+            {/if}
+            {#if bottomSheetItem.extendedAt}
+              <div class="sheet-history-row">
+                <span class="sheet-history-label">Prorrogado em:</span>
+                <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.extendedAt)}</span>
+              </div>
+            {/if}
+            {#if bottomSheetItem.completedAt}
+              <div class="sheet-history-row">
+                <span class="sheet-history-label">Concluído em:</span>
+                <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.completedAt)}</span>
+              </div>
+            {/if}
+          </div>
+
           {#if bottomSheetItem.productionChapter && onOpenChapter}
             <button
               type="button"
@@ -3026,6 +3189,40 @@
     gap: 0.25rem;
   }
 
+  .ctx-history-meta-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0.45rem;
+    padding: 0.5rem 0.65rem;
+  }
+
+  .ctx-history-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem 0.5rem;
+  }
+
+  .ctx-history-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+  }
+
+  .ctx-history-lbl {
+    font-size: 0.64rem;
+    color: #64748b;
+    text-transform: uppercase;
+  }
+
+  .ctx-history-txt {
+    font-size: 0.72rem;
+    color: #cbd5e1;
+    font-weight: 500;
+  }
+
   .ctx-actions-footer {
     display: flex;
     flex-direction: column;
@@ -3499,6 +3696,34 @@
   }
 
   /* 6. Histórico / Produção */
+  .sheet-history-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.45rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .sheet-history-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .sheet-history-label {
+    font-size: 0.68rem;
+    color: #94a3b8;
+  }
+
+  .sheet-history-val {
+    font-size: 0.72rem;
+    color: #cbd5e1;
+    font-weight: 600;
+  }
+
   .btn-sheet-production {
     width: 100%;
     display: inline-flex;
