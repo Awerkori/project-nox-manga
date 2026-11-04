@@ -137,6 +137,10 @@
 
   let catalogData = $derived({
     ...baseData,
+    page: 1,
+    perPage: 20,
+    total: 4,
+    totalPages: 1,
     works: [
       {
         id: 'w-1',

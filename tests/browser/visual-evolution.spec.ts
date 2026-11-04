@@ -86,10 +86,10 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto(`${LOCAL_URL}/qa-reader`);
-    await page.waitForSelector('.reader-end');
+    await page.waitForSelector('#chapter-end');
 
     await page.evaluate(() => {
-      const el = document.querySelector('.reader-end');
+      const el = document.querySelector('#chapter-end');
       el?.scrollIntoView({ behavior: 'instant' });
     });
     await page.waitForTimeout(400);
@@ -102,10 +102,10 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
       fullPage: false
     });
 
-    const drawerBtn = page.locator('.btn-nav-drawer').first();
+    const drawerBtn = page.getByRole('button', { name: /lista de capítulos/i }).first();
     if (await drawerBtn.isVisible()) {
       await drawerBtn.click();
-      await page.waitForSelector('.drawer-panel');
+      await page.getByRole('dialog', { name: /todos os capítulos/i }).waitFor();
       await page.waitForTimeout(300);
 
       const drawerOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -116,7 +116,7 @@ test('visual audit evolution features and verify zero horizontal overflow', asyn
         fullPage: false
       });
 
-      await page.locator('.btn-drawer-close').click();
+      await page.getByRole('button', { name: 'Fechar', exact: true }).click();
       await page.waitForTimeout(200);
     }
   }

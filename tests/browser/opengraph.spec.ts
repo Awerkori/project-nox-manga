@@ -1,16 +1,27 @@
 import { test, expect } from '@playwright/test';
 
 const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
+
+async function dismissAgeGate(page: import('@playwright/test').Page) {
+  const adult = page.getByRole('button', { name: 'Sim, tenho 18 anos ou mais' });
+  if (await adult.isVisible().catch(() => false)) {
+    await adult.click();
+    await page.getByRole('button', { name: 'Confirmar e Continuar' }).click();
+    await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+  }
+}
 
 test('verify obra page has single og:image and single twitter:image', async ({ page }) => {
   // Set age cookies so AgeGateModal is bypassed
   await page.context().addCookies([
-    { name: 'nox-age-status', value: 'ADULT', domain: '127.0.0.1', path: '/' },
-    { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' }
+    { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' },
+    { name: 'nox-blur-nsfw', value: 'false', domain: LIVE_DOMAIN, path: '/' }
   ]);
 
   await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.work-page-container');
+  await dismissAgeGate(page);
+  await page.waitForSelector('main.work-page-root');
 
   const metaData = await page.evaluate(() => {
     const ogImages = Array.from(document.querySelectorAll('meta[property="og:image"]')).map(el => el.getAttribute('content'));
