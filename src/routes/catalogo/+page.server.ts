@@ -2,7 +2,7 @@
 import { withTimeout } from '$lib/server/resilience';
 import { fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
 
-let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number } | null = null;
+let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number; hasMore: boolean } | null = null;
 const CATALOGO_CACHE_TTL_MS = 300_000;
 
 export const load = async ({ locals, url, setHeaders, platform }: any) => {
@@ -34,6 +34,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     return {
       works: cachedUnfilteredPage1.works,
       count: cachedUnfilteredPage1.count,
+      hasMore: cachedUnfilteredPage1.hasMore,
       tags: selectedTag,
       q,
       tag,
@@ -53,7 +54,8 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
         status: ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
         sort: sort === 'titulo' ? 'titulo' : sort === 'views' ? 'views' : 'recentes',
         limit: 20,
-        offset: (page - 1) * 20
+        offset: (page - 1) * 20,
+        includeTotal: false
       },
       platform?.env
     ),
@@ -64,23 +66,27 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
 
   let works = catalogRes.works || [];
   let totalCount = catalogRes.total || 0;
+  let hasMore = catalogRes.hasMore === true;
 
   if (works.length === 0 && isUnfiltered && cachedUnfilteredPage1) {
     works = cachedUnfilteredPage1.works;
     totalCount = cachedUnfilteredPage1.count;
+    hasMore = cachedUnfilteredPage1.hasMore;
   }
 
   if (isUnfiltered && works.length > 0) {
     cachedUnfilteredPage1 = {
       timestamp: Date.now(),
       works,
-      count: totalCount
+      count: totalCount,
+      hasMore
     };
   }
 
   return {
     works,
     count: totalCount,
+    hasMore,
     tags: selectedTag,
     q,
     tag,

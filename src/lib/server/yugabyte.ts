@@ -1149,6 +1149,8 @@ export interface YugabyteCatalogOptions {
   sort?: 'recentes' | 'titulo' | 'views' | 'updated_at';
   limit?: number;
   offset?: number;
+  /** Public SSR only needs a correct next-page signal, not a blocking exact count. */
+  includeTotal?: boolean;
 }
 
 export type YugabyteWorkSearchOptions = YugabyteCatalogOptions;
@@ -1279,9 +1281,11 @@ export async function fetchTagsFromYugabyte(platformEnv?: any): Promise<Yugabyte
 export async function fetchCatalogFromYugabyte(
   options: YugabyteCatalogOptions = {},
   platformEnv?: any
-): Promise<{ works: YugabyteWork[]; total: number }> {
+): Promise<{ works: YugabyteWork[]; total: number; hasMore: boolean }> {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const includeTotal = options.includeTotal !== false;
+  const queryLimit = includeTotal ? limit : limit + 1;
   const sort = options.sort || 'recentes';
   const sortCol = sort === 'titulo' ? 'title' : sort === 'views' ? 'views_total' : 'updated_at';
   const sortAsc = sort === 'titulo';
@@ -1289,7 +1293,7 @@ export async function fetchCatalogFromYugabyte(
   const rawQ = options.q !== undefined ? options.q.trim() : '';
   const q = rawQ.slice(0, 100).replace(/[%_\\]/g, '').trim();
   if (rawQ.length > 0 && q.length === 0) {
-    return { works: [], total: 0 };
+    return { works: [], total: 0, hasMore: false };
   }
 
   const kind = (options.kind || '').trim().toUpperCase();
@@ -1299,7 +1303,13 @@ export async function fetchCatalogFromYugabyte(
 
   const isUnfiltered = !q && !kind && !status && !contentRating && !tag;
 
-  const cacheKey = `catalog_${isUnfiltered ? 'unfiltered' : `${q}_${kind}_${status}_${contentRating}_${tag}`}_${sort}_${limit}_${offset}`;
+  const cacheKey = `catalog_${isUnfiltered ? 'unfiltered' : `${q}_${kind}_${status}_${contentRating}_${tag}`}_${sort}_${limit}_${offset}_${includeTotal ? 'total' : 'page'}`;
+
+  const pageResult = (rows: YugabyteWork[]): { works: YugabyteWork[]; total: number; hasMore: boolean } => {
+    const hasMore = !includeTotal && rows.length > limit;
+    const works = hasMore ? rows.slice(0, limit) : rows;
+    return { works, total: includeTotal ? 0 : offset + works.length, hasMore };
+  };
 
   return withYugabyteLkg(
     cacheKey,
@@ -1313,15 +1323,13 @@ export async function fetchCatalogFromYugabyte(
              WHERE published = true
              ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}
              LIMIT $1 OFFSET $2;`,
-            [limit, offset],
+            [queryLimit, offset],
             platformEnv
           ),
-          fetchPublishedWorksCountFromYugabyte(platformEnv)
+          includeTotal ? fetchPublishedWorksCountFromYugabyte(platformEnv) : Promise.resolve(0)
         ]);
-        return {
-          works: worksRes.rows,
-          total: totalCount
-        };
+        const page = pageResult(worksRes.rows);
+        return { ...page, total: includeTotal ? totalCount : page.total };
       }
 
       // Filtered path
@@ -1352,12 +1360,12 @@ export async function fetchCatalogFromYugabyte(
       )`);
         }
 
-        params.push(limit);
+        params.push(queryLimit);
         const limitIdx = params.length;
         params.push(offset);
         const offsetIdx = params.length;
 
-        const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
+        const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
     FROM works WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
     ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
     LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
@@ -1383,11 +1391,8 @@ export async function fetchCatalogFromYugabyte(
           );
         }
 
-        const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
-        return {
-          works: res.rows.map(({ total_count: _t, ...w }: any) => w),
-          total
-        };
+        const page = pageResult(res.rows.map(({ total_count: _t, ...w }: any) => w));
+        return { ...page, total: includeTotal && res.rows.length > 0 ? Number(res.rows[0].total_count) : page.total };
       }
 
       // Filtered without q (e.g. tag, kind, status)
@@ -1410,13 +1415,13 @@ export async function fetchCatalogFromYugabyte(
         WHERE wt.work_id=works.id AND t.slug=$${params.length}
       )`);
       }
-      params.push(limit);
+      params.push(queryLimit);
       const limitIdx = params.length;
       params.push(offset);
       const offsetIdx = params.length;
 
-      const res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-        `SELECT ${WORK_SELECT_COLUMNS}, COUNT(*) OVER()::int AS total_count
+      const res = await executeYugabyteSql<YugabyteWork & { total_count?: number }>(
+        `SELECT ${WORK_SELECT_COLUMNS}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
          FROM works
          WHERE ${where.join(' AND ')}
          ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
@@ -1425,13 +1430,10 @@ export async function fetchCatalogFromYugabyte(
         platformEnv
       );
 
-      const total = res.rows.length > 0 ? Number(res.rows[0].total_count) : 0;
-      return {
-        works: res.rows.map(({ total_count: _t, ...w }: any) => w),
-        total
-      };
+      const page = pageResult(res.rows.map(({ total_count: _t, ...w }: any) => w));
+      return { ...page, total: includeTotal && res.rows.length > 0 ? Number(res.rows[0].total_count) : page.total };
     },
-    { works: [], total: 0 },
+    { works: [], total: 0, hasMore: false },
     isUnfiltered ? 60_000 : 45_000
   );
 }

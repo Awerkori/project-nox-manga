@@ -18,7 +18,7 @@ vi.mock('pg', () => {
   return { Client: MockClient, Pool: MockPool };
 });
 
-import { searchWorksFromYugabyte } from '../src/lib/server/yugabyte';
+import { fetchCatalogFromYugabyte, searchWorksFromYugabyte } from '../src/lib/server/yugabyte';
 import { GET as getWorks } from '../src/routes/api/v1/[...path]/+server';
 
 describe('Yugabyte alias search', () => {
@@ -36,6 +36,7 @@ describe('Yugabyte alias search', () => {
 
     expect(result.works).toEqual([{ id: 'work-1', title: 'Solo Leveling', aliases: ['나 혼자만 레벨업'] }]);
     expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('search_text ILIKE $1');
     expect(sql).toContain('wt.work_id=works.id');
@@ -45,8 +46,27 @@ describe('Yugabyte alias search', () => {
 
   it('does not turn wildcard input into an unbounded match', async () => {
     const result = await searchWorksFromYugabyte(' %_\\ ', { limit: 20, offset: 0 }, {});
-    expect(result).toEqual({ works: [], total: 0 });
+    expect(result).toEqual({ works: [], total: 0, hasMore: false });
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('uses a limit-plus-one page for public filtered SSR without a distributed total count', async () => {
+    query.mockResolvedValue({
+      rows: [
+        { id: 'work-1', title: 'First' },
+        { id: 'work-2', title: 'Second' }
+      ],
+      rowCount: 2
+    });
+
+    const result = await fetchCatalogFromYugabyte({ tag: 'action', limit: 1, offset: 0, includeTotal: false }, {
+      HYPERDRIVE: { connectionString: 'postgres://test' }
+    });
+
+    expect(result).toEqual({ works: [{ id: 'work-1', title: 'First' }], total: 1, hasMore: true });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain('COUNT(*) OVER()');
+    expect(params).toEqual(['action', 2, 0]);
   });
 
   it('falls back to persisted title and aliases when the derived search index is stale', async () => {
@@ -61,7 +81,8 @@ describe('Yugabyte alias search', () => {
 
     expect(result).toEqual({
       works: [{ id: 'work-2', slug: 'cheer-love', title: 'Cheer Love!', aliases: ['Viva o Amor!'] }],
-      total: 1
+      total: 1,
+      hasMore: false
     });
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain('search_text ILIKE $1');
