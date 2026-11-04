@@ -19,7 +19,7 @@
       comments: [],
       profile: null,
       preview: false,
-      progress: null,
+      progress: id === 'qa-first' ? { page: 3 } : null,
       previous: number > 1 ? { id: 'qa-first', number: 1 } : null,
       next: number < 3 ? { id: `qa-${number + 1}`, number: number + 1 } : null,
       siblings: [
@@ -42,4 +42,6 @@
   });
 </script>
 
-<ReaderRoute {data} />
+{#key data.chapter.id}
+  <ReaderRoute {data} />
+{/key}
