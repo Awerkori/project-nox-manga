@@ -40,36 +40,8 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     };
   }
 
-  // Only share public search results. A timed-out request must not cache its
-  // degraded response; an independently completed SQL read may populate the
-  // edge cache after that response has been returned.
-  let edgeCache: Cache | undefined;
-  let edgeKey: string | undefined;
-  if (!locals.user && q && platform?.context?.waitUntil) {
-    try {
-      edgeCache = (globalThis as any).caches?.default;
-      if (edgeCache) {
-        const raw = JSON.stringify([q, tag, kind, status, sort, page]);
-        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-        edgeKey = `https://edge-cache.project-nox.internal/catalog-search-v1/${Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')}`;
-      }
-    } catch { edgeCache = undefined; edgeKey = undefined; }
-  }
-  let cachedResult: any;
-  if (edgeCache && edgeKey) {
-    try {
-      const response = await edgeCache.match(edgeKey);
-      if (response) {
-        const entry = await response.json() as any;
-        if (Date.now() - entry.timestamp < 45_000 && entry.timestamp <= Date.now() && Array.isArray(entry.result?.works)) {
-          cachedResult = entry.result;
-        }
-      }
-    } catch { /* edge cache is best-effort */ }
-  }
-
-  let edgeWrite: Promise<unknown> = Promise.resolve();
-  const catalogPromise = cachedResult ? Promise.resolve(cachedResult) : fetchCatalogFromYugabyte(
+  const catalogRes = await withTimeout(
+    fetchCatalogFromYugabyte(
       {
         q,
         tag: tag || undefined,
@@ -80,19 +52,8 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
         offset: (page - 1) * 20,
         includeTotal: false
       },
-      platform?.env,
-      (result) => {
-        if (!edgeCache || !edgeKey || result.isDegraded) return;
-        edgeWrite = edgeCache.put(edgeKey, new Response(JSON.stringify({ timestamp: Date.now(), result }), {
-          headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=45' }
-        })).catch(() => {});
-      }
-    );
-  if (!cachedResult && edgeCache && platform?.context?.waitUntil) {
-    platform.context.waitUntil(catalogPromise.then(() => edgeWrite).catch(() => {}));
-  }
-  const catalogRes = await withTimeout(
-    catalogPromise,
+      platform?.env
+    ),
     6000,
     { works: [], total: 0, hasMore: false, isDegraded: true },
     'catalogo_yugabyte_catalog'
