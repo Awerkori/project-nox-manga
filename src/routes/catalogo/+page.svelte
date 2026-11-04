@@ -101,11 +101,13 @@
     </div>
   </form>
 
-  <div class="results-meta-bar">
-    <span class="count-pill">
-      {data.hasMore ? `${data.count}+ obras encontradas` : `${data.count} ${data.count === 1 ? 'obra encontrada' : 'obras encontradas'}`}
-    </span>
-  </div>
+  {#if !data.loadError}
+    <div class="results-meta-bar">
+      <span class="count-pill">
+        {data.hasMore ? `${data.count}+ obras encontradas` : `${data.count} ${data.count === 1 ? 'obra encontrada' : 'obras encontradas'}`}
+      </span>
+    </div>
+  {/if}
 
   {#if data.loadError}
     <Empty title="Não foi possível carregar o catálogo." text="Tente novamente em instantes." href="/catalogo" label="Tentar novamente" />
