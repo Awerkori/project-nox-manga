@@ -69,6 +69,16 @@ describe('Yugabyte alias search', () => {
     expect(params).toEqual(['action', 2, 0]);
   });
 
+  it('does not issue a published-work count for an unfiltered page without a total', async () => {
+    query.mockResolvedValue({ rows: [{ id: 'one' }, { id: 'two' }], rowCount: 2 });
+    const result = await fetchCatalogFromYugabyte({ limit: 1, includeTotal: false }, {
+      HYPERDRIVE: { connectionString: 'postgres://test' }
+    });
+    expect(result).toEqual({ works: [{ id: 'one' }], total: 1, hasMore: true });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][1]).toEqual([2, 0]);
+  });
+
   it('falls back to persisted title and aliases when the derived search index is stale', async () => {
     query.mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockResolvedValueOnce({
       rows: [{ id: 'work-2', slug: 'cheer-love', title: 'Cheer Love!', aliases: ['Viva o Amor!'], total_count: 1 }],

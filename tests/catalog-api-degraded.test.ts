@@ -38,3 +38,21 @@ describe.each([['works', works], ['mihon', mihon], ['v1', v1]] as const)('%s cat
     expect(response.headers.get('cache-control')).toContain('public');
   });
 });
+
+describe('works API pagination without an exact count', () => {
+  beforeEach(() => fetchCatalog.mockReset());
+
+  it('uses the catalog next-page signal and omits the total when requested', async () => {
+    fetchCatalog.mockResolvedValue({ works: [{ id: 'work-1' }], total: 1, hasMore: true });
+    const response = await works({ ...event, url: new URL('https://projectnox.org/api/works?limit=1&include_total=false') });
+    expect(await response.json()).toEqual({ works: [{ id: 'work-1' }], hasMore: true });
+    expect(fetchCatalog).toHaveBeenCalledWith(expect.objectContaining({ limit: 1, includeTotal: false }), undefined);
+  });
+
+  it('preserves the default total and hasMore contract', async () => {
+    fetchCatalog.mockResolvedValue({ works: [{ id: 'work-1' }], total: 2, hasMore: false });
+    const response = await works({ ...event, url: new URL('https://projectnox.org/api/works?limit=1') });
+    expect(await response.json()).toEqual({ works: [{ id: 'work-1' }], total: 2, hasMore: true });
+    expect(fetchCatalog).toHaveBeenCalledWith(expect.objectContaining({ includeTotal: true }), undefined);
+  });
+});
