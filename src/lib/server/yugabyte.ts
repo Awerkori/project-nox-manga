@@ -1319,6 +1319,16 @@ export async function fetchCatalogFromYugabyte(
   if (rawQ.length > 0 && q.length === 0) {
     return { works: [], total: 0, hasMore: false };
   }
+  // A phrase can make the Yugabyte trigram index produce thousands of false
+  // positives that must be rechecked. For multi-word input, first use its
+  // longest word to narrow the GIN scan, then validate the original phrase on
+  // those IDs. The latter is logically redundant (a phrase contains that word)
+  // and therefore cannot alter search results.
+  const searchTerms = q.match(/\S+/gu) || [];
+  const searchAnchor = searchTerms.length > 1
+    ? searchTerms.reduce((longest, term) => term.length > longest.length ? term : longest)
+    : '';
+  const searchAnchorLiteral = searchAnchor.replace(/'/g, "''");
 
   const kind = (options.kind || '').trim().toUpperCase();
   const status = (options.status || '').trim().toUpperCase();
@@ -1389,10 +1399,29 @@ export async function fetchCatalogFromYugabyte(
         params.push(offset);
         const offsetIdx = params.length;
 
-        const buildSql = (searchExpr: string) => `SELECT ${WORK_SELECT_COLUMNS}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
-    FROM works WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
-    ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
-    LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
+        // The trigram index can return thousands of candidates for a negative
+        // phrase. Keep its recheck narrow and fetch the wide catalog row only
+        // after sorting/paginating those candidate IDs.
+        const buildIndexedSql = (searchExpr: string) => `WITH ${searchAnchor ? `candidates AS MATERIALIZED (
+          SELECT works.id, works.${sortCol}
+          FROM works
+          WHERE ${[...where.slice(0, 1), `works.search_text ILIKE '%${searchAnchorLiteral}%'`, ...where.slice(1)].join(' AND ')}
+        ), ` : ''}matched AS MATERIALIZED (
+          SELECT works.id, works.${sortCol}
+          FROM ${searchAnchor ? 'candidates JOIN works ON works.id = candidates.id' : 'works'}
+          WHERE ${searchAnchor ? searchExpr : [...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
+        ), paged AS MATERIALIZED (
+          SELECT id, ${sortCol}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
+          FROM matched
+          ORDER BY ${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, id ASC
+          LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        )
+        SELECT works.id, works.slug, works.title, works.aliases, works.synopsis, works.description, works.author, works.artist,
+               works.kind, works.status, works.year, works.age_rating, works.published, works.featured, works.cover_id,
+               works.updated_at, works.created_at, works.content_rating, works.views_total${includeTotal ? ', paged.total_count' : ''}
+        FROM paged
+        JOIN works ON works.id = paged.id
+        ORDER BY paged.${sortCol} ${sortAsc ? 'ASC' : 'DESC'}, paged.id ASC`;
 
         // Keep the alias/accent fallback from materializing the wide work row
         // for every candidate. In particular, a negative search must not read
@@ -1400,7 +1429,7 @@ export async function fetchCatalogFromYugabyte(
         const buildFallbackSql = (searchExpr: string) => `WITH matched AS MATERIALIZED (
           SELECT works.id, works.${sortCol}
           FROM works
-          WHERE ${[...where.slice(0, 1), searchExpr, ...where.slice(1)].join(' AND ')}
+          WHERE ${[...where.slice(0, 1), 'works.search_text IS NULL', searchExpr, ...where.slice(1)].join(' AND ')}
         ), paged AS MATERIALIZED (
           SELECT id, ${sortCol}${includeTotal ? ', COUNT(*) OVER()::int AS total_count' : ''}
           FROM matched
@@ -1416,7 +1445,7 @@ export async function fetchCatalogFromYugabyte(
 
         // 1. Try search_text first (fast indexed path)
         let res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
-          buildSql(`search_text ILIKE $${qParamIdx}`),
+          buildIndexedSql(`search_text ILIKE $${qParamIdx}`),
           params,
           platformEnv
         );

@@ -39,6 +39,8 @@ describe('Yugabyte alias search', () => {
     expect(result.hasMore).toBe(false);
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('search_text ILIKE $1');
+    expect(sql).toContain('matched AS MATERIALIZED');
+    expect(sql).toContain('JOIN works ON works.id = paged.id');
     expect(sql).toContain('wt.work_id=works.id');
     expect(sql).toContain('ORDER BY title ASC, id ASC');
     expect(params).toEqual(['%나 혼자만 레벨업%', 'MANHWA', 'action', 20, 20]);
@@ -107,6 +109,7 @@ describe('Yugabyte alias search', () => {
     expect(query.mock.calls[1][0]).toContain('unnest(COALESCE(works.aliases');
     expect(query.mock.calls[1][0]).toContain("concat_ws(' ', works.title, works.author, works.artist");
     expect(query.mock.calls[1][0]).not.toContain('COALESCE(works.search_text');
+    expect(query.mock.calls[1][0]).toContain('works.search_text IS NULL');
   });
 
   it('serves public API alias searches from the authoritative catalog', async () => {
