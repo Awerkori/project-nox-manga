@@ -1119,8 +1119,8 @@
                     </span>
 
                     {#if dlInfo.extensionCount > 0}
-                      <span class="meta-pill-extended" title="Prazo prorrogado em +2 dias">
-                        Prorrogado (+2d)
+                      <span class="meta-pill-extended" title="Prazo prorrogado em +2 dias (nova data: {dlInfo.dueFormatted})">
+                        Prazo prorrogado ({dlInfo.dueFormatted})
                       </span>
                     {/if}
                   </div>

@@ -92,6 +92,16 @@ async function run() {
           await page.screenshot({ path: pDrawer, fullPage: false });
           console.log(`  ✓ Saved: ${pDrawer}`);
 
+          // Expand 2nd commitment inside drawer to verify progressive disclosure
+          const secondRow = page.locator('.drawer-card-summary-row').nth(1);
+          if (await secondRow.count() > 0) {
+            await secondRow.click({ force: true });
+            await page.waitForTimeout(600);
+            const pExpanded = path.join(ARTIFACT_DIR, `desktop_1440x900_day_drawer_expanded.png`);
+            await page.screenshot({ path: pExpanded, fullPage: false });
+            console.log(`  ✓ Saved Expanded Item in Drawer: ${pExpanded}`);
+          }
+
           // Close Drawer
           const closeDrawerBtn = page.locator('.btn-close-drawer').first();
           if (await closeDrawerBtn.count() > 0) {
@@ -146,7 +156,7 @@ async function run() {
       await page.screenshot({ path: pMobMonth, fullPage: false });
       console.log(`  ✓ Saved: ${pMobMonth}`);
 
-      // Click on Day 2 to inspect Level 1 Quick Summary
+      // Click on Day 2 to inspect Level 1 Quick Summary below monthly calendar
       const day2 = page.locator('.matrix-day-cell').filter({ hasText: '2' }).first();
       if (await day2.count() > 0) {
         await day2.click({ force: true });
@@ -155,10 +165,10 @@ async function run() {
         await page.screenshot({ path: pMobSummary, fullPage: false });
         console.log(`  ✓ Saved Quick Summary: ${pMobSummary}`);
 
-        // Open Bottom Sheet (Level 2)
-        const verDetalhesBtn = page.locator('.btn-open-full-drawer').first();
-        if (await verDetalhesBtn.count() > 0) {
-          await verDetalhesBtn.click({ force: true });
+        // Touch first mini-card to open Level 2 Bottom Sheet with that commitment expanded
+        const firstMiniCard = page.locator('.preview-mini-card').first();
+        if (await firstMiniCard.count() > 0) {
+          await firstMiniCard.click({ force: true });
           await page.waitForTimeout(1000);
           const pMobSheet = path.join(ARTIFACT_DIR, `android_${res.name}_bottom_sheet.png`);
           await page.screenshot({ path: pMobSheet, fullPage: false });

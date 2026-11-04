@@ -8,6 +8,7 @@
     ChevronLeft,
     ChevronRight,
     ChevronDown,
+    ChevronUp,
     Sparkles,
     Briefcase,
     Filter,
@@ -98,6 +99,7 @@
 
   // Modals & Panels State
   let showDayDrawer = $state(false);
+  let expandedCommitmentId = $state<string | null>(null);
   let showExtensionModal = $state(false);
   let extensionTargetItem = $state<any>(null);
   let isExtending = $state(false);
@@ -555,9 +557,29 @@
 
   // Upcoming items for current user (Minhas Próximas Entregas)
   let myUpcomingDeliveries = $derived.by(() => {
+    const nowMs = Date.now();
     return allCommitments
       .filter((c) => c.assignedTo === currentUserId && c.status === 'IN_PROGRESS' && c.dueAt)
-      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
+      .sort((a, b) => {
+        // Priority 1: Editorial stage with Obra/Capítulo over generic tasks
+        const aIsEditorial = a.kind === 'EDITORIAL_STAGE' ? 1 : 0;
+        const bIsEditorial = b.kind === 'EDITORIAL_STAGE' ? 1 : 0;
+        if (aIsEditorial !== bIsEditorial) {
+          return bIsEditorial - aIsEditorial;
+        }
+
+        // Priority 2: Upcoming items (due in future or within recent 24h) over stale past items
+        const aTime = new Date(a.dueAt).getTime();
+        const bTime = new Date(b.dueAt).getTime();
+        const aIsUpcoming = aTime >= nowMs - (24 * 60 * 60 * 1000);
+        const bIsUpcoming = bTime >= nowMs - (24 * 60 * 60 * 1000);
+        if (aIsUpcoming !== bIsUpcoming) {
+          return aIsUpcoming ? -1 : 1;
+        }
+
+        // Priority 3: Closest due date
+        return aTime - bTime;
+      })
       .slice(0, 6);
   });
 
@@ -665,10 +687,44 @@
     return chips;
   });
 
+  function isMobileViewport(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  }
+
   // Handler for Day Cell Click
-  function handleSelectDay(ymd: string) {
+  function handleSelectDay(ymd: string, forceOpenDrawer = false) {
     selectedDateYMD = ymd;
+    const dayCommitments = commitmentsByDateMap.get(ymd) || [];
+    if (dayCommitments.length === 1) {
+      expandedCommitmentId = dayCommitments[0].id;
+    } else {
+      expandedCommitmentId = null;
+    }
+
+    if (forceOpenDrawer || !isMobileViewport()) {
+      showDayDrawer = true;
+    }
+  }
+
+  function handleSelectEvent(ymd: string, eventId: string) {
+    selectedDateYMD = ymd;
+    expandedCommitmentId = eventId;
     showDayDrawer = true;
+  }
+
+  function handleOpenCommitmentFromMobile(item: any) {
+    selectedDateYMD = item.dueYMD;
+    expandedCommitmentId = item.id;
+    showDayDrawer = true;
+  }
+
+  function toggleCommitmentExpansion(itemId: string) {
+    if (expandedCommitmentId === itemId) {
+      expandedCommitmentId = null;
+    } else {
+      expandedCommitmentId = itemId;
+    }
   }
 
   // Notes editing helpers
@@ -751,7 +807,7 @@
       <div class="view-toggle-segmented" role="radiogroup" aria-label="Visualização">
         <button
           type="button"
-          class="toggle-opt-btn"
+          class="toggle-opt-btn btn-toggle-view"
           class:active={activeViewMode === 'MONTH'}
           onclick={() => (activeViewMode = 'MONTH')}
           title="Visão Mensal"
@@ -761,7 +817,7 @@
         </button>
         <button
           type="button"
-          class="toggle-opt-btn"
+          class="toggle-opt-btn btn-toggle-view"
           class:active={activeViewMode === 'AGENDA'}
           onclick={() => (activeViewMode = 'AGENDA')}
           title="Visão Agenda / Lista"
@@ -780,7 +836,7 @@
       <!-- Quick Filter: Minhas Entregas -->
       <button
         type="button"
-        class="chip-filter-btn"
+        class="chip-filter-btn btn-mine-quick"
         class:is-active={filterAssigneeId === 'MINE'}
         onclick={toggleMineFilter}
       >
@@ -853,7 +909,7 @@
       <div class="mobile-filters-top-strip">
         <button
           type="button"
-          class="chip-filter-btn"
+          class="chip-filter-btn btn-mine-quick"
           class:is-active={filterAssigneeId === 'MINE'}
           onclick={toggleMineFilter}
         >
@@ -959,6 +1015,10 @@
                       class="day-event-card {item.statusClass}"
                       style="--stage-accent: {item.stageColor}"
                       title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || item.assignee?.username || 'Membro'}"
+                      onclick={(e) => { e.stopPropagation(); handleSelectEvent(cell.ymd, item.id); }}
+                      role="button"
+                      tabindex="0"
+                      onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleSelectEvent(cell.ymd, item.id); } }}
                     >
                       <div class="event-card-top-row">
                         <div class="event-card-avatar-wrap">
@@ -984,7 +1044,7 @@
 
                   <!-- Overflow indicator if > 2 items -->
                   {#if cell.commitments.length > 2}
-                    <div class="event-overflow-badge" onclick={(e) => { e.stopPropagation(); handleSelectDay(cell.ymd); }}>
+                    <div class="event-overflow-badge" onclick={(e) => { e.stopPropagation(); handleSelectDay(cell.ymd, true); }}>
                       <span>+{cell.commitments.length - 2} entregas</span>
                     </div>
                   {/if}
@@ -1034,8 +1094,8 @@
               {#if selectedDayCommitments.length > 0}
                 <button
                   type="button"
-                  class="btn-view-drawer-trigger"
-                  onclick={() => (showDayDrawer = true)}
+                  class="btn-view-drawer-trigger btn-open-full-drawer"
+                  onclick={() => { expandedCommitmentId = null; showDayDrawer = true; }}
                 >
                   <span>Ver detalhes</span>
                   <ArrowRight size={12} />
@@ -1052,10 +1112,10 @@
                 {#each selectedDayCommitments as item}
                   <div
                     class="preview-mini-card {item.statusClass}"
-                    onclick={() => (showDayDrawer = true)}
+                    onclick={() => handleOpenCommitmentFromMobile(item)}
                     role="button"
                     tabindex="0"
-                    onkeydown={(e) => { if (e.key === 'Enter') showDayDrawer = true; }}
+                    onkeydown={(e) => { if (e.key === 'Enter') handleOpenCommitmentFromMobile(item); }}
                   >
                     <div class="preview-card-avatar">
                       <UserAvatar user={item.assignee} size={28} />
@@ -1239,7 +1299,7 @@
               {:else if primaryMyDelivery.extensionCount > 0}
                 <div class="extension-hero-extended">
                   <Check size={12} class="text-emerald-400" />
-                  <span>Prazo prorrogado (+2d aplicados)</span>
+                  <span>Prazo prorrogado: nova data {formatDueDisplay(primaryMyDelivery.dueAt)}</span>
                 </div>
               {/if}
             {/if}
@@ -1354,7 +1414,7 @@
       </section>
 
       <!-- INFORMAÇÕES ADICIONAIS: Seção Recolhível (Equipe & Publicações) -->
-      <details class="side-collapsible-card">
+      <details class="side-collapsible-card team-extras-collapsible">
         <summary class="side-collapsible-summary">
           <div class="summary-left">
             <Layers size={14} class="text-purple-400" />
@@ -1464,205 +1524,266 @@
           {:else}
             <div class="drawer-cards-stack">
               {#each selectedDayCommitments as item}
-                <article class="drawer-commitment-card {item.statusClass}">
-                  <!-- Card Header: Cover + Work + Stage + Status -->
-                  <div class="card-hero-row">
-                    <div class="work-cover-thumb-box">
-                      {#if item.workCoverId}
-                        <img
-                          src="/media/{item.workCoverId}"
-                          alt={item.workTitle}
-                          class="work-cover-img"
-                          loading="lazy"
-                        />
-                      {:else}
-                        <div class="work-cover-img fallback">
-                          <Briefcase size={16} />
+                {@const isExpanded = selectedDayCommitments.length === 1 || expandedCommitmentId === item.id}
+                <article class="drawer-commitment-card {item.statusClass}" class:is-accordion={selectedDayCommitments.length > 1} class:is-expanded={isExpanded}>
+                  <!-- When multiple commitments exist, show compact summary row -->
+                  {#if selectedDayCommitments.length > 1}
+                    <div
+                      class="drawer-card-summary-row"
+                      onclick={() => toggleCommitmentExpansion(item.id)}
+                      role="button"
+                      tabindex="0"
+                      onkeydown={(e) => { if (e.key === 'Enter') toggleCommitmentExpansion(item.id); }}
+                    >
+                      <div class="summary-row-left">
+                        <div class="summary-row-avatar">
+                          <UserAvatar user={item.assignee} size={22} />
                         </div>
-                      {/if}
-                    </div>
+                        <div class="summary-row-meta">
+                          <div class="summary-row-title-line">
+                            <strong class="summary-work-title">{item.workTitle}</strong>
+                            {#if item.chapterNumber}
+                              <span class="summary-ch-num">#{item.chapterNumber}</span>
+                            {/if}
+                            <span class="summary-stage-badge" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                          </div>
+                          <div class="summary-row-sub-line">
+                            <span class="summary-assignee-text">{item.assignee?.display_name || item.assignee?.username || 'Membro'}</span>
+                            <span class="summary-dot-sep">•</span>
+                            <span class="summary-due-text">
+                              {item.status === 'DONE' ? (item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído') : formatDueDisplay(item.dueAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-                    <div class="hero-text-col">
-                      <span class="hero-work-title">{item.workTitle}</span>
-                      <div class="hero-pills-row">
-                        {#if item.chapterNumber}
-                          <span class="hero-chapter-pill">Capítulo #{item.chapterNumber}</span>
-                        {/if}
-                        <span class="hero-stage-pill" style="--st-c: {item.stageColor}">
-                          <span class="st-dot"></span>
-                          {item.stageName}
+                      <div class="summary-row-right">
+                        <span class="hero-status-tag {item.statusClass}">
+                          {#if item.status === 'DONE'}
+                            <Check size={11} />
+                          {:else if item.isOverdue}
+                            <AlertTriangle size={11} />
+                          {:else}
+                            <Clock size={11} />
+                          {/if}
+                          {item.statusLabel}
+                        </span>
+                        <span class="summary-toggle-icon" title={isExpanded ? 'Recolher detalhes' : 'Ver detalhes completos'}>
+                          {#if isExpanded}
+                            <ChevronUp size={15} />
+                          {:else}
+                            <ChevronDown size={15} />
+                          {/if}
                         </span>
                       </div>
                     </div>
+                  {/if}
 
-                    <!-- Status Pill -->
-                    <div class="hero-status-box">
-                      <span class="hero-status-tag {item.statusClass}">
-                        {#if item.status === 'DONE'}
-                          <Check size={11} />
-                        {:else if item.isOverdue}
-                          <AlertTriangle size={11} />
+                  <!-- Expanded Commitment Details (Level 2) -->
+                  {#if isExpanded}
+                    <div class="drawer-expanded-body">
+                      <!-- Card Header: Cover + Work + Stage + Status -->
+                      <div class="card-hero-row">
+                        <div class="work-cover-thumb-box">
+                          {#if item.workCoverId}
+                            <img
+                              src="/media/{item.workCoverId}"
+                              alt={item.workTitle}
+                              class="work-cover-img"
+                              loading="lazy"
+                            />
+                          {:else}
+                            <div class="work-cover-img fallback">
+                              <Briefcase size={16} />
+                            </div>
+                          {/if}
+                        </div>
+
+                        <div class="hero-text-col">
+                          <span class="hero-work-title">{item.workTitle}</span>
+                          <div class="hero-pills-row">
+                            {#if item.chapterNumber}
+                              <span class="hero-chapter-pill">Capítulo #{item.chapterNumber}</span>
+                            {/if}
+                            <span class="hero-stage-pill" style="--st-c: {item.stageColor}">
+                              <span class="st-dot"></span>
+                              {item.stageName}
+                            </span>
+                          </div>
+                        </div>
+
+                        {#if selectedDayCommitments.length === 1}
+                          <!-- Status Pill -->
+                          <div class="hero-status-box">
+                            <span class="hero-status-tag {item.statusClass}">
+                              {#if item.status === 'DONE'}
+                                <Check size={11} />
+                              {:else if item.isOverdue}
+                                <AlertTriangle size={11} />
+                              {:else}
+                                <Clock size={11} />
+                              {/if}
+                              {item.statusLabel}
+                            </span>
+                          </div>
+                        {/if}
+                      </div>
+
+                      <!-- Assignee + Due Date Details (Correct semantic dates) -->
+                      <div class="card-details-grid">
+                        <div class="detail-cell">
+                          <span class="detail-label">Responsável:</span>
+                          <div class="detail-user-pill">
+                            <UserAvatar user={item.assignee} size={20} />
+                            <span class="detail-user-name">
+                              {item.assignee?.display_name || item.assignee?.username || 'Membro da equipe'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div class="detail-cell">
+                          {#if item.status === 'DONE'}
+                            <span class="detail-label">Data de conclusão:</span>
+                            <strong class="detail-due-val text-emerald-400">
+                              {item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído'}
+                            </strong>
+                          {:else}
+                            <span class="detail-label">Prazo vigente:</span>
+                            <strong class="detail-due-val text-cyan-400">
+                              {item.dueYMD ? `${item.dueYMD.split('-')[2]}/${item.dueYMD.split('-')[1]}/${item.dueYMD.split('-')[0]}` : '--'} às 23:59
+                            </strong>
+                          {/if}
+                        </div>
+
+                        {#if item.originalDueAt && item.extensionCount > 0}
+                          <div class="detail-cell">
+                            <span class="detail-label">Prazo original:</span>
+                            <span class="detail-orig-due">
+                              {formatYMD(getSaoPauloDate(item.originalDueAt)).split('-')[2]}/{formatYMD(getSaoPauloDate(item.originalDueAt)).split('-')[1]}
+                            </span>
+                          </div>
+                        {/if}
+                      </div>
+
+                      <!-- Notes & Inline Note Editing -->
+                      <div class="notes-block">
+                        <div class="notes-header-row">
+                          <span class="notes-label-text">
+                            <FileText size={12} />
+                            <span>Observações do Responsável:</span>
+                          </span>
+                          {#if (item.assignedTo === currentUserId || ['OWNER', 'ADMIN'].includes(userRole)) && editingNoteId !== item.id}
+                            <button
+                              type="button"
+                              class="btn-edit-note-trigger"
+                              onclick={() => startEditingNote(item)}
+                            >
+                              <Edit3 size={11} />
+                              <span>{item.notes ? 'Editar nota' : 'Adicionar nota'}</span>
+                            </button>
+                          {/if}
+                        </div>
+
+                        {#if editingNoteId === item.id}
+                          <!-- Form to edit note with YSQL persistence -->
+                          <form
+                            method="POST"
+                            action="?/updateStageNotes"
+                            use:enhance={() => {
+                              isSavingNote = true;
+                              return async ({ result, update }) => {
+                                isSavingNote = false;
+                                if (result.type === 'success') {
+                                  item.notes = noteTextDraft;
+                                  editingNoteId = null;
+                                  await update();
+                                  invalidate('scan:workspace');
+                                }
+                              };
+                            }}
+                            class="note-editor-form"
+                          >
+                            <input type="hidden" name="chapter_stage_id" value={item.id} />
+                            <textarea
+                              name="notes"
+                              bind:value={noteTextDraft}
+                              maxlength="500"
+                              rows="2"
+                              class="note-editor-textarea"
+                              placeholder="Digite anotações sobre o andamento..."
+                            ></textarea>
+                            <div class="note-editor-buttons">
+                              <button
+                                type="button"
+                                class="btn-note-cancel"
+                                onclick={cancelEditingNote}
+                                disabled={isSavingNote}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="submit"
+                                class="btn-note-save"
+                                disabled={isSavingNote}
+                              >
+                                {#if isSavingNote}
+                                  <span>Salvando...</span>
+                                {:else}
+                                  <Check size={12} />
+                                  <span>Salvar nota</span>
+                                {/if}
+                              </button>
+                            </div>
+                          </form>
                         {:else}
-                          <Clock size={11} />
+                          <p class="notes-body-text" class:is-empty={!item.notes}>
+                            {item.notes ? `"${item.notes}"` : 'Nenhuma observação registrada.'}
+                          </p>
                         {/if}
-                        {item.statusLabel}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Assignee + Due Date Details (Correct semantic dates) -->
-                  <div class="card-details-grid">
-                    <div class="detail-cell">
-                      <span class="detail-label">Responsável:</span>
-                      <div class="detail-user-pill">
-                        <UserAvatar user={item.assignee} size={20} />
-                        <span class="detail-user-name">
-                          {item.assignee?.display_name || item.assignee?.username || 'Membro da equipe'}
-                        </span>
                       </div>
-                    </div>
 
-                    <div class="detail-cell">
-                      {#if item.status === 'DONE'}
-                        <span class="detail-label">Data de conclusão:</span>
-                        <strong class="detail-due-val text-emerald-400">
-                          {item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído'}
-                        </strong>
-                      {:else}
-                        <span class="detail-label">Prazo vigente:</span>
-                        <strong class="detail-due-val text-cyan-400">
-                          {item.dueYMD ? `${item.dueYMD.split('-')[2]}/${item.dueYMD.split('-')[1]}/${item.dueYMD.split('-')[0]}` : '--'} às 23:59
-                        </strong>
-                      {/if}
-                    </div>
+                      <!-- Actions: Extend +2 days / Open in Production -->
+                      <div class="card-actions-bar">
+                        {#if item.kind === 'EDITORIAL_STAGE'}
+                          {#if item.canExtend}
+                            <button
+                              type="button"
+                              class="btn-extend-action"
+                              onclick={() => openExtensionModal(item)}
+                              title="Prorrogar prazo +2 dias sem aprovação"
+                            >
+                              <Zap size={13} />
+                              <span>Prorrogar prazo +2 dias</span>
+                            </button>
+                          {:else if item.remainingHours > 24 && item.extensionCount === 0 && item.status === 'IN_PROGRESS'}
+                            <div class="drawer-ext-note info">
+                              <Info size={12} class="text-cyan-400" />
+                              <span>Prorrogação de +2 dias disponível nas últimas 24h do prazo.</span>
+                            </div>
+                          {:else if item.extensionCount > 0}
+                            <div class="drawer-ext-note extended">
+                              <Check size={12} class="text-emerald-400" />
+                              <span>Prazo prorrogado: nova data {formatDueDisplay(item.dueAt)}</span>
+                            </div>
+                          {/if}
+                        {/if}
 
-                    {#if item.originalDueAt && item.extensionCount > 0}
-                      <div class="detail-cell">
-                        <span class="detail-label">Prazo original:</span>
-                        <span class="detail-orig-due">
-                          {formatYMD(getSaoPauloDate(item.originalDueAt)).split('-')[2]}/{formatYMD(getSaoPauloDate(item.originalDueAt)).split('-')[1]}
-                        </span>
-                      </div>
-                    {/if}
-                  </div>
-
-                  <!-- Notes & Inline Note Editing -->
-                  <div class="notes-block">
-                    <div class="notes-header-row">
-                      <span class="notes-label-text">
-                        <FileText size={12} />
-                        <span>Observações do Responsável:</span>
-                      </span>
-                      {#if (item.assignedTo === currentUserId || ['OWNER', 'ADMIN'].includes(userRole)) && editingNoteId !== item.id}
-                        <button
-                          type="button"
-                          class="btn-edit-note-trigger"
-                          onclick={() => startEditingNote(item)}
-                        >
-                          <Edit3 size={11} />
-                          <span>{item.notes ? 'Editar nota' : 'Adicionar nota'}</span>
-                        </button>
-                      {/if}
-                    </div>
-
-                    {#if editingNoteId === item.id}
-                      <!-- Form to edit note with YSQL persistence -->
-                      <form
-                        method="POST"
-                        action="?/updateStageNotes"
-                        use:enhance={() => {
-                          isSavingNote = true;
-                          return async ({ result, update }) => {
-                            isSavingNote = false;
-                            if (result.type === 'success') {
-                              item.notes = noteTextDraft;
-                              editingNoteId = null;
-                              await update();
-                              invalidate('scan:workspace');
-                            }
-                          };
-                        }}
-                        class="note-editor-form"
-                      >
-                        <input type="hidden" name="chapter_stage_id" value={item.id} />
-                        <textarea
-                          name="notes"
-                          bind:value={noteTextDraft}
-                          maxlength="500"
-                          rows="2"
-                          class="note-editor-textarea"
-                          placeholder="Digite anotações sobre o andamento..."
-                        ></textarea>
-                        <div class="note-editor-buttons">
+                        {#if item.productionChapter && onOpenChapter}
                           <button
                             type="button"
-                            class="btn-note-cancel"
-                            onclick={cancelEditingNote}
-                            disabled={isSavingNote}
+                            class="btn-open-production"
+                            onclick={() => {
+                              showDayDrawer = false;
+                              onOpenChapter(item.productionChapter);
+                            }}
                           >
-                            Cancelar
+                            <span>Abrir na Produção</span>
+                            <ArrowRight size={13} />
                           </button>
-                          <button
-                            type="submit"
-                            class="btn-note-save"
-                            disabled={isSavingNote}
-                          >
-                            {#if isSavingNote}
-                              <span>Salvando...</span>
-                            {:else}
-                              <Check size={12} />
-                              <span>Salvar nota</span>
-                            {/if}
-                          </button>
-                        </div>
-                      </form>
-                    {:else}
-                      <p class="notes-body-text" class:is-empty={!item.notes}>
-                        {item.notes ? `"${item.notes}"` : 'Nenhuma observação registrada.'}
-                      </p>
-                    {/if}
-                  </div>
-
-                  <!-- Actions: Extend +2 days / Open in Production -->
-                  <div class="card-actions-bar">
-                    {#if item.kind === 'EDITORIAL_STAGE'}
-                      {#if item.canExtend}
-                        <button
-                          type="button"
-                          class="btn-extend-action"
-                          onclick={() => openExtensionModal(item)}
-                          title="Prorrogar prazo +2 dias sem aprovação"
-                        >
-                          <Zap size={13} />
-                          <span>Prorrogar prazo +2 dias</span>
-                        </button>
-                      {:else if item.remainingHours > 24 && item.extensionCount === 0 && item.status === 'IN_PROGRESS'}
-                        <div class="drawer-ext-note info">
-                          <Info size={12} class="text-cyan-400" />
-                          <span>Prorrogação de +2 dias disponível nas últimas 24h do prazo.</span>
-                        </div>
-                      {:else if item.extensionCount > 0}
-                        <div class="drawer-ext-note extended">
-                          <Check size={12} class="text-emerald-400" />
-                          <span>Prazo prorrogado (+2 dias concedidos)</span>
-                        </div>
-                      {/if}
-                    {/if}
-
-                    {#if item.productionChapter && onOpenChapter}
-                      <button
-                        type="button"
-                        class="btn-open-production"
-                        onclick={() => {
-                          showDayDrawer = false;
-                          onOpenChapter(item.productionChapter);
-                        }}
-                      >
-                        <span>Abrir na Produção</span>
-                        <ArrowRight size={13} />
-                      </button>
-                    {/if}
-                  </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
                 </article>
               {/each}
             </div>
@@ -3582,11 +3703,150 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    transition: border-color 0.15s ease;
+    transition: all 0.15s ease;
   }
 
   .drawer-commitment-card:hover {
     border-color: rgba(139, 92, 246, 0.35);
+  }
+
+  .drawer-commitment-card.is-accordion:not(.is-expanded) {
+    padding: 0.65rem 0.85rem;
+    background: rgba(15, 23, 42, 0.55);
+  }
+
+  .drawer-commitment-card.is-accordion:not(.is-expanded):hover {
+    background: rgba(15, 23, 42, 0.85);
+  }
+
+  .drawer-card-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .summary-row-left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .summary-row-avatar {
+    flex-shrink: 0;
+  }
+
+  .summary-row-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .summary-row-title-line {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .summary-work-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  .summary-ch-num {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.08rem 0.35rem;
+    border-radius: 4px;
+  }
+
+  .summary-stage-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--st-c, #a855f7);
+    background: color-mix(in srgb, var(--st-c, #a855f7) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--st-c, #a855f7) 28%, transparent);
+    padding: 0.08rem 0.35rem;
+    border-radius: 4px;
+  }
+
+  .summary-row-sub-line {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+
+  .summary-assignee-text {
+    color: #cbd5e1;
+    font-weight: 500;
+  }
+
+  .summary-dot-sep {
+    color: #475569;
+  }
+
+  .summary-due-text {
+    color: #38bdf8;
+  }
+
+  .summary-row-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .summary-toggle-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    transition: all 0.15s ease;
+  }
+
+  .drawer-card-summary-row:hover .summary-toggle-icon {
+    background: rgba(139, 92, 246, 0.18);
+    color: #fff;
+  }
+
+  .drawer-expanded-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    animation: fadeInExpand 0.18s ease-out;
+  }
+
+  @keyframes fadeInExpand {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .drawer-commitment-card.overdue {
