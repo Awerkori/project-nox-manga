@@ -107,7 +107,9 @@
     </span>
   </div>
 
-  {#if data.works.length}
+  {#if data.loadError}
+    <Empty title="Não foi possível carregar o catálogo." text="Tente novamente em instantes." href="/catalogo" label="Tentar novamente" />
+  {:else if data.works.length}
     <div class="catalog-grid">
       {#each data.works as work, index (work.id)}
         <WorkCard

@@ -1281,7 +1281,7 @@ export async function fetchTagsFromYugabyte(platformEnv?: any): Promise<Yugabyte
 export async function fetchCatalogFromYugabyte(
   options: YugabyteCatalogOptions = {},
   platformEnv?: any
-): Promise<{ works: YugabyteWork[]; total: number; hasMore: boolean }> {
+): Promise<{ works: YugabyteWork[]; total: number; hasMore: boolean; isDegraded?: boolean }> {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const includeTotal = options.includeTotal !== false;
@@ -1311,7 +1311,7 @@ export async function fetchCatalogFromYugabyte(
     return { works, total: includeTotal ? 0 : offset + works.length, hasMore };
   };
 
-  return withYugabyteLkg(
+  return withYugabyteLkg<{ works: YugabyteWork[]; total: number; hasMore: boolean; isDegraded?: boolean }>(
     cacheKey,
     async () => {
       if (isUnfiltered) {
@@ -1433,7 +1433,7 @@ export async function fetchCatalogFromYugabyte(
       const page = pageResult(res.rows.map(({ total_count: _t, ...w }: any) => w));
       return { ...page, total: includeTotal && res.rows.length > 0 ? Number(res.rows[0].total_count) : page.total };
     },
-    { works: [], total: 0, hasMore: false },
+    { works: [], total: 0, hasMore: false, isDegraded: true },
     isUnfiltered ? 60_000 : 45_000
   );
 }

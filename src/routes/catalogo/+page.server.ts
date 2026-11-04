@@ -23,14 +23,9 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     ? [{ id: `selected:${tag}`, slug: tag, name: tag, kind: 'TAG' }]
     : [];
 
-  if (!locals.user) {
-    setHeaders({
-      'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300'
-    });
-  }
-
   // Fast path for unfiltered default catalog view (zero DB wait when cached)
   if (isUnfiltered && cachedUnfilteredPage1 && Date.now() - cachedUnfilteredPage1.timestamp < CATALOGO_CACHE_TTL_MS) {
+    if (!locals.user) setHeaders({ 'cache-control': 'public, max-age=60, s-maxage=120, stale-while-revalidate=300' });
     return {
       works: cachedUnfilteredPage1.works,
       count: cachedUnfilteredPage1.count,
@@ -60,7 +55,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
       platform?.env
     ),
     6000,
-    { works: [], total: 0 },
+    { works: [], total: 0, hasMore: false, isDegraded: true },
     'catalogo_yugabyte_catalog'
   );
 
@@ -74,7 +69,14 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     hasMore = cachedUnfilteredPage1.hasMore;
   }
 
-  if (isUnfiltered && works.length > 0) {
+  const loadError = catalogRes.isDegraded === true && works.length === 0;
+  if (!locals.user) {
+    setHeaders({ 'cache-control': catalogRes.isDegraded
+      ? 'private, no-store'
+      : 'public, max-age=60, s-maxage=120, stale-while-revalidate=300' });
+  }
+
+  if (isUnfiltered && works.length > 0 && !catalogRes.isDegraded) {
     cachedUnfilteredPage1 = {
       timestamp: Date.now(),
       works,
@@ -87,6 +89,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     works,
     count: totalCount,
     hasMore,
+    loadError,
     tags: selectedTag,
     q,
     tag,
