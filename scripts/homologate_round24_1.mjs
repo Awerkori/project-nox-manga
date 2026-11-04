@@ -5,8 +5,12 @@ import fs from 'node:fs';
 import pg from 'pg';
 const { Pool } = pg;
 
+import { fileURLToPath } from 'node:url';
+
 const PREVIEW_URL = 'https://home-preview-manga.project-nox-awerkori.workers.dev';
-const ARTIFACT_DIR = path.resolve('artifacts/round24_1');
+const __homologateFile = fileURLToPath(import.meta.url);
+const __homologateDir = path.dirname(__homologateFile);
+const ARTIFACT_DIR = path.resolve(__homologateDir, '../artifacts/round24_1');
 if (!fs.existsSync(ARTIFACT_DIR)) {
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
 }

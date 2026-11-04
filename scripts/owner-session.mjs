@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs';
 import crypto from 'node:crypto';
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 let createClient = null;
 let createServerClient = null;
 try {
@@ -12,9 +15,15 @@ try {
   // Supabase Zero mode: running fully decoupled on native YugabyteDB
 }
 
-if (existsSync('.env')) process.loadEnvFile('.env');
-if (!process.env.PUBLIC_SUPABASE_URL && existsSync('.dev.vars.preview_full')) {
-  process.loadEnvFile('.dev.vars.preview_full');
+const __currentFile = fileURLToPath(import.meta.url);
+const __projectDir = path.resolve(path.dirname(__currentFile), '..');
+
+const defaultEnv = path.join(__projectDir, '.env');
+const previewVars = path.join(__projectDir, '.dev.vars.preview_full');
+
+if (existsSync(defaultEnv)) process.loadEnvFile(defaultEnv);
+if (!process.env.PUBLIC_SUPABASE_URL && existsSync(previewVars)) {
+  process.loadEnvFile(previewVars);
 }
 
 function createNativeOwnerCookie(origin) {

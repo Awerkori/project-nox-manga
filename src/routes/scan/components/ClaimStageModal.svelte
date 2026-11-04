@@ -86,10 +86,48 @@
   let stageDisplayName = $derived(getCanonicalStageName(stageItem?.stage));
   let stageDisplayColor = $derived(getCanonicalStageColor(stageItem?.stage));
 
+  // Reactive baseline timestamp to detect date rollover & ensure Svelte 5 reactivity
+  let currentTimestamp = $state(Date.now());
+
+  $effect(() => {
+    if (!isOpen) return;
+    currentTimestamp = Date.now();
+    const interval = setInterval(() => {
+      currentTimestamp = Date.now();
+    }, 15000);
+    return () => clearInterval(interval);
+  });
+
   // Dynamically derive allowed date options according to backend rule:
   // Strictly up to 3 calendar days ahead in America/Sao_Paulo timezone.
+  // Can be bounded if stageItem defines maxAllowedDays, maxDays or chapter.due_at.
+  let maxAllowedOffset = $derived.by(() => {
+    // Current SP time is tracked reactively via currentTimestamp
+    const _ = currentTimestamp;
+    let limit = 3;
+    if (typeof stageItem?.maxAllowedDays === 'number') {
+      limit = Math.min(limit, Math.max(0, stageItem.maxAllowedDays));
+    } else if (typeof stageItem?.maxDays === 'number') {
+      limit = Math.min(limit, Math.max(0, stageItem.maxDays));
+    }
+    const chapterDue = stageItem?.chapter?.due_at || stageItem?.productionChapter?.due_at || stageItem?.chapterDueAt;
+    if (chapterDue) {
+      const nowSp = getSaoPauloDateParts(currentTimestamp);
+      const chDueSp = getSaoPauloDateParts(chapterDue);
+      const nowUtc = Date.UTC(nowSp.year, nowSp.month, nowSp.day);
+      const chUtc = Date.UTC(chDueSp.year, chDueSp.month, chDueSp.day);
+      const diffDays = Math.floor((chUtc - nowUtc) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0 && diffDays < limit) {
+        limit = diffDays;
+      } else if (diffDays < 0) {
+        limit = 0;
+      }
+    }
+    return limit;
+  });
+
   let dateOptions = $derived.by(() => {
-    const nowSp = getSaoPauloDateParts();
+    const nowSp = getSaoPauloDateParts(currentTimestamp);
     const list: Array<{
       offset: number;
       label: string;
@@ -99,25 +137,28 @@
       fullDateStr: string;
     }> = [];
 
-    for (let offset = 0; offset <= 3; offset++) {
-      const d = new Date(nowSp.year, nowSp.month, nowSp.day + offset);
-      const ymd = formatYMD(d.getFullYear(), d.getMonth(), d.getDate());
+    for (let offset = 0; offset <= maxAllowedOffset; offset++) {
+      // Deterministic UTC baseline to avoid any client timezone / DST drift
+      const utcMs = Date.UTC(nowSp.year, nowSp.month, nowSp.day + offset, 12, 0, 0);
+      const d = new Date(utcMs);
+      const ymd = formatYMD(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 
       let label = '';
       if (offset === 0) label = 'Hoje';
       else if (offset === 1) label = 'Amanhã';
       else if (offset === 2) label = '+2 dias';
-      else label = '+3 dias';
+      else label = `+${offset} dias`;
 
-      const weekdayShort = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const weekdayShort = d.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       const dayMonth = `${day}/${month}`;
 
       const fullDateStr = d.toLocaleDateString('pt-BR', {
         weekday: 'long',
         day: 'numeric',
-        month: 'short'
+        month: 'short',
+        timeZone: 'UTC'
       });
 
       list.push({
@@ -141,7 +182,8 @@
   // Sync state whenever modal opens or stageItem changes
   $effect(() => {
     if (isOpen) {
-      // Default to max permitted (Hoje + 3 dias) to provide comfortable default margin
+      currentTimestamp = Date.now();
+      // Default to max permitted (Hoje + maxOffset) to provide comfortable default margin
       const defaultOption = dateOptions[dateOptions.length - 1];
       selectedYMD = defaultOption?.ymd || '';
       notes = '';
@@ -280,7 +322,12 @@
           <!-- SELETOR COMPACTO DE DATAS (Substitui o calendário mensal completo) -->
           <div class="compact-date-selector-section">
             <span class="selector-section-title">Escolha o prazo de entrega</span>
-            <div class="date-chips-grid" role="radiogroup" aria-label="Prazo de entrega elegível">
+            <div
+              class="date-chips-grid"
+              style="--chips-count: {dateOptions.length};"
+              role="radiogroup"
+              aria-label="Prazo de entrega elegível"
+            >
               {#each dateOptions as opt}
                 <button
                   type="button"
@@ -633,7 +680,7 @@
 
   .date-chips-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(var(--chips-count, 4), minmax(0, 1fr));
     gap: 0.45rem;
   }
 
@@ -910,7 +957,7 @@
 
   @media (max-width: 380px) {
     .date-chips-grid {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(var(--chips-count, 4), minmax(0, 1fr));
       gap: 0.22rem;
     }
 

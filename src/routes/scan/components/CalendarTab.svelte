@@ -269,9 +269,10 @@
         dueYMD = dueSpParts.ymd;
         const dueMs = new Date(cs.due_at).getTime();
         const diffMs = dueMs - nowMs;
-        remainingHours = Math.round(diffMs / (1000 * 60 * 60));
+        const isWithin24Hours = diffMs <= 24 * 60 * 60 * 1000;
+        remainingHours = Math.floor(diffMs / (1000 * 60 * 60));
         isOverdue = diffMs < 0 && cs.status !== 'DONE';
-        isDueSoon = !isOverdue && cs.status === 'IN_PROGRESS' && remainingHours <= 24;
+        isDueSoon = !isOverdue && cs.status === 'IN_PROGRESS' && (isWithin24Hours || dueYMD === todayYMD);
 
         const extensionCount = Number(cs.extension_count || 0);
 
@@ -287,7 +288,7 @@
           extendedDateTimeStr = `${day}/${month} às ${hours}:${minutes}`;
         } else if (diffMs < -(4 * 60 * 60 * 1000)) {
           extensionState = 'EXPIRED';
-        } else if (remainingHours <= 24 || dueYMD === todayYMD) {
+        } else if (isWithin24Hours || dueYMD === todayYMD) {
           // Estado B: Nas últimas 24 horas (ou vencendo hoje)
           extensionState = canUserExtend ? 'AVAILABLE' : 'RESTRICTED_AVAILABLE';
         } else {
@@ -649,13 +650,15 @@
     return `Vence em ${days} dias`;
   }
 
-  // Format due date for clean display
+  // Format due date for clean display with accurate time
   function formatDueDisplay(dueAt?: string): string {
-    if (!dueAt) return '--';
+    if (!dueAt) return 'Sem prazo registrado';
     const parts = getSaoPauloDateParts(dueAt);
     const day = String(parts.day).padStart(2, '0');
     const month = String(parts.month + 1).padStart(2, '0');
-    return `${day}/${month} às 23:59`;
+    const hours = String(parts.hours).padStart(2, '0');
+    const mins = String(parts.minutes).padStart(2, '0');
+    return `${day}/${month} às ${hours}:${mins}`;
   }
 
   // Format timestamp with date and time
@@ -680,12 +683,13 @@
 
   // Format proposed new date (+2 days at 23:59 SP) with weekday
   function formatProposedExtendedDisplay(dueAt?: string): string {
-    if (!dueAt) return '--';
+    if (!dueAt) return 'Sem prazo registrado';
     const parts = getSaoPauloDateParts(dueAt);
-    const target = new Date(parts.year, parts.month, parts.day + 2);
-    const weekday = target.toLocaleDateString('pt-BR', { weekday: 'short' });
-    const day = String(target.getDate()).padStart(2, '0');
-    const month = String(target.getMonth() + 1).padStart(2, '0');
+    const utcMs = Date.UTC(parts.year, parts.month, parts.day + 2, 12, 0, 0);
+    const target = new Date(utcMs);
+    const weekday = target.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
+    const day = String(target.getUTCDate()).padStart(2, '0');
+    const month = String(target.getUTCMonth() + 1).padStart(2, '0');
     return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day}/${month} às 23:59`;
   }
 
@@ -761,6 +765,16 @@
     bottomSheetItem = item;
     showBottomSheet = true;
   }
+
+  // Keep bottom sheet item synchronized when commitments data reloads or updates
+  $effect(() => {
+    if (showBottomSheet && bottomSheetItem?.id) {
+      const fresh = commitments.find((c) => c.id === bottomSheetItem.id);
+      if (fresh) {
+        bottomSheetItem = fresh;
+      }
+    }
+  });
 
   function toggleContextPanelExpansion(itemId: string) {
     contextPanelExpandedId = contextPanelExpandedId === itemId ? null : itemId;
@@ -1113,12 +1127,17 @@
                     >
                       {#if cell.hasOverdue}
                         <span class="mobile-capsule-pip overdue" title="Compromisso em atraso"></span>
-                      {:else if cell.hasMine}
+                      {/if}
+                      {#if cell.hasMine}
                         <span class="mobile-capsule-pip mine" title="Sua entrega agendada"></span>
-                      {:else if cell.allDone}
-                        <span class="mobile-capsule-pip done" title="Entrega concluída"></span>
-                      {:else}
-                        <span class="mobile-capsule-pip normal" title="Entrega agendada"></span>
+                      {/if}
+                      {#if !cell.hasOverdue && !cell.hasMine}
+                        <span
+                          class="mobile-capsule-pip"
+                          class:done={cell.allDone}
+                          class:normal={!cell.allDone}
+                          title={cell.allDone ? 'Entrega concluída' : 'Entrega agendada'}
+                        ></span>
                       {/if}
                       <span class="mobile-capsule-count">{cell.commitments.length}</span>
                     </div>
@@ -1132,6 +1151,7 @@
           <div class="mobile-calendar-legend">
             <div class="legend-chip"><span class="legend-pip mine"></span><span>Minha entrega</span></div>
             <div class="legend-chip"><span class="legend-pip overdue"></span><span>Atrasada</span></div>
+            <div class="legend-chip"><span class="legend-pip pending"></span><span>Agendada</span></div>
             <div class="legend-chip"><span class="legend-pip done"></span><span>Concluída</span></div>
           </div>
 
@@ -1370,13 +1390,13 @@
                           <Check size={11} />
                           <span>Concluído</span>
                         </span>
-                      {:else if item.extensionCount > 0}
-                        <span class="ctx-remaining-badge extended">
-                          <span>Prorrogado (+2d)</span>
-                        </span>
                       {:else if item.isOverdue}
                         <span class="ctx-remaining-badge overdue">
                           <span>Prazo encerrado</span>
+                        </span>
+                      {:else if item.extensionCount > 0}
+                        <span class="ctx-remaining-badge extended">
+                          <span>Prorrogado (+2d)</span>
                         </span>
                       {:else if item.dueAt}
                         <span class="ctx-remaining-badge {item.statusClass}">
@@ -1628,11 +1648,28 @@
       <!-- Drag handle -->
       <div class="sheet-drag-handle"></div>
 
-      <!-- Sheet Header -->
+      <!-- Sheet Header: Unified Compact Work Lockup -->
       <header class="sheet-header">
-        <div class="sheet-title-col">
-          <span class="sheet-eyebrow">Detalhes do Compromisso</span>
-          <h3 class="sheet-title">{bottomSheetItem.workTitle} #{bottomSheetItem.chapterNumber}</h3>
+        <div class="sheet-header-work-lockup">
+          <div class="sheet-cover-box">
+            {#if bottomSheetItem.workCoverId}
+              <img src="/media/{bottomSheetItem.workCoverId}" alt={bottomSheetItem.workTitle} class="sheet-cover-img" loading="lazy" />
+            {:else}
+              <div class="sheet-cover-fallback"><Briefcase size={15} /></div>
+            {/if}
+          </div>
+          <div class="sheet-work-meta">
+            <h3 class="sheet-work-name">{bottomSheetItem.workTitle}</h3>
+            <div class="sheet-pills-row">
+              {#if bottomSheetItem.chapterNumber}
+                <span class="sheet-ch-pill">Capítulo #{bottomSheetItem.chapterNumber}</span>
+              {/if}
+              <span class="sheet-stage-pill" style="--st-c: {bottomSheetItem.stageColor}">
+                <span class="st-dot"></span>
+                {bottomSheetItem.stageName}
+              </span>
+            </div>
+          </div>
         </div>
         <button
           type="button"
@@ -1644,34 +1681,9 @@
         </button>
       </header>
 
-      <!-- Sheet Scrollable Content (6 Organized Sections) -->
+      <!-- Sheet Scrollable Content -->
       <div class="sheet-scroll-body">
-        <!-- 1. Obra, capítulo e etapa -->
-        <section class="sheet-section">
-          <div class="sheet-work-banner">
-            <div class="sheet-cover-box">
-              {#if bottomSheetItem.workCoverId}
-                <img src="/media/{bottomSheetItem.workCoverId}" alt={bottomSheetItem.workTitle} class="sheet-cover-img" loading="lazy" />
-              {:else}
-                <div class="sheet-cover-fallback"><Briefcase size={16} /></div>
-              {/if}
-            </div>
-            <div class="sheet-work-meta">
-              <span class="sheet-work-name">{bottomSheetItem.workTitle}</span>
-              <div class="sheet-pills-row">
-                {#if bottomSheetItem.chapterNumber}
-                  <span class="sheet-ch-pill">Capítulo #{bottomSheetItem.chapterNumber}</span>
-                {/if}
-                <span class="sheet-stage-pill" style="--st-c: {bottomSheetItem.stageColor}">
-                  <span class="st-dot"></span>
-                  {bottomSheetItem.stageName}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 2. Responsável e status -->
+        <!-- 1. Responsável e status -->
         <section class="sheet-section">
           <div class="sheet-grid-two">
             <div class="sheet-meta-cell">
@@ -1691,7 +1703,7 @@
           </div>
         </section>
 
-        <!-- 3. Prazo e tempo restante -->
+        <!-- 2. Prazo e tempo restante -->
         <section class="sheet-section">
           <div class="sheet-deadline-banner">
             <div class="sheet-deadline-left">
@@ -1713,13 +1725,13 @@
                 <Check size={11} />
                 <span>Concluído</span>
               </span>
-            {:else if bottomSheetItem.extensionCount > 0}
-              <span class="sheet-time-badge extended">
-                <span>Prorrogado (+2d)</span>
-              </span>
             {:else if bottomSheetItem.isOverdue}
               <span class="sheet-time-badge overdue">
                 <span>Prazo encerrado</span>
+              </span>
+            {:else if bottomSheetItem.extensionCount > 0}
+              <span class="sheet-time-badge extended">
+                <span>Prorrogado (+2d)</span>
               </span>
             {:else if bottomSheetItem.dueAt}
               <span class="sheet-time-badge {bottomSheetItem.statusClass}">
@@ -2555,7 +2567,7 @@
   }
 
   .event-stage-tag {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 700;
     color: var(--stage-accent, #c084fc);
     white-space: nowrap;
@@ -2563,9 +2575,9 @@
   }
 
   .event-work-text {
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    color: #e2e8f0;
+    color: #f8fafc;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2574,21 +2586,23 @@
   }
 
   .event-ch-pill {
-    font-size: 0.62rem;
+    font-size: 0.66rem;
     font-weight: 700;
     color: #f1f5f9;
     background: rgba(255, 255, 255, 0.12);
-    padding: 0.04rem 0.25rem;
-    border-radius: 0.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.04rem 0.28rem;
+    border-radius: 0.22rem;
     flex-shrink: 0;
   }
 
   .event-ext-tag {
-    font-size: 0.58rem;
+    font-size: 0.62rem;
     font-weight: 700;
     background: rgba(6, 182, 212, 0.25);
+    border: 1px solid rgba(6, 182, 212, 0.35);
     color: #22d3ee;
-    padding: 0.04rem 0.22rem;
+    padding: 0.04rem 0.24rem;
     border-radius: 0.2rem;
     flex-shrink: 0;
   }
@@ -2601,7 +2615,7 @@
   .event-card-sub-row {
     display: flex;
     align-items: center;
-    gap: 0.28rem;
+    gap: 0.3rem;
     width: 100%;
     min-width: 0;
   }
@@ -2611,15 +2625,15 @@
   }
 
   .event-user-text {
-    font-size: 0.62rem;
-    color: #94a3b8;
+    font-size: 0.68rem;
+    color: #cbd5e1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .event-overflow-pill {
-    font-size: 0.6rem;
+    font-size: 0.64rem;
     font-weight: 700;
     color: #a855f7;
     background: rgba(139, 92, 246, 0.15);
@@ -3506,81 +3520,26 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.45rem 1rem 0.65rem;
+    padding: 0.55rem 0.95rem 0.65rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 0.5rem;
   }
 
-  .sheet-title-col {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
-  .sheet-eyebrow {
-    font-size: 0.65rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  .sheet-title {
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: #f8fafc;
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .btn-close-sheet {
-    background: transparent;
-    border: none;
-    color: #64748b;
-    padding: 0.35rem;
-    cursor: pointer;
-    border-radius: 0.35rem;
-  }
-
-  .sheet-scroll-body {
-    padding: 0.75rem 1rem max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .sheet-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-  }
-
-  .sheet-label {
-    font-size: 0.66rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  /* 1. Obra, capítulo e etapa */
-  .sheet-work-banner {
+  .sheet-header-work-lockup {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
-    background: rgba(15, 23, 42, 0.7);
-    padding: 0.55rem 0.75rem;
-    border-radius: 0.55rem;
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 0.6rem;
+    min-width: 0;
+    flex: 1;
   }
 
   .sheet-cover-box {
-    width: 36px;
-    height: 48px;
+    width: 32px;
+    height: 44px;
     border-radius: 0.35rem;
     overflow: hidden;
     background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     flex-shrink: 0;
   }
 
@@ -3602,7 +3561,7 @@
   .sheet-work-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.15rem;
     min-width: 0;
     flex: 1;
   }
@@ -3614,6 +3573,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.25;
   }
 
   .sheet-pills-row {
@@ -3640,6 +3600,41 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+  }
+
+  .btn-close-sheet {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 0.35rem;
+    cursor: pointer;
+    border-radius: 0.35rem;
+  }
+
+  .btn-close-sheet:hover {
+    color: #cbd5e1;
+  }
+
+  .sheet-scroll-body {
+    padding: 0.75rem 1rem max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .sheet-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .sheet-label {
+    font-size: 0.66rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   /* 2. Responsável e status */
@@ -4373,14 +4368,19 @@
       transition: transform 0.1s ease;
     }
 
-    .mobile-commitment-capsule.has-overdue {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.5);
-    }
-
     .mobile-commitment-capsule.has-mine {
       background: rgba(56, 189, 248, 0.18);
       border-color: rgba(56, 189, 248, 0.5);
+    }
+
+    .mobile-commitment-capsule.has-overdue {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+
+    .mobile-commitment-capsule.has-overdue.has-mine {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(56, 189, 248, 0.2) 100%);
+      border-color: rgba(239, 68, 68, 0.65);
     }
 
     .mobile-commitment-capsule.is-all-done {
@@ -4409,7 +4409,8 @@
       background: #10b981;
     }
 
-    .mobile-capsule-pip.pending {
+    .mobile-capsule-pip.pending,
+    .mobile-capsule-pip.normal {
       background: #c084fc;
       box-shadow: 0 0 5px rgba(192, 132, 252, 0.7);
     }
@@ -4421,12 +4422,16 @@
       line-height: 1;
     }
 
+    .mobile-commitment-capsule.has-mine .mobile-capsule-count {
+      color: #7dd3fc;
+    }
+
     .mobile-commitment-capsule.has-overdue .mobile-capsule-count {
       color: #fca5a5;
     }
 
-    .mobile-commitment-capsule.has-mine .mobile-capsule-count {
-      color: #7dd3fc;
+    .mobile-commitment-capsule.has-overdue.has-mine .mobile-capsule-count {
+      color: #fecdd3;
     }
 
     .mobile-commitment-capsule.is-all-done .mobile-capsule-count {
@@ -4653,6 +4658,43 @@
       gap: 0.4rem;
       font-size: 0.58rem;
       padding: 0.35rem 0.45rem;
+    }
+  }
+
+  @media (min-width: 1440px) {
+    .calendar-workspace-layout {
+      grid-template-columns: minmax(0, 1fr) 420px;
+      gap: 1.25rem;
+    }
+
+    .matrix-day-cell {
+      min-height: 124px;
+      max-height: 156px;
+      padding: 0.5rem 0.45rem;
+    }
+
+    .event-stage-tag {
+      font-size: 0.72rem;
+    }
+
+    .event-work-text {
+      font-size: 0.76rem;
+    }
+
+    .event-ch-pill {
+      font-size: 0.7rem;
+    }
+
+    .event-user-text {
+      font-size: 0.72rem;
+    }
+
+    .ctx-work-title {
+      font-size: 0.95rem;
+    }
+
+    .ctx-due-val {
+      font-size: 0.86rem;
     }
   }
 
