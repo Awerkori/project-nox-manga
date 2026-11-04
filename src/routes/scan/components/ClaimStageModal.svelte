@@ -50,7 +50,7 @@
     return `${y}-${m}-${day}`;
   }
 
-  // Canonical Stage Names & Colors helper (Guarantees NEVER "Etapa Editorial")
+  // Canonical Stage Names & Colors helper
   function getCanonicalStageName(stage: any): string {
     const slug = (stage?.slug || '').toLowerCase().trim();
     const name = (stage?.name || '').trim();
@@ -121,7 +121,7 @@
     return set;
   });
 
-  // Month navigation boundary checks (only allow navigating within months containing allowed dates)
+  // Month navigation boundary checks
   let canPrevMonth = $derived(
     viewYear > spToday.getFullYear() ||
     (viewYear === spToday.getFullYear() && viewMonth > spToday.getMonth())
@@ -151,7 +151,7 @@
     }
   }
 
-  // Days matrix for the calendar month: dynamic number of weeks (4, 5, or 6 only if needed)
+  // Days matrix for the calendar month
   let monthCells = $derived.by(() => {
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -195,7 +195,7 @@
       });
     }
 
-    // Trailing days from next month to complete the last week (multiple of 7)
+    // Trailing days from next month to complete the last week
     const remainder = cells.length % 7;
     if (remainder > 0) {
       const trailingCount = 7 - remainder;
@@ -222,15 +222,15 @@
     errorMessage = null;
   }
 
-  // Format selected date for display (ex: "Sexta-feira, 7 de Novembro de 2026")
+  // Format selected date for display
   let formattedSelected = $derived.by(() => {
     if (!selectedYMD) return '';
     const [y, m, d] = selectedYMD.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
     const formatted = dateObj.toLocaleDateString('pt-BR', {
-      weekday: 'long',
+      weekday: 'short',
       day: 'numeric',
-      month: 'long',
+      month: 'short',
       year: 'numeric'
     });
     return formatted.charAt(0).toUpperCase() + formatted.slice(1);
@@ -256,17 +256,15 @@
     aria-labelledby="claim-modal-title"
   >
     <div class="modal-card">
-      <!-- Modal Header (Compact & Welcoming) -->
+      <!-- 1. MODAL HEADER (Compact & Short) -->
       <header class="modal-header">
-        <div class="header-title-row">
+        <div class="header-left">
           <div class="icon-orb purple">
-            <CalendarIcon size={18} />
+            <CalendarIcon size={16} />
           </div>
-          <div class="header-text-cluster">
-            <h2 id="claim-modal-title" class="modal-title">Quando você pretende entregar esta etapa?</h2>
-            <p class="modal-subtitle">
-              Escolha a data em que pretende concluir seu trabalho. Você tem até 3 dias corridos para realizar a entrega.
-            </p>
+          <div class="header-titles">
+            <h2 id="claim-modal-title" class="modal-title">Assumir Etapa</h2>
+            <p class="modal-subtitle">Defina o prazo de entrega (até 3 dias corridos).</p>
           </div>
         </div>
         <button
@@ -276,51 +274,47 @@
           disabled={isSubmitting}
           aria-label="Fechar"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
       </header>
 
-      <!-- Assignment Summary Card (Specific stage name, real avatar, matched chapter) -->
-      <section class="assignment-summary-card">
-        <div class="work-cover-wrapper">
+      <!-- 2. COMPACT ASSIGNMENT BANNER -->
+      <section class="assignment-compact-strip">
+        <div class="work-thumb-box">
           {#if stageItem.chapter?.work?.cover_id}
             <img
               src="/media/{stageItem.chapter.work.cover_id}"
               alt={stageItem.chapter?.work?.title || 'Capa'}
-              class="work-cover-thumb"
+              class="work-thumb-img"
               loading="lazy"
             />
           {:else}
-            <div class="work-cover-fallback">
-              <Briefcase size={20} />
+            <div class="work-thumb-fallback">
+              <Briefcase size={14} />
             </div>
           {/if}
         </div>
 
-        <div class="assignment-meta-details">
-          <span class="assignment-work-title" title={stageItem.chapter?.work?.title || 'Obra'}>
-            {stageItem.chapter?.work?.title || 'Obra sem título'}
-          </span>
-          <div class="assignment-pills-row">
-            <span class="chapter-number-pill">
-              Capítulo #{stageItem.chapter?.chapter_number || '1'}
+        <div class="assignment-meta-col">
+          <div class="work-and-ch-row">
+            <span class="assignment-work-name" title={stageItem.chapter?.work?.title || 'Obra'}>
+              {stageItem.chapter?.work?.title || 'Obra'}
             </span>
-            <span class="stage-tag-pill" style="--stage-c: {stageDisplayColor}">
-              <span class="stage-dot"></span>
+            <span class="ch-badge">#{stageItem.chapter?.chapter_number || '1'}</span>
+          </div>
+          <div class="tags-row">
+            <span class="stage-tag" style="--stage-c: {stageDisplayColor}">
+              <span class="st-dot"></span>
               {stageDisplayName}
             </span>
-          </div>
-          <div class="assignee-row">
-            <span class="assignee-label">Responsável:</span>
-            <div class="user-chip">
-              <UserAvatar user={currentUser} size={18} />
-              <span class="user-chip-name">{currentUser?.display_name || currentUser?.username || 'Você'}</span>
-            </div>
+            <span class="assignee-text">
+              Por: <strong>{currentUser?.display_name || currentUser?.username || 'Você'}</strong>
+            </span>
           </div>
         </div>
       </section>
 
-      <!-- Form Body with Compact Scrollable Area & Pinned Footer -->
+      <!-- 3. FORM BODY -->
       <form
         method="POST"
         action="?/claimStage"
@@ -338,7 +332,7 @@
             }
           };
         }}
-        class="claim-form-body"
+        class="claim-form-layout"
       >
         <input type="hidden" name="chapter_stage_id" value={stageItem.id} />
         <input type="hidden" name="due_date" value={selectedYMD} />
@@ -346,115 +340,109 @@
         <div class="claim-form-scrollable">
           {#if errorMessage}
             <div class="alert-banner error" role="alert">
-              <AlertCircle size={14} />
+              <AlertCircle size={13} />
               <span>{errorMessage}</span>
             </div>
           {/if}
 
-          <!-- Compact Calendar Component -->
-          <div class="compact-calendar-wrapper">
-            <div class="calendar-nav-header">
-              <span class="calendar-month-heading">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-              <div class="calendar-arrows">
+          <!-- MINI CALENDAR COMPONENT -->
+          <div class="mini-calendar-box">
+            <div class="cal-header">
+              <span class="cal-month-title">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+              <div class="cal-nav-buttons">
                 <button
                   type="button"
-                  class="btn-cal-arrow"
+                  class="btn-cal-step"
                   onclick={prevMonth}
                   aria-label="Mês anterior"
                   disabled={isSubmitting || !canPrevMonth}
                 >
-                  <ChevronLeft size={14} />
+                  <ChevronLeft size={13} />
                 </button>
                 <button
                   type="button"
-                  class="btn-cal-arrow"
+                  class="btn-cal-step"
                   onclick={nextMonth}
                   aria-label="Próximo mês"
                   disabled={isSubmitting || !canNextMonth}
                 >
-                  <ChevronRight size={14} />
+                  <ChevronRight size={13} />
                 </button>
               </div>
             </div>
 
-            <!-- Weekday Headers -->
-            <div class="cal-weekdays-row">
+            <!-- Weekdays -->
+            <div class="cal-week-row">
               {#each WEEK_DAYS as wd}
-                <span class="cal-weekday-lbl">{wd}</span>
+                <span class="cal-wd-cell">{wd}</span>
               {/each}
             </div>
 
-            <!-- Compact Days Grid -->
-            <div class="cal-days-grid">
+            <!-- Days Grid -->
+            <div class="cal-grid">
               {#each monthCells as cell}
                 <button
                   type="button"
-                  class="cal-day-cell"
-                  class:is-other-month={!cell.isCurrentMonth}
+                  class="cal-day-btn"
+                  class:is-other={!cell.isCurrentMonth}
                   class:is-today={cell.isToday}
                   class:is-selected={cell.isSelected}
                   class:is-allowed={cell.isAllowed}
                   class:is-blocked={!cell.isAllowed}
                   disabled={!cell.isAllowed || isSubmitting}
                   onclick={() => selectDate(cell.ymd, cell.isAllowed)}
-                  title={cell.isAllowed ? `Definir entrega para ${cell.ymd}` : 'Fora do limite de 3 dias corridos'}
+                  title={cell.isAllowed ? `Definir entrega para ${cell.ymd}` : 'Fora do limite de 3 dias'}
                 >
-                  <span class="cell-day-text">{cell.day}</span>
-                  {#if cell.isToday && !cell.isSelected}
-                    <span class="cell-today-pip"></span>
-                  {/if}
+                  <span class="day-num-txt">{cell.day}</span>
                   {#if cell.isSelected}
-                    <span class="cell-selected-check">
-                      <Check size={9} />
-                    </span>
+                    <span class="selected-check-dot"><Check size={8} /></span>
+                  {:else if cell.isToday}
+                    <span class="today-pip"></span>
                   {/if}
                 </button>
               {/each}
             </div>
           </div>
 
-          <!-- Selected Deadline Summary Box (Refined & Compact) -->
-          <div class="chosen-date-card">
-            <div class="chosen-date-row">
-              <div class="chosen-date-icon">
-                <Clock size={14} />
-              </div>
-              <div class="chosen-date-info">
-                <span class="chosen-date-prefix">Entrega prevista para</span>
-                <strong class="chosen-date-highlight">{formattedSelected}</strong>
-                <span class="chosen-date-time">Até 23h59 • Horário de Brasília</span>
+          <!-- SUMMARY LINE: SELECTED DATE -->
+          <div class="selected-summary-card">
+            <div class="summary-line-left">
+              <Clock size={14} class="text-purple-400" />
+              <div class="summary-text-block">
+                <span class="summary-sub-txt">Entrega prevista:</span>
+                <strong class="summary-val-txt">{formattedSelected} às 23:59</strong>
               </div>
             </div>
-            <div class="extension-micro-hint">
-              <Info size={11} class="hint-icon" />
-              <span>Prorrogação de +2 dias disponível nas últimas 24h caso precise de mais tempo.</span>
+            <div class="summary-hint-line">
+              <Info size={11} class="text-cyan-400" />
+              <span>Prorrogação (+2d) disponível nas últimas 24h</span>
             </div>
           </div>
 
-          <!-- Optional Planning Notes (Compact) -->
-          <div class="notes-field-group">
-            <div class="notes-header-row">
-              <label for="claim-notes-input" class="notes-label">Observações (opcional)</label>
-              <span class="notes-char-count">{notes.length}/500</span>
+          <!-- OPTIONAL NOTES -->
+          <div class="notes-block">
+            <div class="notes-label-bar">
+              <label for="claim-notes" class="notes-lbl">Observações (opcional)</label>
+              <span class="notes-counter">{notes.length}/500</span>
             </div>
             <textarea
-              id="claim-notes-input"
+              id="claim-notes"
               name="notes"
               bind:value={notes}
               maxlength="500"
               rows="2"
-              placeholder="Ex.: Tradução em andamento; revisarei diálogos no sábado."
-              class="notes-textarea"
+              placeholder="Ex.: Tradução em andamento; revisarei no sábado."
+              class="notes-input"
               disabled={isSubmitting}
             ></textarea>
           </div>
         </div>
 
-        <!-- Pinned Actions Footer: Both buttons always visible and accessible -->
-        <footer class="modal-actions-footer">
+        <!-- 4. PINNED FOOTER (Always visible without awkward scrolling) -->
+        <footer class="modal-footer-pinned">
           <button
             type="button"
-            class="btn-cancel"
+            class="btn-cancel-claim"
             onclick={onClose}
             disabled={isSubmitting}
           >
@@ -462,14 +450,14 @@
           </button>
           <button
             type="submit"
-            class="btn-confirm-claim"
+            class="btn-confirm-stage"
             disabled={!selectedYMD || isSubmitting}
           >
             {#if isSubmitting}
-              <span class="submit-spinner"></span>
+              <span class="btn-spinner"></span>
               <span>Confirmando...</span>
             {:else}
-              <Check size={15} />
+              <Check size={14} />
               <span>Confirmar e assumir etapa</span>
             {/if}
           </button>
@@ -490,30 +478,30 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: max(0.75rem, env(safe-area-inset-top, 0.75rem)) 0.75rem max(0.75rem, env(safe-area-inset-bottom, 0.75rem));
+    padding: max(0.5rem, env(safe-area-inset-top, 0.5rem)) 0.5rem max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   .modal-card {
     background: #090d16;
-    border: 1px solid rgba(139, 92, 246, 0.28);
-    border-radius: 1.15rem;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 35px rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 1rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(139, 92, 246, 0.12);
     width: 100%;
-    max-width: 460px;
-    max-height: min(92vh, 660px);
+    max-width: 420px;
+    max-height: min(92vh, 560px);
     margin: auto 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: modalPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  @keyframes modalPopIn {
+  @keyframes modalPop {
     from {
       opacity: 0;
-      transform: scale(0.97) translateY(6px);
+      transform: scale(0.97) translateY(4px);
     }
     to {
       opacity: 1;
@@ -521,26 +509,28 @@
     }
   }
 
+  /* Header */
   .modal-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    padding: 0.85rem 1.15rem 0.75rem;
+    padding: 0.75rem 1rem 0.65rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    gap: 0.75rem;
     flex-shrink: 0;
+    gap: 0.5rem;
   }
 
-  .header-title-row {
+  .header-left {
     display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
   }
 
   .icon-orb {
-    width: 36px;
-    height: 36px;
-    border-radius: 0.65rem;
+    width: 30px;
+    height: 30px;
+    border-radius: 0.55rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -548,29 +538,29 @@
     color: #c084fc;
     border: 1px solid rgba(139, 92, 246, 0.35);
     flex-shrink: 0;
-    margin-top: 0.1rem;
   }
 
-  .header-text-cluster {
+  .header-titles {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.05rem;
+    min-width: 0;
   }
 
   .modal-title {
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 700;
     color: #f8fafc;
     margin: 0;
-    line-height: 1.3;
+    line-height: 1.2;
     letter-spacing: -0.01em;
   }
 
   .modal-subtitle {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     color: #94a3b8;
     margin: 0;
-    line-height: 1.35;
+    line-height: 1.2;
   }
 
   .btn-close-modal {
@@ -578,8 +568,8 @@
     border: none;
     color: #64748b;
     cursor: pointer;
-    padding: 0.4rem;
-    border-radius: 0.45rem;
+    padding: 0.35rem;
+    border-radius: 0.4rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -592,34 +582,35 @@
     color: #f1f5f9;
   }
 
-  /* Assignment Summary Card */
-  .assignment-summary-card {
+  /* Compact Assignment Strip */
+  .assignment-compact-strip {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    padding: 0.75rem 1.15rem;
-    background: rgba(15, 23, 42, 0.65);
+    gap: 0.65rem;
+    padding: 0.5rem 1rem;
+    background: rgba(15, 23, 42, 0.7);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
   }
 
-  .work-cover-wrapper {
-    width: 42px;
-    height: 56px;
-    border-radius: 0.45rem;
+  .work-thumb-box {
+    width: 32px;
+    height: 42px;
+    border-radius: 0.35rem;
     overflow: hidden;
     background: #1e293b;
     flex-shrink: 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .work-cover-thumb {
+  .work-thumb-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
   }
 
-  .work-cover-fallback {
+  .work-thumb-fallback {
     width: 100%;
     height: 100%;
     display: flex;
@@ -628,16 +619,23 @@
     color: #64748b;
   }
 
-  .assignment-meta-details {
+  .assignment-meta-col {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.2rem;
     min-width: 0;
     flex: 1;
   }
 
-  .assignment-work-title {
-    font-size: 0.925rem;
+  .work-and-ch-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .assignment-work-name {
+    font-size: 0.84rem;
     font-weight: 700;
     color: #f1f5f9;
     white-space: nowrap;
@@ -646,69 +644,58 @@
     line-height: 1.2;
   }
 
-  .assignment-pills-row {
+  .ch-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    padding: 0.05rem 0.3rem;
+    border-radius: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .tags-row {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
   }
 
-  .chapter-number-pill {
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: rgba(255, 255, 255, 0.08);
-    color: #e2e8f0;
-    padding: 0.12rem 0.45rem;
-    border-radius: 0.35rem;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .stage-tag-pill {
-    font-size: 0.72rem;
+  .stage-tag {
+    font-size: 0.68rem;
     font-weight: 600;
     background: color-mix(in srgb, var(--stage-c, #a855f7) 16%, transparent);
     color: var(--stage-c, #a855f7);
-    border: 1px solid color-mix(in srgb, var(--stage-c, #a855f7) 38%, transparent);
-    padding: 0.12rem 0.45rem;
-    border-radius: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--stage-c, #a855f7) 35%, transparent);
+    padding: 0.06rem 0.4rem;
+    border-radius: 0.3rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
 
-  .stage-tag-pill .stage-dot {
-    width: 5px;
-    height: 5px;
+  .stage-tag .st-dot {
+    width: 4px;
+    height: 4px;
     border-radius: 50%;
     background: currentColor;
   }
 
-  .assignee-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.73rem;
+  .assignee-text {
+    font-size: 0.68rem;
     color: #94a3b8;
   }
 
-  .user-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
+  .assignee-text strong {
     color: #e2e8f0;
-    font-weight: 500;
   }
 
-  .user-chip-name {
-    font-size: 0.75rem;
-  }
-
-  .claim-form-body {
+  /* Form Layout */
+  .claim-form-layout {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-height: 0;
-    padding: 0;
     overflow: hidden;
   }
 
@@ -716,61 +703,60 @@
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 0.75rem 1.15rem 0.5rem;
+    padding: 0.65rem 1rem 0.4rem;
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.55rem;
   }
 
   .alert-banner.error {
     background: rgba(239, 68, 68, 0.16);
     border: 1px solid rgba(239, 68, 68, 0.4);
     color: #fca5a5;
-    padding: 0.55rem 0.75rem;
-    border-radius: 0.45rem;
-    font-size: 0.78rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 0.4rem;
+    font-size: 0.74rem;
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.4rem;
   }
 
-  /* Compact Calendar Component */
-  .compact-calendar-wrapper {
-    background: rgba(15, 23, 42, 0.75);
+  /* Mini Calendar */
+  .mini-calendar-box {
+    background: rgba(15, 23, 42, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.75rem;
-    padding: 0.65rem 0.75rem;
+    border-radius: 0.65rem;
+    padding: 0.5rem 0.65rem;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.35rem;
   }
 
-  .calendar-nav-header {
+  .cal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .calendar-month-heading {
-    font-size: 0.84rem;
+  .cal-month-title {
+    font-size: 0.8rem;
     font-weight: 700;
     color: #f1f5f9;
-    letter-spacing: -0.01em;
   }
 
-  .calendar-arrows {
+  .cal-nav-buttons {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.2rem;
   }
 
-  .btn-cal-arrow {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+  .btn-cal-step {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: #cbd5e1;
-    width: 26px;
-    height: 26px;
-    border-radius: 0.35rem;
+    width: 24px;
+    height: 24px;
+    border-radius: 0.3rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -778,284 +764,252 @@
     transition: all 0.15s ease;
   }
 
-  .btn-cal-arrow:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.14);
+  .btn-cal-step:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
     color: #fff;
   }
 
-  .btn-cal-arrow:disabled {
-    opacity: 0.25;
+  .btn-cal-step:disabled {
+    opacity: 0.2;
     cursor: not-allowed;
   }
 
-  .cal-weekdays-row {
+  .cal-week-row {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-size: 0.68rem;
+    font-size: 0.64rem;
     font-weight: 600;
     color: #64748b;
-    padding-bottom: 0.1rem;
+    padding-bottom: 0.05rem;
   }
 
-  .cal-days-grid {
+  .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 0.25rem;
+    gap: 0.18rem;
   }
 
-  .cal-day-cell {
+  .cal-day-btn {
     position: relative;
-    height: 36px;
-    border-radius: 0.45rem;
+    height: 30px;
+    border-radius: 0.35rem;
     border: 1px solid transparent;
     background: rgba(255, 255, 255, 0.02);
     color: #475569;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
     font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: not-allowed;
-    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.12s ease;
     padding: 0;
   }
 
-  .cal-day-cell.is-other-month {
+  .cal-day-btn.is-other {
+    opacity: 0.2;
+  }
+
+  .cal-day-btn.is-blocked {
     opacity: 0.25;
   }
 
-  .cal-day-cell.is-blocked {
-    opacity: 0.35;
-  }
-
-  .cal-day-cell.is-allowed {
+  .cal-day-btn.is-allowed {
     background: rgba(139, 92, 246, 0.08);
     border-color: rgba(139, 92, 246, 0.25);
     color: #f1f5f9;
     cursor: pointer;
   }
 
-  .cal-day-cell.is-allowed:hover:not(.is-selected) {
+  .cal-day-btn.is-allowed:hover:not(.is-selected) {
     background: rgba(139, 92, 246, 0.22);
     border-color: rgba(139, 92, 246, 0.5);
     color: #fff;
-    transform: translateY(-1px);
   }
 
-  .cal-day-cell.is-today:not(.is-selected) {
+  .cal-day-btn.is-today:not(.is-selected) {
     border-color: rgba(6, 182, 212, 0.45);
     color: #38bdf8;
   }
 
-  .cell-today-pip {
+  .today-pip {
     position: absolute;
-    bottom: 3px;
-    width: 4px;
-    height: 4px;
+    bottom: 2px;
+    width: 3px;
+    height: 3px;
     border-radius: 50%;
     background: #38bdf8;
   }
 
-  .cal-day-cell.is-selected {
+  .cal-day-btn.is-selected {
     background: #7c3aed !important;
     border-color: #a855f7 !important;
     color: #ffffff !important;
-    box-shadow: 0 0 14px rgba(124, 58, 237, 0.55);
     font-weight: 700;
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
   }
 
-  .cell-selected-check {
+  .selected-check-dot {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    color: #ffffff;
+    top: 1px;
+    right: 1px;
+    color: #fff;
     opacity: 0.9;
   }
 
-  /* Chosen Date Summary Card */
-  .chosen-date-card {
+  /* Summary Card */
+  .selected-summary-card {
     background: rgba(139, 92, 246, 0.08);
     border: 1px solid rgba(139, 92, 246, 0.25);
-    border-radius: 0.65rem;
-    padding: 0.6rem 0.8rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .chosen-date-row {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-  }
-
-  .chosen-date-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 0.5rem;
-    background: rgba(139, 92, 246, 0.2);
-    color: #c084fc;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .chosen-date-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.12rem;
-    min-width: 0;
-  }
-
-  .chosen-date-prefix {
-    font-size: 0.68rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-weight: 600;
-  }
-
-  .chosen-date-highlight {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #f1f5f9;
-    letter-spacing: -0.01em;
-  }
-
-  .chosen-date-time {
-    font-size: 0.71rem;
-    color: #38bdf8;
-    font-weight: 500;
-  }
-
-  .extension-micro-hint {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.35rem;
-    font-size: 0.69rem;
-    color: #94a3b8;
-    line-height: 1.3;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding-top: 0.35rem;
-  }
-
-  .hint-icon {
-    flex-shrink: 0;
-    margin-top: 0.1rem;
-    color: #8b5cf6;
-  }
-
-  /* Notes Field */
-  .notes-field-group {
+    border-radius: 0.55rem;
+    padding: 0.45rem 0.65rem;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
   }
 
-  .notes-header-row {
+  .summary-line-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .summary-text-block {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .summary-sub-txt {
+    font-size: 0.68rem;
+    color: #94a3b8;
+  }
+
+  .summary-val-txt {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #38bdf8;
+  }
+
+  .summary-hint-line {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 0.25rem;
+  }
+
+  /* Notes */
+  .notes-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .notes-label-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .notes-label {
-    font-size: 0.72rem;
+  .notes-lbl {
+    font-size: 0.68rem;
     font-weight: 600;
     color: #94a3b8;
   }
 
-  .notes-char-count {
-    font-size: 0.68rem;
+  .notes-counter {
+    font-size: 0.64rem;
     color: #64748b;
   }
 
-  .notes-textarea {
+  .notes-input {
     width: 100%;
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 0.5rem;
-    padding: 0.4rem 0.6rem;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.55rem;
     color: #f1f5f9;
-    font-size: 0.78rem;
-    line-height: 1.35;
+    font-size: 0.74rem;
+    line-height: 1.3;
     resize: none;
     outline: none;
-    transition: all 0.15s ease;
   }
 
-  .notes-textarea:focus {
+  .notes-input:focus {
     border-color: rgba(139, 92, 246, 0.5);
     background: rgba(15, 23, 42, 0.95);
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
   }
 
-  .notes-textarea::placeholder {
+  .notes-input::placeholder {
     color: #64748b;
-    font-size: 0.76rem;
+    font-size: 0.72rem;
   }
 
-  /* Actions Footer - Pinned and Always In View */
-  .modal-actions-footer {
+  /* Pinned Footer */
+  .modal-footer-pinned {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.6rem;
-    padding: 0.7rem 1.15rem;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem max(0.6rem, env(safe-area-inset-bottom, 0.6rem));
     background: #090d16;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
   }
 
-  .btn-cancel {
+  .btn-cancel-claim {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.09);
     color: #cbd5e1;
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     font-weight: 600;
-    padding: 0.5rem 0.9rem;
-    border-radius: 0.5rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 0.45rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
-  .btn-cancel:hover:not(:disabled) {
+  .btn-cancel-claim:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
   }
 
-  .btn-confirm-claim {
+  .btn-confirm-stage {
     background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
     border: 1px solid rgba(139, 92, 246, 0.4);
     color: #fff;
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     font-weight: 700;
-    padding: 0.5rem 1.1rem;
-    border-radius: 0.5rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 0.45rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35);
-    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    gap: 0.4rem;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+    transition: all 0.15s ease;
   }
 
-  .btn-confirm-claim:hover:not(:disabled) {
+  .btn-confirm-stage:hover:not(:disabled) {
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.5);
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
   }
 
-  .btn-confirm-claim:disabled {
+  .btn-confirm-stage:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
   }
 
-  .submit-spinner {
-    width: 13px;
-    height: 13px;
+  .btn-spinner {
+    width: 12px;
+    height: 12px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-top-color: #fff;
     border-radius: 50%;
@@ -1068,49 +1022,65 @@
     }
   }
 
+  /* Responsive Rules for Android (320px, 360px, 390px, 430px) */
   @media (max-width: 480px) {
     .modal-card {
-      max-height: calc(100dvh - 1.5rem);
-      margin: auto 0;
+      max-height: calc(100dvh - 1rem);
+      border-radius: 0.85rem;
     }
 
     .modal-header {
-      padding: 0.75rem 0.9rem 0.65rem;
+      padding: 0.65rem 0.85rem 0.55rem;
     }
 
-    .assignment-summary-card {
-      padding: 0.55rem 0.9rem;
+    .assignment-compact-strip {
+      padding: 0.45rem 0.85rem;
     }
 
     .claim-form-scrollable {
-      padding: 0.65rem 0.9rem 0.4rem;
-      gap: 0.55rem;
+      padding: 0.55rem 0.85rem 0.35rem;
+      gap: 0.45rem;
     }
 
-    .cal-day-cell {
-      height: 32px;
-      font-size: 0.76rem;
+    .mini-calendar-box {
+      padding: 0.45rem 0.55rem;
     }
 
-    /* Footer on mobile: side-by-side so both buttons are immediately accessible without scrolling */
-    .modal-actions-footer {
-      flex-direction: row;
+    .cal-day-btn {
+      height: 28px;
+      font-size: 0.72rem;
+    }
+
+    .modal-footer-pinned {
+      padding: 0.55rem 0.85rem max(0.55rem, env(safe-area-inset-bottom, 0.55rem));
       justify-content: space-between;
-      gap: 0.5rem;
-      padding: 0.6rem 0.9rem max(0.6rem, env(safe-area-inset-bottom, 0.6rem));
     }
 
-    .btn-cancel {
+    .btn-cancel-claim {
       flex: 0 0 auto;
-      min-width: 85px;
-      padding: 0.55rem 0.8rem;
-      text-align: center;
+      padding: 0.45rem 0.75rem;
     }
 
-    .btn-confirm-claim {
+    .btn-confirm-stage {
       flex: 1 1 auto;
       justify-content: center;
-      padding: 0.55rem 0.9rem;
+      padding: 0.45rem 0.8rem;
+    }
+  }
+
+  @media (max-width: 340px) {
+    .modal-title {
+      font-size: 0.88rem;
+    }
+
+    .cal-day-btn {
+      height: 26px;
+      font-size: 0.68rem;
+    }
+
+    .btn-confirm-stage {
+      font-size: 0.72rem;
+      padding: 0.4rem 0.6rem;
     }
   }
 </style>
