@@ -1,4 +1,4 @@
-import { executeYugabyteSql, withYugabyteLkg } from './yugabyte';
+import { executeYugabyteSql } from './yugabyte';
 
 export interface RatingSummary {
   average: number | null;
@@ -11,7 +11,6 @@ export interface RatingSummary {
 const ratingCache = new Map<string, { summary: RatingSummary; timestamp: number }>();
 const CACHE_TTL_MS = 15_000;
 
-let tableEnsured = true;
 async function ensureWorkRatingsTable(_platformEnv?: any) {
   // Table and index are authoritative and verified to exist. No-op on hot SSR path.
 }
@@ -28,63 +27,65 @@ export async function getWorkRating(
     return cached.summary;
   }
 
-  return withYugabyteLkg(
-    `rating_${workId}`,
-    async () => {
-      const sql = `
-        SELECT
-          ROUND(AVG(rating) FILTER (WHERE rating >= 1 AND rating <= 5)::numeric, 1) as avg_rating,
-          COUNT(*) FILTER (WHERE rating >= 1 AND rating <= 5)::int as total_count,
-          MAX(rating) FILTER (WHERE visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL)) as user_rating,
-          COUNT(*) FILTER (WHERE rating = 1)::int as cnt_1,
-          COUNT(*) FILTER (WHERE rating = 2)::int as cnt_2,
-          COUNT(*) FILTER (WHERE rating = 3)::int as cnt_3,
-          COUNT(*) FILTER (WHERE rating = 4)::int as cnt_4,
-          COUNT(*) FILTER (WHERE rating = 5)::int as cnt_5
-        FROM public.work_ratings
-        WHERE work_id = $1;
-      `;
-      const res = await executeYugabyteSql<{
-        avg_rating: string | null;
-        total_count: number;
-        user_rating: number | null;
-        cnt_1: number;
-        cnt_2: number;
-        cnt_3: number;
-        cnt_4: number;
-        cnt_5: number;
-      }>(sql, [workId, visitorId || '', userId || null], platformEnv);
+  try {
+    const sql = `
+      SELECT
+        ROUND(AVG(rating) FILTER (WHERE rating >= 1 AND rating <= 5)::numeric, 1) as avg_rating,
+        COUNT(*) FILTER (WHERE rating >= 1 AND rating <= 5)::int as total_count,
+        MAX(rating) FILTER (WHERE visitor_id = $2 OR (user_id = $3 AND $3 IS NOT NULL)) as user_rating,
+        COUNT(*) FILTER (WHERE rating = 1)::int as cnt_1,
+        COUNT(*) FILTER (WHERE rating = 2)::int as cnt_2,
+        COUNT(*) FILTER (WHERE rating = 3)::int as cnt_3,
+        COUNT(*) FILTER (WHERE rating = 4)::int as cnt_4,
+        COUNT(*) FILTER (WHERE rating = 5)::int as cnt_5
+      FROM public.work_ratings
+      WHERE work_id = $1;
+    `;
+    const res = await executeYugabyteSql<{
+      avg_rating: string | null;
+      total_count: number;
+      user_rating: number | null;
+      cnt_1: number;
+      cnt_2: number;
+      cnt_3: number;
+      cnt_4: number;
+      cnt_5: number;
+    }>(sql, [workId, visitorId || '', userId || null], platformEnv);
 
-      const row = res.rows[0];
-      const rawAvg = row?.avg_rating;
-      const count = row?.total_count ? Number(row.total_count) : 0;
-      const average = rawAvg !== null && rawAvg !== undefined ? parseFloat(rawAvg) : null;
-      const userRating = row?.user_rating !== null && row?.user_rating !== undefined ? Number(row.user_rating) : null;
-      const distribution: Record<number, number> = {
-        1: row?.cnt_1 ? Number(row.cnt_1) : 0,
-        2: row?.cnt_2 ? Number(row.cnt_2) : 0,
-        3: row?.cnt_3 ? Number(row.cnt_3) : 0,
-        4: row?.cnt_4 ? Number(row.cnt_4) : 0,
-        5: row?.cnt_5 ? Number(row.cnt_5) : 0
-      };
+    const row = res.rows[0];
+    const rawAvg = row?.avg_rating;
+    const count = row?.total_count ? Number(row.total_count) : 0;
+    const average = rawAvg !== null && rawAvg !== undefined ? parseFloat(rawAvg) : null;
+    const userRating = row?.user_rating !== null && row?.user_rating !== undefined ? Number(row.user_rating) : null;
+    const distribution: Record<number, number> = {
+      1: row?.cnt_1 ? Number(row.cnt_1) : 0,
+      2: row?.cnt_2 ? Number(row.cnt_2) : 0,
+      3: row?.cnt_3 ? Number(row.cnt_3) : 0,
+      4: row?.cnt_4 ? Number(row.cnt_4) : 0,
+      5: row?.cnt_5 ? Number(row.cnt_5) : 0
+    };
 
-      const summary: RatingSummary = {
-        average,
-        count,
-        userRating,
-        distribution
-      };
+    const summary: RatingSummary = {
+      average,
+      count,
+      userRating,
+      distribution
+    };
 
-      ratingCache.set(cacheKey, { summary, timestamp: Date.now() });
-      return summary;
-    },
-    {
+    ratingCache.set(cacheKey, { summary, timestamp: Date.now() });
+    return summary;
+  } catch (error) {
+    console.warn('[RATING] Yugabyte read failed', error instanceof Error ? error.message : String(error));
+    // Fallbacks contain a personal vote, so reuse only this exact visitor's
+    // bounded cache entry. A work-wide fallback could expose another vote.
+    if (cached && Date.now() - cached.timestamp < 120_000) return cached.summary;
+    return {
       average: null,
       count: 0,
       userRating: null,
       distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-    }
-  );
+    };
+  }
 }
 
 export async function setWorkRating(
