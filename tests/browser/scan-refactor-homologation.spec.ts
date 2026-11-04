@@ -129,7 +129,7 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
         await expect(navigation.getByRole('button', { name: stage, exact: false })).toBeVisible();
       }
 
-      const layout = await navigation.evaluate((element) => {
+      const layout = await navigation.evaluate(() => {
         return {
           pageOverflow: document.documentElement.scrollWidth > window.innerWidth
         };
