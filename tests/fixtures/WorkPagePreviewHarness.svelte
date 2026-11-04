@@ -34,7 +34,7 @@
       featured: true, updated_at: new Date().toISOString()
     },
     chapters, tags, scans: [], metrics: { readers: 15342 }, progress: [], profile: null,
-    library: null, likes: [], comments: [], metaImage: '/brand/nox-symbol.webp',
+    library: null, likesCount: 0, viewerHasLiked: false, comments: [], metaImage: '/brand/nox-symbol.webp',
     canonical: 'https://nox.invalid/obra/obra-preview', structuredData: '{}'
   };
 </script>

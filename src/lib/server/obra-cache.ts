@@ -1,13 +1,13 @@
 /**
  * src/lib/server/obra-cache.ts
- * In-memory cache for auxiliary public obra page data (comments, likes, metrics, workScans)
+ * In-memory cache for auxiliary public obra page data (comments, like count, metrics, workScans)
  * with instant invalidation on interactive actions (like, favorite, comment).
  */
 
 export type ObraAuxCacheEntry = {
   timestamp: number;
   comments: any[];
-  likes: any[];
+  likesCount: number;
   metrics: any;
   workScans: any[];
 };
