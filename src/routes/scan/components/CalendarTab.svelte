@@ -22,7 +22,10 @@
     AlertTriangle,
     Zap,
     Grid,
-    ListFilter
+    ListFilter,
+    Users,
+    BookOpen,
+    Info
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { invalidate } from '$app/navigation';
@@ -223,7 +226,7 @@
       const chapterNumber = pc?.chapter_number || '1';
       const chapterLabel = pc?.chapter_label || null;
 
-      const assigneeObj = cs.assignee || (cs.assigned_to ? teamMap.get(cs.assigned_to) : null);
+      const assigneeObj = cs.assignee || cs.completer || (cs.assigned_to ? teamMap.get(cs.assigned_to) : (cs.completed_by ? teamMap.get(cs.completed_by) : null));
 
       let dueYMD = '';
       let isOverdue = false;
@@ -565,6 +568,65 @@
       .slice(0, 5);
   });
 
+  // Upcoming items across whole team (Entregas da Equipe)
+  let teamUpcomingDeliveries = $derived.by(() => {
+    return allCommitments
+      .filter((c) => c.status === 'IN_PROGRESS' && c.dueAt)
+      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
+      .slice(0, 5);
+  });
+
+  // Recent Publications across scan (Últimas Publicações)
+  let recentPublications = $derived.by(() => {
+    return (chapters || [])
+      .filter((c: any) => c.published_at || c.created_at)
+      .sort((a: any, b: any) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())
+      .slice(0, 5);
+  });
+
+  // Active Filter Badges for quick removal and mobile sheets
+  let activeFilterChips = $derived.by(() => {
+    const chips: Array<{ id: string; label: string; onRemove: () => void }> = [];
+    if (filterStageSlug !== 'ALL') {
+      const stageName = filterStageSlug === 'tarefa' ? 'Tarefas Gerais' : getCanonicalStageName(filterStageSlug);
+      chips.push({
+        id: 'stage',
+        label: `Etapa: ${stageName}`,
+        onRemove: () => { filterStageSlug = 'ALL'; }
+      });
+    }
+    if (filterAssigneeId === 'MINE') {
+      chips.push({
+        id: 'assignee_mine',
+        label: 'Apenas minhas entregas',
+        onRemove: () => { filterAssigneeId = 'ALL'; }
+      });
+    } else if (filterAssigneeId !== 'ALL') {
+      const m = teamMap.get(filterAssigneeId);
+      const name = m?.display_name || m?.username || 'Membro';
+      chips.push({
+        id: 'assignee',
+        label: `Responsável: ${name}`,
+        onRemove: () => { filterAssigneeId = 'ALL'; }
+      });
+    }
+    if (filterStatus !== 'ALL') {
+      const statusLabels: Record<string, string> = {
+        IN_PROGRESS: 'Em andamento',
+        DUE_SOON: 'Vence em breve',
+        DONE: 'Concluídos',
+        OVERDUE: 'Em atraso',
+        EXTENDED: 'Prorrogados (+2d)'
+      };
+      chips.push({
+        id: 'status',
+        label: `Situação: ${statusLabels[filterStatus] || filterStatus}`,
+        onRemove: () => { filterStatus = 'ALL'; }
+      });
+    }
+    return chips;
+  });
+
   // Handler for Day Cell Click
   function handleSelectDay(ymd: string) {
     selectedDateYMD = ymd;
@@ -675,7 +737,8 @@
 
   <!-- 2. STREAMLINED HORIZONTAL FILTER BAR (Desktop & Mobile Chips) -->
   <section class="calendar-filters-bar" aria-label="Filtros do Calendário">
-    <div class="filters-left-group">
+    <!-- Desktop Filter Controls (>= 768px) -->
+    <div class="filters-left-group desktop-only-filters">
       <!-- Quick Filter: Minhas Entregas -->
       <button
         type="button"
@@ -747,8 +810,69 @@
       {/if}
     </div>
 
-    <!-- Active Count Counter -->
-    <div class="filters-right-meta">
+    <!-- Mobile Filter Controls (< 768px) -->
+    <div class="mobile-filter-controls">
+      <div class="mobile-filters-top-strip">
+        <button
+          type="button"
+          class="chip-filter-btn"
+          class:is-active={filterAssigneeId === 'MINE'}
+          onclick={toggleMineFilter}
+        >
+          <User size={13} />
+          <span>Minhas</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn-open-filter-sheet"
+          class:has-filters={activeFilterChips.length > 0}
+          onclick={() => (showMobileFilterSheet = true)}
+          aria-label="Abrir painel de filtros"
+        >
+          <Sliders size={13} />
+          <span>Filtros</span>
+          {#if activeFilterChips.length > 0}
+            <span class="sheet-count-pip">{activeFilterChips.length}</span>
+          {/if}
+        </button>
+
+        {#if hasActiveFilters}
+          <button
+            type="button"
+            class="btn-clear-mobile-quick"
+            onclick={clearAllFilters}
+            title="Limpar filtros"
+          >
+            <X size={12} />
+            <span>Limpar</span>
+          </button>
+        {/if}
+
+        <span class="mobile-stat-count">
+          <strong>{filteredCommitments.length}</strong> {filteredCommitments.length === 1 ? 'item' : 'itens'}
+        </span>
+      </div>
+
+      {#if activeFilterChips.length > 0}
+        <div class="mobile-active-chips-scroll">
+          {#each activeFilterChips as chip}
+            <button
+              type="button"
+              class="active-chip-pill"
+              onclick={chip.onRemove}
+              title="Remover filtro"
+            >
+              <span>{chip.label}</span>
+              <X size={10} />
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Active Count Counter (Desktop) -->
+    <div class="filters-right-meta desktop-only-filters">
       <span class="commitments-stat-pill">
         <strong>{filteredCommitments.length}</strong> compromisso{filteredCommitments.length === 1 ? '' : 's'}
       </span>
@@ -790,33 +914,39 @@
                   {/if}
                 </div>
 
-                <!-- DESKTOP EVENT CARDS (Real Avatars + Stage + Chapter) -->
+                <!-- DESKTOP EVENT CARDS (Real Avatars + Member Name + Stage + Chapter) -->
                 <div class="desktop-events-stack">
                   {#each cell.commitments.slice(0, 2) as item}
                     <div
                       class="day-event-card {item.statusClass}"
                       style="--stage-accent: {item.stageColor}"
-                      title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || 'Membro'}"
+                      title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || item.assignee?.username || 'Membro da equipe'}"
                     >
-                      <div class="event-card-avatar-wrap">
-                        <UserAvatar user={item.assignee} size={18} />
+                      <div class="event-card-top-row">
+                        <div class="event-card-avatar-wrap" title="{item.assignee?.display_name || item.assignee?.username || 'Membro'}">
+                          <UserAvatar user={item.assignee} size={15} />
+                        </div>
+                        <span class="event-card-user-name">
+                          {item.assignee?.display_name || item.assignee?.username || 'Membro'}
+                        </span>
+                        {#if item.extensionCount > 0 && item.status !== 'DONE'}
+                          <span class="event-card-ext-badge">+2d</span>
+                        {/if}
+                        {#if item.status === 'DONE'}
+                          <Check size={10} class="event-card-done-ico" />
+                        {/if}
                       </div>
-                      <div class="event-card-info-cluster">
-                        <span class="event-card-work-line">{item.workTitle.slice(0, 14)} #{item.chapterNumber}</span>
+
+                      <div class="event-card-bottom-row">
                         <span class="event-card-stage-pill">{item.stageName}</span>
+                        <span class="event-card-work-line">{item.workTitle} #{item.chapterNumber}</span>
                       </div>
-                      {#if item.extensionCount > 0 && item.status !== 'DONE'}
-                        <span class="event-card-ext-badge">+2d</span>
-                      {/if}
-                      {#if item.status === 'DONE'}
-                        <Check size={10} class="event-card-done-ico" />
-                      {/if}
                     </div>
                   {/each}
 
                   <!-- Overflow indicator if > 2 items -->
                   {#if cell.commitments.length > 2}
-                    <div class="event-overflow-badge">
+                    <div class="event-overflow-badge" onclick={(e) => { e.stopPropagation(); handleSelectDay(cell.ymd); }}>
                       <span>+{cell.commitments.length - 2} entrega{cell.commitments.length - 2 === 1 ? '' : 's'}</span>
                     </div>
                   {/if}
@@ -855,6 +985,58 @@
                 </div>
               </button>
             {/each}
+          </div>
+
+          <!-- ANDROID / MOBILE: SELECTED DAY ACTIVE PREVIEW (Fills empty void below calendar) -->
+          <div class="mobile-day-preview-strip">
+            <div class="preview-strip-header">
+              <div class="preview-header-left">
+                <CalendarIcon size={14} class="text-purple-400" />
+                <span class="preview-day-title">{formattedSelectedDayHeader}</span>
+              </div>
+              <button
+                type="button"
+                class="btn-view-drawer-trigger"
+                onclick={() => (showDayDrawer = true)}
+              >
+                <span>Ver detalhes</span>
+                <ArrowRight size={12} />
+              </button>
+            </div>
+
+            {#if selectedDayCommitments.length === 0}
+              <div class="preview-empty-note">
+                <span>Nenhuma entrega prevista para este dia. Toque em qualquer dia com avatar para ver os compromissos.</span>
+              </div>
+            {:else}
+              <div class="preview-items-row">
+                {#each selectedDayCommitments.slice(0, 2) as item}
+                  <div
+                    class="preview-mini-card"
+                    onclick={() => (showDayDrawer = true)}
+                    role="button"
+                    tabindex="0"
+                    onkeydown={(e) => { if (e.key === 'Enter') showDayDrawer = true; }}
+                  >
+                    <div class="preview-card-avatar">
+                      <UserAvatar user={item.assignee} size={22} />
+                    </div>
+                    <div class="preview-card-text">
+                      <div class="preview-work-line">
+                        <strong class="preview-work-name">{item.workTitle}</strong>
+                        {#if item.chapterNumber}
+                          <span class="preview-chapter-badge">#{item.chapterNumber}</span>
+                        {/if}
+                      </div>
+                      <div class="preview-meta-line">
+                        <span class="preview-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                        <span class="preview-status-pill {item.statusClass}">{item.statusLabel}</span>
+                      </div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         </div>
       {:else}
@@ -960,7 +1142,7 @@
 
         {#if myUpcomingDeliveries.length === 0}
           <div class="widget-empty-box">
-            <CheckCircle2 size={22} class="text-emerald-400" />
+            <CheckCircle2 size={20} class="text-emerald-400" />
             <p>Você não possui entregas pendentes.</p>
           </div>
         {:else}
@@ -975,7 +1157,10 @@
                 onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD); }}
               >
                 <div class="delivery-item-left">
-                  <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                  <div class="delivery-header-line">
+                    <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                    <span class="delivery-status-pill {item.statusClass}">{item.statusLabel}</span>
+                  </div>
                   <div class="delivery-tags-row">
                     <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
                     <span class="delivery-due-tag">
@@ -1007,7 +1192,55 @@
         {/if}
       </section>
 
-      <!-- Panel 2: Atrasos da Scan -->
+      <!-- Panel 2: Entregas da Equipe -->
+      <section class="side-widget-card">
+        <header class="widget-header">
+          <Users size={15} class="text-indigo-400" />
+          <h3 class="widget-title">Entregas da Equipe ({teamUpcomingDeliveries.length})</h3>
+        </header>
+
+        {#if teamUpcomingDeliveries.length === 0}
+          <div class="widget-empty-box">
+            <CheckCircle2 size={20} class="text-emerald-400" />
+            <p>Nenhuma entrega pendente na equipe.</p>
+          </div>
+        {:else}
+          <div class="widget-items-stack">
+            {#each teamUpcomingDeliveries as item}
+              <div
+                class="widget-delivery-item"
+                onclick={() => handleSelectDay(item.dueYMD)}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD); }}
+              >
+                <div class="delivery-item-left">
+                  <div class="delivery-header-line">
+                    <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                    <span class="delivery-status-pill {item.statusClass}">{item.statusLabel}</span>
+                  </div>
+                  <div class="delivery-tags-row">
+                    <div class="delivery-assignee-chip" title="{item.assignee?.display_name || item.assignee?.username || 'Membro'}">
+                      <UserAvatar user={item.assignee} size={15} />
+                      <span>{item.assignee?.display_name || item.assignee?.username || 'Membro'}</span>
+                    </div>
+                    <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                    <span class="delivery-due-tag">
+                      Prazo: {item.dueYMD.split('-')[2]}/{item.dueYMD.split('-')[1]}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="delivery-item-right">
+                  <span class="widget-arrow"><ArrowRight size={13} /></span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
+      <!-- Panel 3: Atrasos da Scan -->
       {#if overdueDeliveries.length > 0}
         <section class="side-widget-card alert-card">
           <header class="widget-header">
@@ -1025,12 +1258,16 @@
                 onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD || todayYMD); }}
               >
                 <div class="delivery-item-left">
-                  <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                  <div class="delivery-header-line">
+                    <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
+                    <span class="delivery-status-pill overdue">Em atraso</span>
+                  </div>
                   <div class="delivery-tags-row">
+                    <div class="delivery-assignee-chip">
+                      <UserAvatar user={item.assignee} size={15} />
+                      <span>{item.assignee?.display_name || item.assignee?.username || 'Membro'}</span>
+                    </div>
                     <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
-                    <span class="delivery-overdue-assignee">
-                      {item.assignee?.display_name || item.assignee?.username || 'Membro'}
-                    </span>
                   </div>
                 </div>
                 <span class="widget-arrow"><ArrowRight size={13} /></span>
@@ -1040,7 +1277,7 @@
         </section>
       {/if}
 
-      <!-- Panel 3: Disponibilidade dos Membros -->
+      <!-- Panel 4: Disponibilidade dos Membros -->
       <section class="side-widget-card">
         <header class="widget-header">
           <User size={15} class="text-purple-400" />
@@ -1062,6 +1299,47 @@
             </div>
           {/each}
         </div>
+      </section>
+
+      <!-- Panel 5: Últimas Publicações -->
+      <section class="side-widget-card">
+        <header class="widget-header">
+          <Sparkles size={15} class="text-emerald-400" />
+          <h3 class="widget-title">Últimas Publicações ({recentPublications.length})</h3>
+        </header>
+
+        {#if recentPublications.length === 0}
+          <div class="widget-empty-box">
+            <BookOpen size={20} class="text-slate-500" />
+            <p>Nenhuma publicação recente registrada.</p>
+          </div>
+        {:else}
+          <div class="widget-items-stack">
+            {#each recentPublications as pub}
+              <div class="widget-delivery-item publication">
+                <div class="delivery-item-left">
+                  <span class="delivery-work-title">{pub.works?.title || 'Obra'}</span>
+                  <div class="delivery-tags-row">
+                    <span class="delivery-pub-badge">Cap. #{pub.number}</span>
+                    <span class="delivery-due-tag">
+                      {pub.published_at ? `${getSaoPauloDate(pub.published_at).getDate()}/${getSaoPauloDate(pub.published_at).getMonth() + 1}` : 'Publicado'}
+                    </span>
+                  </div>
+                </div>
+                <a
+                  href="/ler/{pub.id}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn-widget-read"
+                  title="Ler capítulo publicado"
+                >
+                  <span>Ler</span>
+                  <ArrowRight size={11} />
+                </a>
+              </div>
+            {/each}
+          </div>
+        {/if}
       </section>
     </aside>
   </div>
@@ -1455,6 +1733,119 @@
   </div>
 {/if}
 
+<!-- ========================================================================= -->
+<!-- 6. MOBILE FILTER BOTTOM SHEET (Android & Mobile Screens)                  -->
+<!-- ========================================================================= -->
+{#if showMobileFilterSheet}
+  <div
+    class="filter-sheet-backdrop"
+    onclick={(e) => {
+      if (e.target === e.currentTarget) showMobileFilterSheet = false;
+    }}
+    role="dialog"
+    aria-modal="true"
+    aria-label="Filtros do Calendário"
+  >
+    <div class="filter-sheet-panel">
+      <header class="filter-sheet-header">
+        <div class="sheet-title-cluster">
+          <Sliders size={16} class="text-purple-400" />
+          <h3 class="sheet-heading">Filtros do Calendário</h3>
+        </div>
+        <button
+          type="button"
+          class="btn-close-filter-sheet"
+          onclick={() => (showMobileFilterSheet = false)}
+          aria-label="Fechar filtros"
+        >
+          <X size={18} />
+        </button>
+      </header>
+
+      <div class="filter-sheet-body">
+        <!-- Stage section -->
+        <div class="filter-section-block">
+          <span class="filter-section-title">Etapa Editorial</span>
+          <div class="filter-pills-flow">
+            {#each [
+              { slug: 'ALL', label: 'Todas as etapas' },
+              { slug: 'traducao', label: 'Tradução' },
+              { slug: 'clean_redraw', label: 'Clean/Redraw' },
+              { slug: 'typeset', label: 'Typeset' },
+              { slug: 'revisor_qc', label: 'Revisor (QC)' },
+              { slug: 'tarefa', label: 'Tarefas gerais' }
+            ] as opt}
+              <button
+                type="button"
+                class="filter-chip-option"
+                class:is-chosen={filterStageSlug === opt.slug}
+                onclick={() => (filterStageSlug = opt.slug)}
+              >
+                {opt.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Status section -->
+        <div class="filter-section-block">
+          <span class="filter-section-title">Situação do Prazo</span>
+          <div class="filter-pills-flow">
+            {#each [
+              { key: 'ALL', label: 'Todas' },
+              { key: 'IN_PROGRESS', label: 'Em andamento' },
+              { key: 'DUE_SOON', label: 'Vence em breve (≤24h)' },
+              { key: 'DONE', label: 'Concluídos' },
+              { key: 'OVERDUE', label: 'Em atraso' },
+              { key: 'EXTENDED', label: 'Prorrogados (+2d)' }
+            ] as opt}
+              <button
+                type="button"
+                class="filter-chip-option"
+                class:is-chosen={filterStatus === opt.key}
+                onclick={() => (filterStatus = opt.key)}
+              >
+                {opt.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Assignee section -->
+        <div class="filter-section-block">
+          <span class="filter-section-title">Responsável</span>
+          <select bind:value={filterAssigneeId} class="filter-sheet-select">
+            <option value="ALL">Toda a equipe</option>
+            <option value="MINE">Apenas minhas entregas</option>
+            {#each team as member}
+              <option value={member.id}>{member.display_name || member.username}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+
+      <footer class="filter-sheet-footer">
+        <button
+          type="button"
+          class="btn-sheet-clear"
+          onclick={() => {
+            clearAllFilters();
+          }}
+        >
+          Limpar Tudo
+        </button>
+        <button
+          type="button"
+          class="btn-sheet-apply"
+          onclick={() => (showMobileFilterSheet = false)}
+        >
+          Ver {filteredCommitments.length} compromisso{filteredCommitments.length === 1 ? '' : 's'}
+        </button>
+      </footer>
+    </div>
+  </div>
+{/if}
+
 <style>
   /* ========================================================================= */
   /* DESIGN SYSTEM: PROJECT NOX PREMIUM EDITORIAL CALENDAR                     */
@@ -1629,6 +2020,16 @@
     flex-wrap: wrap;
   }
 
+  .desktop-only-filters {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .mobile-filter-controls {
+    display: none;
+  }
+
   .filters-left-group {
     display: flex;
     align-items: center;
@@ -1714,6 +2115,96 @@
 
   .commitments-stat-pill strong {
     color: #c084fc;
+  }
+
+  /* Mobile Filter Top Strip & Pills */
+  .mobile-filters-top-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .btn-open-filter-sheet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #c084fc;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-open-filter-sheet:hover {
+    background: rgba(139, 92, 246, 0.25);
+    color: #fff;
+  }
+
+  .sheet-count-pip {
+    font-size: 0.65rem;
+    background: #7c3aed;
+    color: #fff;
+    padding: 0.05rem 0.35rem;
+    border-radius: 9999px;
+    font-weight: 800;
+  }
+
+  .btn-clear-mobile-quick {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.5rem;
+    border-radius: 0.4rem;
+    cursor: pointer;
+  }
+
+  .mobile-stat-count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+
+  .mobile-stat-count strong {
+    color: #c084fc;
+  }
+
+  .mobile-active-chips-scroll {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding-top: 0.35rem;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-active-chips-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .active-chip-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(139, 92, 246, 0.2);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #e2e8f0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.4rem;
+    white-space: nowrap;
+    cursor: pointer;
   }
 
   /* 3. WORKSPACE LAYOUT (Main Grid + Side Widgets) */
@@ -1839,8 +2330,8 @@
 
   .day-event-card {
     display: flex;
-    align-items: center;
-    gap: 0.35rem;
+    flex-direction: column;
+    gap: 0.15rem;
     background: rgba(15, 23, 42, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-left: 3px solid var(--stage-accent, #8b5cf6);
@@ -1879,35 +2370,59 @@
     border-left-color: #06b6d4;
   }
 
+  .event-card-top-row {
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+    width: 100%;
+    min-width: 0;
+  }
+
   .event-card-avatar-wrap {
     flex-shrink: 0;
     display: flex;
     align-items: center;
   }
 
-  .event-card-info-cluster {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    flex: 1;
-    line-height: 1.15;
-  }
-
-  .event-card-work-line {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: #f1f5f9;
+  .event-card-user-name {
+    font-size: 0.64rem;
+    font-weight: 600;
+    color: #e2e8f0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .event-card-bottom-row {
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+    width: 100%;
+    min-width: 0;
   }
 
   .event-card-stage-pill {
-    font-size: 0.62rem;
-    color: #94a3b8;
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--stage-accent, #c084fc);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.04rem 0.25rem;
+    border-radius: 0.25rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .event-card-work-line {
+    font-size: 0.64rem;
+    font-weight: 600;
+    color: #cbd5e1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
   }
 
   .event-card-ext-badge {
@@ -2307,10 +2822,92 @@
     text-overflow: ellipsis;
   }
 
+  .delivery-header-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+  }
+
+  .delivery-status-pill {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.08rem 0.35rem;
+    border-radius: 0.25rem;
+  }
+
+  .delivery-status-pill.in-progress {
+    background: rgba(139, 92, 246, 0.15);
+    color: #c084fc;
+  }
+
+  .delivery-status-pill.due-soon {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+  }
+
+  .delivery-status-pill.done {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+  }
+
+  .delivery-status-pill.overdue {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+  }
+
+  .delivery-status-pill.extended {
+    background: rgba(6, 182, 212, 0.18);
+    color: #22d3ee;
+  }
+
   .delivery-tags-row {
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .delivery-assignee-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.66rem;
+    color: #cbd5e1;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .delivery-pub-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 0.08rem 0.35rem;
+    border-radius: 0.25rem;
+  }
+
+  .btn-widget-read {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.2rem 0.45rem;
+    border-radius: 0.3rem;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+
+  .btn-widget-read:hover {
+    background: rgba(16, 185, 129, 0.28);
+    color: #fff;
   }
 
   .delivery-stage-tag {
@@ -3123,6 +3720,178 @@
     animation: spin 0.6s linear infinite;
   }
 
+  /* Default state for mobile preview strip (hidden on desktop) */
+  .mobile-day-preview-strip {
+    display: none;
+  }
+
+  /* ========================================================================= */
+  /* 6. MOBILE FILTER BOTTOM SHEET (Android & Mobile Screens)                  */
+  /* ========================================================================= */
+  .filter-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(4, 7, 18, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .filter-sheet-panel {
+    background: #090d16;
+    border-top: 1px solid rgba(139, 92, 246, 0.35);
+    border-radius: 1.15rem 1.15rem 0 0;
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.85);
+    animation: filterSheetUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes filterSheetUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .filter-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.15rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .sheet-title-cluster {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .sheet-heading {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+  }
+
+  .btn-close-filter-sheet {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0.35rem;
+    border-radius: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .btn-close-filter-sheet:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  .filter-sheet-body {
+    padding: 1rem 1.15rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .filter-section-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .filter-section-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .filter-pills-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .filter-chip-option {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-chip-option.is-chosen {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.6);
+    color: #c084fc;
+  }
+
+  .filter-sheet-select {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f1f5f9;
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    outline: none;
+    width: 100%;
+  }
+
+  .filter-sheet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.15rem max(0.85rem, env(safe-area-inset-bottom, 0.85rem));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #090d16;
+    gap: 0.75rem;
+  }
+
+  .btn-sheet-clear {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 0.5rem 0.85rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+  }
+
+  .btn-sheet-apply {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.5rem 1.15rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    flex: 1;
+  }
+
   /* ========================================================================= */
   /* RESPONSIVE DESIGN (Android 320px - 430px & Tablets)                       */
   /* ========================================================================= */
@@ -3179,25 +3948,21 @@
       font-size: 0.82rem;
     }
 
-    /* Filters: Compact horizontal scrollable row */
+    /* Filters: Mobile dedicated controls */
+    .desktop-only-filters {
+      display: none !important;
+    }
+
+    .mobile-filter-controls {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      gap: 0.35rem;
+    }
+
     .calendar-filters-bar {
       padding: 0.45rem 0.65rem;
-      overflow-x: auto;
-      flex-wrap: nowrap;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-
-    .calendar-filters-bar::-webkit-scrollbar {
-      display: none;
-    }
-
-    .filters-left-group {
-      flex-wrap: nowrap;
-    }
-
-    .filters-right-meta {
-      display: none;
+      flex-wrap: wrap;
     }
 
     /* Grid adjustments for mobile */
@@ -3263,6 +4028,158 @@
       width: 4px;
       height: 4px;
       border-radius: 50%;
+    }
+
+    /* Mobile Day Active Preview Strip */
+    .mobile-day-preview-strip {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      padding: 0.65rem 0.75rem;
+      background: rgba(15, 23, 42, 0.85);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .preview-strip-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .preview-header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .preview-day-title {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .btn-view-drawer-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: transparent;
+      border: none;
+      color: #a855f7;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .preview-empty-note {
+      font-size: 0.72rem;
+      color: #64748b;
+      font-style: italic;
+      line-height: 1.35;
+    }
+
+    .preview-items-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .preview-mini-card {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0.45rem;
+      padding: 0.4rem 0.55rem;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .preview-mini-card:active {
+      background: rgba(139, 92, 246, 0.15);
+    }
+
+    .preview-card-avatar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .preview-card-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .preview-work-line {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 0;
+    }
+
+    .preview-work-name {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #f8fafc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-chapter-badge {
+      font-size: 0.65rem;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.05rem 0.3rem;
+      border-radius: 0.25rem;
+      font-weight: 600;
+    }
+
+    .preview-meta-line {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .preview-stage-tag {
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: var(--st-c, #a855f7);
+    }
+
+    .preview-status-pill {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 0.05rem 0.3rem;
+      border-radius: 0.25rem;
+    }
+
+    .preview-status-pill.in-progress {
+      background: rgba(139, 92, 246, 0.15);
+      color: #c084fc;
+    }
+
+    .preview-status-pill.due-soon {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+    }
+
+    .preview-status-pill.done {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .preview-status-pill.overdue {
+      background: rgba(239, 68, 68, 0.18);
+      color: #fca5a5;
+    }
+
+    .preview-status-pill.extended {
+      background: rgba(6, 182, 212, 0.18);
+      color: #22d3ee;
     }
 
     /* Day Drawer becomes Bottom Sheet on Android */
