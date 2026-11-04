@@ -2761,7 +2761,7 @@
                         <div class="result-meta-line">
                           <span class="result-kind">{w.kind || 'Mangá'}</span>
                           <span class="result-dot">•</span>
-                          <span class="result-caps">{w.chapters_count} caps no catálogo</span>
+                          <span class="result-caps">{w.chapters_count} {w.chapters_count === 1 ? 'capítulo' : 'capítulos'} no catálogo</span>
                           {#if w.author}
                             <span class="result-dot">•</span>
                             <span class="result-author">{w.author}</span>
@@ -2801,7 +2801,7 @@
                     <div class="selected-work-meta">
                       <span>{selectedWork.kind || 'Mangá'}</span>
                       <span>•</span>
-                      <span>{selectedWork.chapters_count} caps no catálogo</span>
+                      <span>{selectedWork.chapters_count} {selectedWork.chapters_count === 1 ? 'capítulo' : 'capítulos'} no catálogo</span>
                     </div>
                   </div>
                 </div>

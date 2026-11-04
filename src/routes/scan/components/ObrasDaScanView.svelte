@@ -377,6 +377,19 @@
     return num.toLocaleString('pt-BR');
   }
 
+  function formatChapterCount(count: number | string | undefined | null, suffix = 'no catálogo'): string {
+    const num = Number(count) || 0;
+    const label = num === 1 ? 'capítulo' : 'capítulos';
+    return suffix ? `${num} ${label} ${suffix}` : `${num} ${label}`;
+  }
+
+  function formatViewCount(views: number | string | undefined | null, suffix = ''): string {
+    const num = Number(views) || 0;
+    const formatted = formatNumber(num);
+    const label = num === 1 ? 'leitura' : 'leituras';
+    return suffix ? `${formatted} ${label} ${suffix}` : `${formatted} ${label}`;
+  }
+
   function relativeTime(dateStr?: string): string {
     if (!dateStr) return 'Data recente';
     const d = new Date(dateStr);
@@ -931,11 +944,11 @@
                     <div class="work-metrics-strip">
                       <span class="metric-cell" title="Total de leituras registradas no catálogo">
                         <Eye size={13} class="metric-ico" />
-                        <span>{formatNumber(work.views_total || 0)} leituras</span>
+                        <span>{formatViewCount(work.views_total || 0)}</span>
                       </span>
                       <span class="metric-cell" title="Total de capítulos públicos da obra no catálogo oficial">
                         <Layers size={13} class="metric-ico" />
-                        <span>{work.chapters_count !== undefined ? work.chapters_count : (work.slug === 'ceu-distante' ? 86 : 0)} caps no catálogo</span>
+                        <span>{formatChapterCount(work.chapters_count !== undefined ? work.chapters_count : (work.slug === 'ceu-distante' ? 86 : 0))}</span>
                       </span>
                       {#if managed.total > 0}
                         <span class="metric-cell scan-highlight" title="Capítulos sob gestão desta scan ({managed.published} publicados + {managed.production} no pipeline)">
@@ -1163,7 +1176,7 @@
                   <div class="ch-card-meta-row">
                     <span class="ch-views-info">
                       <Eye size={12} />
-                      <span>{formatNumber(ch.views_total || 0)} leituras</span>
+                      <span>{formatViewCount(ch.views_total || 0)}</span>
                     </span>
                     <time datetime={ch.published_at} class="ch-time-info">
                       <Clock size={11} />
@@ -1322,22 +1335,22 @@
           <div class="kpi-metrics-grid">
             <div class="kpi-metric-card">
               <span class="kpi-label">Catálogo Geral</span>
-              <strong class="kpi-value text-cyan">{selectedWorkForManage.chapters_count || (selectedWorkForManage.slug === 'ceu-distante' ? 86 : workPublishedChapters.length)} caps</strong>
-              <span class="kpi-sub">{formatNumber(selectedWorkForManage.views_total || 0)} leituras totais</span>
+              <strong class="kpi-value text-cyan">{formatChapterCount(selectedWorkForManage.chapters_count || (selectedWorkForManage.slug === 'ceu-distante' ? 86 : workPublishedChapters.length), '')}</strong>
+              <span class="kpi-sub">{formatViewCount(selectedWorkForManage.views_total || 0, 'totais')}</span>
             </div>
             <div class="kpi-metric-card">
               <span class="kpi-label">Publicados pela Scan</span>
-              <strong class="kpi-value text-emerald">{workPublishedChapters.length} caps</strong>
+              <strong class="kpi-value text-emerald">{formatChapterCount(workPublishedChapters.length, '')}</strong>
               <span class="kpi-sub">Vinculados à equipe</span>
             </div>
             <div class="kpi-metric-card">
               <span class="kpi-label">No Pipeline Editorial</span>
-              <strong class="kpi-value text-amber">{workProductionChapters.length} caps</strong>
+              <strong class="kpi-value text-amber">{formatChapterCount(workProductionChapters.length, '')}</strong>
               <span class="kpi-sub">Em produção ativa</span>
             </div>
             <div class="kpi-metric-card">
               <span class="kpi-label">Total sob Gestão</span>
-              <strong class="kpi-value text-violet">{totalScanManagedCount} caps</strong>
+              <strong class="kpi-value text-violet">{formatChapterCount(totalScanManagedCount, '')}</strong>
               <span class="kpi-sub">{workPublishedChapters.length} pub. + {workProductionChapters.length} pipeline</span>
             </div>
           </div>
@@ -1666,7 +1679,7 @@
                     <div class="ch-meta-and-actions">
                       <span class="ch-item-views">
                         <Eye size={13} />
-                        <span>{formatNumber(ch.views_total || 0)} leituras</span>
+                        <span>{formatViewCount(ch.views_total || 0)}</span>
                       </span>
 
                       <a
