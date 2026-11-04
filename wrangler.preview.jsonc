@@ -18,6 +18,10 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "NOX_ENVIRONMENT": "preview",
+    "PREVIEW_ISOLATED": "true"
+  },
   "placement": {
     "mode": "off"
   },

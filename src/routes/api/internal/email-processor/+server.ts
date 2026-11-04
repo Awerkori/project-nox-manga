@@ -19,22 +19,17 @@ function safeTokenCompare(provided: string, expected: string): boolean {
 }
 
 function verifyAuthorization(request: Request, locals: App.Locals, platform?: any): void {
-  // Allow Cloudflare Worker scheduled invocation
+  // 1. Allow native Cloudflare Worker scheduled invocation
   if (platform?.scheduledInvocation === true) {
     return;
   }
 
-  // Allow internal requests marked by worker-wrapper
-  if (request.headers.get('x-internal-cron') === 'true') {
-    return;
-  }
-
-  // Allow authenticated staff / admin users
+  // 2. Allow authenticated staff / admin users
   if (locals.user && ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     return;
   }
 
-  // Allow internal requests authenticated by Bearer NOX_STORAGE_BRIDGE_TOKEN
+  // 3. Allow internal requests authenticated by Bearer NOX_STORAGE_BRIDGE_TOKEN
   const expectedToken = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN || env.NOX_STORAGE_BRIDGE_TOKEN;
   const authHeader = request.headers.get('authorization') || '';
   if (expectedToken && authHeader.startsWith('Bearer ')) {
@@ -48,90 +43,65 @@ function verifyAuthorization(request: Request, locals: App.Locals, platform?: an
   error(401, 'Unauthorized');
 }
 
-export const GET: RequestHandler = async ({ request, url, locals, platform }) => {
+async function handleProcessing(request: Request, url: URL, locals: App.Locals, platform?: App.Platform) {
   verifyAuthorization(request, locals, platform);
+
+  const isPreview = (
+    platform?.env?.PREVIEW_ISOLATED === 'true' ||
+    platform?.env?.NOX_ENVIRONMENT === 'preview' ||
+    env.PREVIEW_ISOLATED === 'true' ||
+    env.NOX_ENVIRONMENT === 'preview'
+  );
 
   const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
   const id = url.searchParams.get('id') || undefined;
 
-  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon, staleReminders, expiredStagesResult] = await Promise.all([
-    processPendingEmailOutbox(limit, id, platform?.env).catch(() => ({ processed: 0, sent: 0, failed: 0, details: [] })),
-    processPendingEmailOutbox(limit, id, platform?.env).catch(() => ({ processed: 0, sent: 0, failed: 0, details: [] })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    dispatchStaleTaskReminders({ platform }).catch(() => ({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] })),
-    executeYugabyteSql<{ process_expired_scan_stages_ysql: any }>(
-      'SELECT public.process_expired_scan_stages_ysql(NULL)',
-      [],
-      platform?.env
-    ).then(r => r.rows?.[0]?.process_expired_scan_stages_ysql || { success: true, devolved_count: 0 })
-     .catch(err => {
-        console.error('[CRON_EXPIRED_STAGES_ERR]', err);
-        return { success: false, error: String(err?.message || err) };
-     })
+  // In PREVIEW mode, do NOT send real emails to avoid alerting real members during testing
+  const outboxPromise = isPreview
+    ? Promise.resolve({ processed: 0, sent: 0, failed: 0, details: ['preview_isolated_mode_skipped_real_email'] })
+    : processPendingEmailOutbox(limit, id, platform?.env).catch(() => ({ processed: 0, sent: 0, failed: 0, details: [] }));
+
+  const reconPromise = isPreview
+    ? Promise.resolve({ reconciled: 0, retried: 0, waiting: 0 })
+    : reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 }));
+
+  const remindersPromise = isPreview
+    ? Promise.resolve({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] })
+    : dispatchStaleTaskReminders({ platform }).catch(() => ({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] }));
+
+  const expiredStagesPromise = executeYugabyteSql<{ process_expired_scan_stages_ysql: any }>(
+    'SELECT public.process_expired_scan_stages_ysql(NULL, $1)',
+    [isPreview],
+    platform?.env
+  ).then(r => r.rows?.[0]?.process_expired_scan_stages_ysql || { success: true, devolved_count: 0 })
+   .catch(err => {
+      console.error('[CRON_EXPIRED_STAGES_ERR]', err);
+      return { success: false, error: String(err?.message || err) };
+   });
+
+  const [outboxResult, reconResult, staleReminders, expiredStagesResult] = await Promise.all([
+    outboxPromise,
+    reconPromise,
+    remindersPromise,
+    expiredStagesPromise
   ]);
-  const outboxResult = {
-    processed: legacyOutbox.processed + scanOutbox.processed,
-    sent: legacyOutbox.sent + scanOutbox.sent,
-    failed: legacyOutbox.failed + scanOutbox.failed,
-    details: [...legacyOutbox.details, ...scanOutbox.details]
-  };
-  const reconResult = {
-    reconciled: legacyRecon.reconciled + scanRecon.reconciled,
-    retried: legacyRecon.retried + scanRecon.retried,
-    waiting: legacyRecon.waiting + scanRecon.waiting
-  };
 
   return json({
     ok: true,
     timestamp: new Date().toISOString(),
+    environment: isPreview ? 'preview_isolated' : 'production',
+    onlyTestChapters: isPreview,
     ...outboxResult,
     reconciliation: reconResult,
     staleReminders,
     expiredStages: expiredStagesResult
   });
+}
+
+export const GET: RequestHandler = async ({ request, url, locals, platform }) => {
+  return handleProcessing(request, url, locals, platform);
 };
 
 export const POST: RequestHandler = async ({ request, url, locals, platform }) => {
-  verifyAuthorization(request, locals, platform);
-
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 25)));
-  const id = url.searchParams.get('id') || undefined;
-  
-  const [legacyOutbox, scanOutbox, legacyRecon, scanRecon, staleReminders, expiredStagesResult] = await Promise.all([
-    processPendingEmailOutbox(limit, id, platform?.env).catch(() => ({ processed: 0, sent: 0, failed: 0, details: [] })),
-    processPendingEmailOutbox(limit, id, platform?.env).catch(() => ({ processed: 0, sent: 0, failed: 0, details: [] })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    reconcileUncertainEmailOutbox(10, platform?.env).catch(() => ({ reconciled: 0, retried: 0, waiting: 0 })),
-    dispatchStaleTaskReminders({ platform }).catch(() => ({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] })),
-    executeYugabyteSql<{ process_expired_scan_stages_ysql: any }>(
-      'SELECT public.process_expired_scan_stages_ysql(NULL)',
-      [],
-      platform?.env
-    ).then(r => r.rows?.[0]?.process_expired_scan_stages_ysql || { success: true, devolved_count: 0 })
-     .catch(err => {
-        console.error('[CRON_EXPIRED_STAGES_ERR]', err);
-        return { success: false, error: String(err?.message || err) };
-     })
-  ]);
-  const outboxResult = {
-    processed: legacyOutbox.processed + scanOutbox.processed,
-    sent: legacyOutbox.sent + scanOutbox.sent,
-    failed: legacyOutbox.failed + scanOutbox.failed,
-    details: [...legacyOutbox.details, ...scanOutbox.details]
-  };
-  const reconResult = {
-    reconciled: legacyRecon.reconciled + scanRecon.reconciled,
-    retried: legacyRecon.retried + scanRecon.retried,
-    waiting: legacyRecon.waiting + scanRecon.waiting
-  };
-
-  return json({
-    ok: true,
-    timestamp: new Date().toISOString(),
-    ...outboxResult,
-    reconciliation: reconResult,
-    staleReminders,
-    expiredStages: expiredStagesResult
-  });
+  return handleProcessing(request, url, locals, platform);
 };

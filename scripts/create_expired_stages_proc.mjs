@@ -18,7 +18,10 @@ const pool = new pg.Pool({
 });
 
 const sql = `
-CREATE OR REPLACE FUNCTION public.process_expired_scan_stages_ysql(p_scan_id uuid DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.process_expired_scan_stages_ysql(
+  p_scan_id uuid DEFAULT NULL,
+  p_only_test_chapters boolean DEFAULT false
+)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -39,10 +42,12 @@ BEGIN
       cs.availability_version,
       cs.production_chapter_id,
       cs.chapter_id,
+      cs.notes,
       ws.id as workflow_stage_id,
       ws.name as stage_name,
       ws.slug as stage_slug,
       pc.chapter_number,
+      pc.chapter_title,
       w.title as work_title
     FROM public.scan_chapter_stages cs
     JOIN public.scan_workflow_stages ws ON ws.id = cs.stage_id
@@ -53,11 +58,18 @@ BEGIN
       AND cs.due_at IS NOT NULL
       AND cs.due_at < now()
       AND (p_scan_id IS NULL OR cs.scan_id = p_scan_id)
+      AND (
+        NOT p_only_test_chapters 
+        OR pc.chapter_number::text ~ '^[9][9][0-9]$' 
+        OR (pc.chapter_number >= 990 AND pc.chapter_number < 1000)
+        OR pc.chapter_title ILIKE '%[TEST]%' 
+        OR pc.chapter_title ILIKE '%Sintético%'
+      )
     FOR UPDATE OF cs
   LOOP
     v_availability_version := COALESCE(r.availability_version, 1) + 1;
 
-    -- Devolve stage to queue (AVAILABLE)
+    -- Devolve stage to queue (AVAILABLE) and record audit marker
     UPDATE public.scan_chapter_stages
     SET status = 'AVAILABLE',
         previous_assigned_to = r.assigned_to,
@@ -67,6 +79,10 @@ BEGIN
         availability_version = v_availability_version,
         availability_reason = 'expired_returned_to_queue',
         notified_available = false,
+        notes = CASE 
+          WHEN notes IS NULL OR notes = '' THEN '[Devolução Automática - Prazo Expirado]'
+          ELSE notes || ' | [Devolução Automática - Prazo Expirado]'
+        END,
         last_activity_at = now(),
         updated_at = now()
     WHERE id = r.stage_id;
@@ -88,22 +104,25 @@ BEGIN
         'previous_assignee', r.assigned_to,
         'due_at', r.due_at,
         'extension_count', r.extension_count,
-        'availability_version', v_availability_version
+        'availability_version', v_availability_version,
+        'preview_isolated_mode', p_only_test_chapters
       )
     );
 
-    -- Send notification to former assignee
-    INSERT INTO public.notifications (
-      user_id, scan_id, title, body, href, type, kind, priority, dedupe_key, created_at
-    ) VALUES (
-      r.assigned_to, r.scan_id,
-      'Etapa devolvida à fila',
-      'O prazo para concluir a etapa ' || r.stage_name || ' de ' || r.work_title || ' #' || r.chapter_number || ' expirou e ela foi devolvida à fila para outro membro assumir.',
-      '/scan?tab=pipeline&stage=' || r.stage_slug,
-      'STAGE_DEVOLVED', 'stage_devolved', 'HIGH',
-      'stage_devolved:' || r.stage_id || ':' || r.assigned_to || ':' || to_char(r.due_at, 'YYYY-MM-DD-HH24'),
-      now()
-    );
+    -- Only send notification to real users if NOT in preview test mode
+    IF NOT p_only_test_chapters THEN
+      INSERT INTO public.notifications (
+        user_id, scan_id, title, body, href, type, kind, priority, dedupe_key, created_at
+      ) VALUES (
+        r.assigned_to, r.scan_id,
+        'Etapa devolvida à fila',
+        'O prazo para concluir a etapa ' || r.stage_name || ' de ' || r.work_title || ' #' || r.chapter_number || ' expirou e ela foi devolvida à fila para outro membro assumir.',
+        '/scan?tab=pipeline&stage=' || r.stage_slug,
+        'STAGE_DEVOLVED', 'stage_devolved', 'HIGH',
+        'stage_devolved:' || r.stage_id || ':' || r.assigned_to || ':' || to_char(r.due_at, 'YYYY-MM-DD-HH24'),
+        now()
+      );
+    END IF;
 
     v_devolved_ids := array_append(v_devolved_ids, r.stage_id);
     v_devolved_count := v_devolved_count + 1;
@@ -112,7 +131,8 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'devolved_count', v_devolved_count,
-    'devolved_stage_ids', v_devolved_ids
+    'devolved_stage_ids', v_devolved_ids,
+    'only_test_chapters', p_only_test_chapters
   );
 END;
 $$;
@@ -122,7 +142,7 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query(sql);
-    console.log('Successfully installed process_expired_scan_stages_ysql into YugabyteDB!');
+    console.log('Successfully upgraded process_expired_scan_stages_ysql with safe numeric cast in YugabyteDB!');
   } finally {
     client.release();
     await pool.end();

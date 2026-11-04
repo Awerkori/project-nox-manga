@@ -22,6 +22,10 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "NOX_ENVIRONMENT": "production",
+    "PREVIEW_ISOLATED": "false"
+  },
   "placement": {
     "mode": "off"
   },

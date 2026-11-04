@@ -17,22 +17,17 @@ function safeTokenCompare(provided: string, expected: string): boolean {
 }
 
 function verifyAuthorization(request: Request, locals: App.Locals, platform?: any): void {
-  // Allow Cloudflare Worker scheduled invocation
+  // 1. Allow native Cloudflare Worker scheduled invocation
   if (platform?.scheduledInvocation === true) {
     return;
   }
 
-  // Allow internal requests marked by worker-wrapper
-  if (request.headers.get('x-internal-cron') === 'true') {
-    return;
-  }
-
-  // Allow authenticated staff / admin users
+  // 2. Allow authenticated staff / admin users
   if (locals.user && ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
     return;
   }
 
-  // Allow internal requests authenticated by Bearer NOX_STORAGE_BRIDGE_TOKEN
+  // 3. Allow internal requests authenticated by Bearer NOX_STORAGE_BRIDGE_TOKEN
   const expectedToken = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN || env.NOX_STORAGE_BRIDGE_TOKEN;
   const authHeader = request.headers.get('authorization') || '';
   if (expectedToken && authHeader.startsWith('Bearer ')) {
@@ -49,16 +44,25 @@ function verifyAuthorization(request: Request, locals: App.Locals, platform?: an
 async function handleDevolution(request: Request, locals: App.Locals, platform?: App.Platform) {
   verifyAuthorization(request, locals, platform);
 
+  const isPreview = (
+    platform?.env?.PREVIEW_ISOLATED === 'true' ||
+    platform?.env?.NOX_ENVIRONMENT === 'preview' ||
+    env.PREVIEW_ISOLATED === 'true' ||
+    env.NOX_ENVIRONMENT === 'preview'
+  );
+
   try {
     const queryRes = await executeYugabyteSql<{ process_expired_scan_stages_ysql: any }>(
-      'SELECT public.process_expired_scan_stages_ysql(NULL)',
-      [],
+      'SELECT public.process_expired_scan_stages_ysql(NULL, $1)',
+      [isPreview],
       platform?.env
     );
     const devolution = queryRes.rows?.[0]?.process_expired_scan_stages_ysql || { success: true, devolved_count: 0 };
     return json({
       ok: true,
       timestamp: new Date().toISOString(),
+      environment: isPreview ? 'preview_isolated' : 'production',
+      onlyTestChapters: isPreview,
       devolution
     });
   } catch (err: any) {

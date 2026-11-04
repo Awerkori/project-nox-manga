@@ -32,6 +32,13 @@
   import { enhance } from '$app/forms';
   import { invalidate } from '$app/navigation';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
+  import {
+    calculateEditorialDeadlineStatus,
+    formatDueDisplay,
+    formatDateWithTime,
+    getSaoPauloDateParts,
+    getCalendarDayDiff
+  } from '$lib/editorial-deadlines';
 
   interface Props {
     tasks?: any[];
@@ -68,39 +75,8 @@
 
   const WEEK_DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-  // Canonical Timezone: America/Sao_Paulo
+  // Canonical Timezone: America/Sao_Paulo (Managed via $lib/editorial-deadlines)
   const SP_TIMEZONE = 'America/Sao_Paulo';
-
-  // Reliable date parts extractor in America/Sao_Paulo timezone
-  function getSaoPauloDateParts(dateInput?: string | Date | number) {
-    const d = dateInput ? new Date(dateInput) : new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: SP_TIMEZONE,
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-      hour12: false,
-      weekday: 'short'
-    });
-    const parts = formatter.formatToParts(d);
-    let year = 2026, month = 1, day = 1, hours = 0, minutes = 0, seconds = 0, weekdayStr = '';
-    for (const p of parts) {
-      if (p.type === 'year') year = parseInt(p.value, 10);
-      else if (p.type === 'month') month = parseInt(p.value, 10);
-      else if (p.type === 'day') day = parseInt(p.value, 10);
-      else if (p.type === 'hour') hours = parseInt(p.value, 10) % 24;
-      else if (p.type === 'minute') minutes = parseInt(p.value, 10);
-      else if (p.type === 'second') seconds = parseInt(p.value, 10);
-      else if (p.type === 'weekday') weekdayStr = p.value;
-    }
-    const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-    const dayOfWeek = weekdayMap[weekdayStr] ?? 0;
-    return { year, month: month - 1, day, hours, minutes, seconds, ymd, dayOfWeek };
-  }
 
   function formatYMDFromParts(year: number, month: number, day: number): string {
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -263,6 +239,9 @@
       let dueYMD = '';
       let isOverdue = false;
       let isDueSoon = false;
+      let isDueToday = false;
+      let isDueTomorrow = false;
+      let inlineStatusLabel: string | null = null;
       let remainingHours = 0;
       let extensionState: 'LOCKED' | 'AVAILABLE' | 'RESTRICTED_AVAILABLE' | 'EXTENDED' | 'EXPIRED' | 'NONE' = 'NONE';
       let unlockDateTimeStr = '';
@@ -271,14 +250,21 @@
       let canUserExtend = isMine || ['ADMIN', 'OWNER'].includes(userRole);
 
       if (cs.due_at) {
-        const dueSpParts = getSaoPauloDateParts(cs.due_at);
-        dueYMD = dueSpParts.ymd;
+        const dl = calculateEditorialDeadlineStatus(cs.due_at, cs.status, {
+          nowMs,
+          extensionCount: Number(cs.extension_count || 0),
+          completedAt: cs.completed_at
+        });
+        dueYMD = dl.dueYMD;
         const dueMs = new Date(cs.due_at).getTime();
         const diffMs = dueMs - nowMs;
         const isWithin24Hours = diffMs <= 24 * 60 * 60 * 1000;
-        remainingHours = Math.floor(diffMs / (1000 * 60 * 60));
-        isOverdue = diffMs < 0 && cs.status !== 'DONE';
-        isDueSoon = !isOverdue && cs.status === 'IN_PROGRESS' && (isWithin24Hours || dueYMD === todayYMD);
+        remainingHours = dl.remainingHours;
+        isOverdue = dl.isOverdue;
+        isDueSoon = dl.isDueSoon;
+        isDueToday = dl.isDueToday;
+        isDueTomorrow = dl.isDueTomorrow;
+        inlineStatusLabel = dl.inlineStatusLabel;
 
         const extensionCount = Number(cs.extension_count || 0);
 
@@ -287,6 +273,7 @@
         } else if (extensionCount > 0) {
           // Estado C: Prorrogação utilizada
           extensionState = 'EXTENDED';
+          const dueSpParts = getSaoPauloDateParts(cs.due_at);
           const day = String(dueSpParts.day).padStart(2, '0');
           const month = String(dueSpParts.month + 1).padStart(2, '0');
           const hours = String(dueSpParts.hours).padStart(2, '0');
@@ -294,7 +281,7 @@
           extendedDateTimeStr = `${day}/${month} às ${hours}:${minutes}`;
         } else if (diffMs < -(4 * 60 * 60 * 1000)) {
           extensionState = 'EXPIRED';
-        } else if (isWithin24Hours || dueYMD === todayYMD) {
+        } else if (isWithin24Hours || isDueToday) {
           // Estado B: Nas últimas 24 horas (ou vencendo hoje)
           extensionState = canUserExtend ? 'AVAILABLE' : 'RESTRICTED_AVAILABLE';
         } else {
@@ -330,6 +317,14 @@
         statusClass = 'extended';
         statusColor = '#06b6d4';
         statusLabel = 'Prorrogado (+2d)';
+      } else if (isDueToday) {
+        statusClass = 'due-soon';
+        statusColor = '#f59e0b';
+        statusLabel = 'Vence hoje';
+      } else if (isDueTomorrow) {
+        statusClass = 'due-soon';
+        statusColor = '#38bdf8';
+        statusLabel = 'Vence amanhã';
       } else if (isDueSoon) {
         statusClass = 'due-soon';
         statusColor = '#f59e0b';
@@ -365,6 +360,9 @@
         completedAt: cs.completed_at,
         isOverdue,
         isDueSoon,
+        isDueToday,
+        isDueTomorrow,
+        inlineStatusLabel,
         remainingHours,
         extensionState,
         unlockDateTimeStr,
@@ -381,12 +379,17 @@
     for (const t of tasks) {
       if (!t.due_at && !t.completed_at) continue;
       const targetDate = t.due_at || t.completed_at;
-      const dueParts = getSaoPauloDateParts(targetDate);
-      const dueYMD = dueParts.ymd;
+      const dl = calculateEditorialDeadlineStatus(targetDate, t.status, {
+        nowMs
+      });
+      const dueYMD = dl.dueYMD;
       const dueMs = new Date(targetDate).getTime();
       const diffMs = dueMs - nowMs;
-      const isOverdue = diffMs < 0 && t.status !== 'DONE' && t.status !== 'CANCELLED';
-      const isDueSoon = !isOverdue && t.status !== 'DONE' && Math.round(diffMs / (1000 * 60 * 60)) <= 24;
+      const isOverdue = dl.isOverdue;
+      const isDueSoon = dl.isDueSoon;
+      const isDueToday = dl.isDueToday;
+      const isDueTomorrow = dl.isDueTomorrow;
+      const inlineStatusLabel = dl.inlineStatusLabel;
 
       let statusClass = 'in-progress';
       let statusColor = '#6366f1';
@@ -400,6 +403,14 @@
         statusClass = 'overdue';
         statusColor = '#ef4444';
         statusLabel = 'Em atraso';
+      } else if (isDueToday) {
+        statusClass = 'due-soon';
+        statusColor = '#f59e0b';
+        statusLabel = 'Vence hoje';
+      } else if (isDueTomorrow) {
+        statusClass = 'due-soon';
+        statusColor = '#38bdf8';
+        statusLabel = 'Vence amanhã';
       } else if (isDueSoon) {
         statusClass = 'due-soon';
         statusColor = '#f59e0b';
@@ -432,7 +443,10 @@
         completedAt: t.completed_at,
         isOverdue,
         isDueSoon,
-        remainingHours: Math.round(diffMs / (1000 * 60 * 60)),
+        isDueToday,
+        isDueTomorrow,
+        inlineStatusLabel,
+        remainingHours: dl.remainingHours,
         extensionState: 'NONE',
         unlockDateTimeStr: '',
         extendedDateTimeStr: '',
@@ -742,80 +756,14 @@
     return allCommitments.find((c) => c.status === 'IN_PROGRESS') || null;
   });
 
-  // Remaining time helper text (accurate, natural, never misleading)
+  // Remaining time helper text (accurate, natural, never misleading via $lib/editorial-deadlines)
   function getRemainingText(item: any): string {
     if (!item?.dueAt) return '';
-    const nowMs = Date.now();
-    const dueMs = new Date(item.dueAt).getTime();
-    const diffMs = dueMs - nowMs;
-    if (diffMs < 0) return 'Prazo vencido';
-
-    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const totalMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (totalHours === 0) {
-      return totalMinutes <= 5 ? 'Vence em instantes!' : `Vence em ${totalMinutes}min`;
-    }
-
-    const dueParts = getSaoPauloDateParts(item.dueAt);
-    const nowParts = getSaoPauloDateParts(new Date(nowMs).toISOString());
-
-    const isToday =
-      dueParts.year === nowParts.year &&
-      dueParts.month === nowParts.month &&
-      dueParts.day === nowParts.day;
-
-    const tomorrowUtc = new Date(nowMs + 86400000);
-    const tomorrowParts = getSaoPauloDateParts(tomorrowUtc.toISOString());
-    const isTomorrow =
-      dueParts.year === tomorrowParts.year &&
-      dueParts.month === tomorrowParts.month &&
-      dueParts.day === tomorrowParts.day;
-
-    const timeStr = `${String(dueParts.hours).padStart(2, '0')}:${String(dueParts.minutes).padStart(2, '0')}`;
-
-    if (isToday) {
-      return `Vence hoje, às ${timeStr}`;
-    }
-
-    if (isTomorrow) {
-      return `Vence amanhã, às ${timeStr}`;
-    }
-
-    const days = Math.floor(totalHours / 24);
-    const remHours = totalHours % 24;
-
-    if (days >= 1 && remHours > 0) {
-      return `Faltam ${days} ${days === 1 ? 'dia' : 'dias'} e ${remHours}h`;
-    }
-
-    if (days >= 1) {
-      return `Faltam ${days} ${days === 1 ? 'dia' : 'dias'}`;
-    }
-
-    return `Vence em ${totalHours}h`;
-  }
-
-  // Format due date for clean display with accurate time
-  function formatDueDisplay(dueAt?: string): string {
-    if (!dueAt) return 'Sem prazo registrado';
-    const parts = getSaoPauloDateParts(dueAt);
-    const day = String(parts.day).padStart(2, '0');
-    const month = String(parts.month + 1).padStart(2, '0');
-    const hours = String(parts.hours).padStart(2, '0');
-    const mins = String(parts.minutes).padStart(2, '0');
-    return `${day}/${month} às ${hours}:${mins}`;
-  }
-
-  // Format timestamp with date and time
-  function formatDateWithTime(dateStr?: string): string {
-    if (!dateStr) return '--';
-    const parts = getSaoPauloDateParts(dateStr);
-    const day = String(parts.day).padStart(2, '0');
-    const month = String(parts.month + 1).padStart(2, '0');
-    const hours = String(parts.hours).padStart(2, '0');
-    const mins = String(parts.minutes).padStart(2, '0');
-    return `${day}/${month} às ${hours}:${mins}`;
+    const dl = calculateEditorialDeadlineStatus(item.dueAt, item.status, {
+      nowMs: Date.now(),
+      extensionCount: Number(item.extensionCount || 0)
+    });
+    return dl.remainingText;
   }
 
   // Format completed date for clean display
@@ -1343,8 +1291,10 @@
                         </span>
                         {#if item.isOverdue}
                           <span class="event-inline-status overdue">Atrasado</span>
-                        {:else if item.isDueSoon}
-                          <span class="event-inline-status due-soon">Vence hoje</span>
+                        {:else if item.inlineStatusLabel}
+                          <span class="event-inline-status {item.isDueToday ? 'due-today' : (item.isDueTomorrow ? 'due-tomorrow' : 'due-soon')}">
+                            {item.inlineStatusLabel}
+                          </span>
                         {/if}
                       </div>
                     </div>
@@ -3006,10 +2956,16 @@
     background: rgba(239, 68, 68, 0.16);
     border: 1px solid rgba(239, 68, 68, 0.3);
   }
+  .event-inline-status.due-today,
   .event-inline-status.due-soon {
     color: #fbbf24;
     background: rgba(245, 158, 11, 0.16);
     border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  .event-inline-status.due-tomorrow {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.16);
+    border: 1px solid rgba(56, 189, 248, 0.3);
   }
 
   .event-overflow-pill {
@@ -3205,6 +3161,7 @@
 
   .agenda-status-tag.in-progress { color: #c084fc; background: rgba(139, 92, 246, 0.15); }
   .agenda-status-tag.due-soon { color: #fbbf24; background: rgba(245, 158, 11, 0.18); }
+  .agenda-status-tag.due-tomorrow { color: #38bdf8; background: rgba(56, 189, 248, 0.18); }
   .agenda-status-tag.done { color: #34d399; background: rgba(16, 185, 129, 0.15); }
   .agenda-status-tag.overdue { color: #fca5a5; background: rgba(239, 68, 68, 0.18); }
   .agenda-status-tag.extended { color: #22d3ee; background: rgba(6, 182, 212, 0.18); }
@@ -3694,6 +3651,7 @@
 
   .ctx-status-pill.in-progress { color: #c084fc; background: rgba(139, 92, 246, 0.18); }
   .ctx-status-pill.due-soon { color: #fbbf24; background: rgba(245, 158, 11, 0.2); }
+  .ctx-status-pill.due-tomorrow { color: #38bdf8; background: rgba(56, 189, 248, 0.2); }
   .ctx-status-pill.done { color: #34d399; background: rgba(16, 185, 129, 0.18); }
   .ctx-status-pill.overdue { color: #fca5a5; background: rgba(239, 68, 68, 0.22); }
   .ctx-status-pill.extended { color: #22d3ee; background: rgba(6, 182, 212, 0.2); }
@@ -3729,6 +3687,7 @@
 
   .ctx-remaining-badge.in-progress { background: rgba(139, 92, 246, 0.2); color: #c084fc; }
   .ctx-remaining-badge.due-soon { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+  .ctx-remaining-badge.due-tomorrow { background: rgba(56, 189, 248, 0.25); color: #38bdf8; }
   .ctx-remaining-badge.overdue { background: rgba(239, 68, 68, 0.25); color: #f87171; }
   .ctx-remaining-badge.extended { background: rgba(6, 182, 212, 0.25); color: #22d3ee; }
   .ctx-remaining-badge.done { background: rgba(16, 185, 129, 0.2); color: #34d399; }
@@ -4253,6 +4212,7 @@
 
   .sheet-status-pill.in-progress { color: #c084fc; background: rgba(139, 92, 246, 0.18); }
   .sheet-status-pill.due-soon { color: #fbbf24; background: rgba(245, 158, 11, 0.2); }
+  .sheet-status-pill.due-tomorrow { color: #38bdf8; background: rgba(56, 189, 248, 0.2); }
   .sheet-status-pill.done { color: #34d399; background: rgba(16, 185, 129, 0.18); }
   .sheet-status-pill.overdue { color: #fca5a5; background: rgba(239, 68, 68, 0.22); }
   .sheet-status-pill.extended { color: #22d3ee; background: rgba(6, 182, 212, 0.2); }
@@ -4289,6 +4249,7 @@
 
   .sheet-time-badge.in-progress { background: rgba(139, 92, 246, 0.2); color: #c084fc; }
   .sheet-time-badge.due-soon { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+  .sheet-time-badge.due-tomorrow { background: rgba(56, 189, 248, 0.25); color: #38bdf8; }
   .sheet-time-badge.overdue { background: rgba(239, 68, 68, 0.25); color: #f87171; }
   .sheet-time-badge.extended { background: rgba(6, 182, 212, 0.25); color: #22d3ee; }
   .sheet-time-badge.done { background: rgba(16, 185, 129, 0.2); color: #34d399; }
@@ -5419,6 +5380,7 @@
 
     .preview-status-pill.in-progress { background: rgba(139, 92, 246, 0.15); color: #c084fc; }
     .preview-status-pill.due-soon { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+    .preview-status-pill.due-tomorrow { background: rgba(56, 189, 248, 0.18); color: #38bdf8; }
     .preview-status-pill.done { background: rgba(16, 185, 129, 0.15); color: #34d399; }
     .preview-status-pill.overdue { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
     .preview-status-pill.extended { background: rgba(6, 182, 212, 0.18); color: #22d3ee; }

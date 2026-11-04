@@ -31,6 +31,7 @@
     Zap
   } from '@lucide/svelte';
   import { evaluateStageClaim, normalizePositionName } from '$lib/scan-roles';
+  import { calculateEditorialDeadlineStatus, getSaoPauloDateParts } from '$lib/editorial-deadlines';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
   import ClaimStageModal from './ClaimStageModal.svelte';
 
@@ -259,50 +260,36 @@
   let completeFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
   let extendFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
 
-  // Helper to determine stage deadline status and extension eligibility
+  // Helper to determine stage deadline status and extension eligibility via $lib/editorial-deadlines
   function getStageDeadlineInfo(cs: any) {
     if (!cs || !cs.due_at) return null;
     const nowMs = Date.now();
+    const extensionCount = Number(cs.extension_count || 0);
+    const dl = calculateEditorialDeadlineStatus(cs.due_at, cs.status, {
+      nowMs,
+      extensionCount
+    });
+
     const dueMs = new Date(cs.due_at).getTime();
     const diffMs = dueMs - nowMs;
-    const remainingHours = diffMs / (1000 * 60 * 60);
-
-    const spToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    const dueSp = new Date(new Date(cs.due_at).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    const isSameDay = spToday.getFullYear() === dueSp.getFullYear() &&
-                      spToday.getMonth() === dueSp.getMonth() &&
-                      spToday.getDate() === dueSp.getDate();
-
-    const isOverdue = diffMs < 0;
-    const extensionCount = Number(cs.extension_count || 0);
+    const isOverdue = dl.isOverdue;
     const canExtend = (cs.assigned_to === currentUserId || isOwnerOrAdmin) &&
                       cs.status === 'IN_PROGRESS' &&
                       extensionCount === 0 &&
-                      (remainingHours <= 24 || isSameDay) &&
+                      (dl.isDueSoon || dl.isDueToday) &&
                       diffMs > -(4 * 60 * 60 * 1000);
 
-    const dayStr = String(dueSp.getDate()).padStart(2, '0');
-    const monthStr = String(dueSp.getMonth() + 1).padStart(2, '0');
+    const dueSp = getSaoPauloDateParts(cs.due_at);
+    const dayStr = String(dueSp.day).padStart(2, '0');
+    const monthStr = String(dueSp.month + 1).padStart(2, '0');
     const dueFormatted = `${dayStr}/${monthStr}`;
-
-    let countdownText = '';
-    if (isOverdue) {
-      const overdueDays = Math.max(1, Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24)));
-      countdownText = `Atrasado há ${overdueDays}d`;
-    } else if (remainingHours < 24) {
-      const hrs = Math.max(1, Math.round(remainingHours));
-      countdownText = `Vence em ${hrs}h`;
-    } else {
-      const days = Math.round(remainingHours / 24);
-      countdownText = `Vence em ${days}d`;
-    }
 
     return {
       dueFormatted,
-      countdownText,
+      countdownText: dl.remainingText,
       isOverdue,
       canExtend,
-      remainingHours,
+      remainingHours: dl.remainingHours,
       extensionCount
     };
   }

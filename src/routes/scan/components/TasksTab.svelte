@@ -28,6 +28,7 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import { relativeTime } from '$lib/types';
+  import { calculateEditorialDeadlineStatus } from '$lib/editorial-deadlines';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
   import ClaimStageModal from './ClaimStageModal.svelte';
 
@@ -140,18 +141,13 @@
     if (cs.assigned_to !== currentUserId) return false;
     if (Number(cs.extension_count || 0) > 0) return false;
 
-    const nowMs = Date.now();
+    const dl = calculateEditorialDeadlineStatus(cs.due_at, cs.status, {
+      nowMs: Date.now(),
+      extensionCount: Number(cs.extension_count || 0)
+    });
     const dueMs = new Date(cs.due_at).getTime();
-    const diffMs = dueMs - nowMs;
-    const remainingHours = diffMs / (1000 * 60 * 60);
-
-    const spToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    const dueSp = new Date(new Date(cs.due_at).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    const isSameDay = spToday.getFullYear() === dueSp.getFullYear() &&
-                      spToday.getMonth() === dueSp.getMonth() &&
-                      spToday.getDate() === dueSp.getDate();
-
-    return (remainingHours <= 24 || isSameDay) && diffMs > -(4 * 60 * 60 * 1000);
+    const diffMs = dueMs - Date.now();
+    return (dl.isDueSoon || dl.isDueToday) && diffMs > -(4 * 60 * 60 * 1000);
   }
 
   // Effective positions for logged-in user
