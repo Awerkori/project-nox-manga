@@ -103,7 +103,7 @@
 
   <div class="results-meta-bar">
     <span class="count-pill">
-      {data.count} {data.count === 1 ? 'obra encontrada' : 'obras encontradas'}
+      {data.hasMore ? `${data.count}+ obras encontradas` : `${data.count} ${data.count === 1 ? 'obra encontrada' : 'obras encontradas'}`}
     </span>
   </div>
 
@@ -131,13 +131,13 @@
     />
   {/if}
 
-  {#if data.count > 20}
+  {#if data.page > 1 || data.hasMore}
     <div class="pagination-bar">
       {#if data.page > 1}
         <a class="button secondary" href={pageUrl(data.page - 1)}>Anterior</a>
       {/if}
       <span class="page-num">Página {data.page}</span>
-      {#if data.page * 20 < data.count}
+      {#if data.hasMore}
         <a class="button secondary" href={pageUrl(data.page + 1)}>Próxima</a>
       {/if}
     </div>
