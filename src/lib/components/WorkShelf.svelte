@@ -36,6 +36,7 @@
   let currentWorks = $derived([...works, ...extraWorks]);
   let isExpanded = $state(false);
   let loadingMore = $state(false);
+  let loadMoreError = $state(false);
   let hasMore = $state(true);
 
   let scrollContainer: HTMLDivElement | null = $state(null);
@@ -102,6 +103,7 @@
     if (!loadMoreSort || loadingMore || !hasMore) return;
     isExpanded = true;
     loadingMore = true;
+    loadMoreError = false;
     try {
       // Fetch 12 items to neatly fill responsive grid rows (divisible by 6, 4, 3, 2)
       const res = await fetch(`/api/works?sort=${loadMoreSort}&offset=${currentWorks.length}&limit=12`);
@@ -120,6 +122,7 @@
       }
     } catch (err) {
       console.error(err);
+      loadMoreError = true;
     } finally {
       loadingMore = false;
     }
@@ -131,6 +134,7 @@
     } else {
       isExpanded = false;
       extraWorks = [];
+      loadMoreError = false;
     }
   }
 
@@ -295,6 +299,9 @@
     <!-- Expanded Footer (Aligned with Grid) -->
     {#if isExpanded}
       <div class="expanded-footer">
+        {#if loadMoreError}
+          <span class="load-error" role="status">Não foi possível carregar mais obras. Tente novamente.</span>
+        {/if}
         {#if hasMore}
           <button
             type="button"
@@ -327,6 +334,10 @@
 {/if}
 
 <style>
+  .load-error {
+    color: #ffb4ab;
+  }
+
   .shelf-section {
     position: relative;
     margin-bottom: 3.5rem;
