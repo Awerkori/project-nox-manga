@@ -150,7 +150,7 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
         }
       });
     }
-    if (!['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(event.locals.role || '')) {
+    if (!['STAFF_SITE', 'ADMIN', 'EDITOR', 'GERENTE'].includes(event.locals.role || '')) {
       return new Response(JSON.stringify({ message: 'Esta área é exclusiva da equipe editorial.' }), {
         status: 403,
         headers: {

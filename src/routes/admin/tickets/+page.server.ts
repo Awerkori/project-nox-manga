@@ -14,12 +14,12 @@ import { invalidateUserSession } from '$lib/server/session-cache';
 import type { PageServerLoad, Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url, platform }) => {
-  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
+  if (!locals.user || !['ADMIN', 'STAFF_SITE', 'EDITOR', 'GERENTE'].includes(locals.role || '')) {
     throw redirect(303, '/entrar?redirect=/admin/tickets');
   }
 
   const isAdmin = locals.role === 'ADMIN';
-  const isSiteManager = locals.role === 'ADMIN' || locals.role === 'STAFF_SITE';
+  const isSiteManager = locals.role === 'ADMIN' || locals.role === 'GERENTE';
   const requestedTab = url.searchParams.get('tab') || 'relatorios';
 
   // Strict permission guard: non-admin users cannot access 'scans' or 'moderacao',
@@ -159,9 +159,9 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
         rawModeration = res.rows;
       }
 
-      // 4. Scan Work Requests Query (ADMIN ONLY — only fetched when tab === 'obras')
+      // 4. Scan Work Requests Query (SITE MANAGERS: ADMIN OR GERENTE — only fetched when tab === 'obras')
       let rawWorkRequests: any[] = [];
-      if (isAdmin && activeTab === 'obras') {
+      if (isSiteManager && activeTab === 'obras') {
         let query = `
           SELECT 
             r.id, r.scan_id, r.work_id, r.user_id, r.message, r.status,
@@ -238,7 +238,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       const [allReportsRes, allScansRes, allWorkRequestsRes] = await Promise.all([
         executeYugabyteSql(`SELECT id, status, target_type, assigned_to FROM public.reports WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })),
         isAdmin ? executeYugabyteSql(`SELECT id, status, assigned_to FROM public.scan_partner_requests WHERE deleted_at IS NULL;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] }),
-        isAdmin ? executeYugabyteSql(`SELECT id, status FROM public.scan_project_requests;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
+        isSiteManager ? executeYugabyteSql(`SELECT id, status FROM public.scan_project_requests;`, [], platform?.env).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
       ]);
 
       const allReportsMeta = allReportsRes.rows || [];
@@ -509,7 +509,7 @@ export const load: PageServerLoad = async ({ locals, url, platform }) => {
       const pendingScansCount = partnerStatusCounts.PENDING;
       const pendingModerationCount = moderationStatusCounts.NOVO + moderationStatusCounts.EM_ANALISE;
       const pendingWorkRequestsCount = workRequestStatusCounts.PENDING;
-      const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount + pendingWorkRequestsCount) : 0);
+      const totalTicketsCount = pendingReportsCount + (isAdmin ? (pendingScansCount + pendingModerationCount) : 0) + (isSiteManager ? pendingWorkRequestsCount : 0);
 
       return {
         isAdmin,
@@ -1195,8 +1195,8 @@ export const actions: Actions = {
   },
 
   reviewWorkRequest: async ({ request, locals, platform }) => {
-    if (!locals.user || !['ADMIN', 'STAFF_SITE'].includes(locals.role || '')) {
-      return fail(403, { message: 'Acesso negado. Apenas Administradores ou Gerentes Globais autorizados.' });
+    if (!locals.user || !['ADMIN', 'GERENTE'].includes(locals.role || '')) {
+      return fail(403, { message: 'Acesso negado. Apenas administradores e gerentes do site possuem autorização para avaliar adesão de obras.' });
     }
 
     const formData = await request.formData();
@@ -1237,14 +1237,19 @@ export const actions: Actions = {
 
     try {
       if (actionType === 'APPROVE') {
-        // Atomic approval: update request status
-        await executeYugabyteSql(
+        // Atomic approval: update request status checking status = 'PENDING'
+        const updateRes = await executeYugabyteSql(
           `UPDATE public.scan_project_requests
            SET status = 'APPROVED', reviewed_by = $2, reviewed_at = now()
-           WHERE id = $1;`,
+           WHERE id = $1 AND status = 'PENDING'
+           RETURNING id;`,
           [requestId, locals.user.id],
           platform?.env
         );
+
+        if (!updateRes.rows || updateRes.rows.length === 0) {
+          return fail(409, { message: 'Esta solicitação já foi respondida ou alterada por outro administrador.' });
+        }
 
         // If marked as primary, ensure other scans for this work are not primary
         if (isPrimary) {
@@ -1308,14 +1313,19 @@ export const actions: Actions = {
           scanName: targetReq.scan_name
         };
       } else {
-        // Atomic rejection: update request status with reason
-        await executeYugabyteSql(
+        // Atomic rejection: update request status with reason checking status = 'PENDING'
+        const updateRes = await executeYugabyteSql(
           `UPDATE public.scan_project_requests
            SET status = 'REJECTED', reviewed_by = $2, reviewed_at = now(), rejection_reason = $3
-           WHERE id = $1;`,
+           WHERE id = $1 AND status = 'PENDING'
+           RETURNING id;`,
           [requestId, locals.user.id, reason],
           platform?.env
         );
+
+        if (!updateRes.rows || updateRes.rows.length === 0) {
+          return fail(409, { message: 'Esta solicitação já foi respondida ou alterada por outro administrador.' });
+        }
 
         // Audit log
         try {
