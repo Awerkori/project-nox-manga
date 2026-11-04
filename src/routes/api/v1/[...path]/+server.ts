@@ -137,6 +137,12 @@ export const GET = async ({ locals, params, url, platform }: any) => {
       },
       platformEnv
     );
+    if (search.isDegraded) {
+      return json({ error: 'Catálogo temporariamente indisponível' }, {
+        status: 503,
+        headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'private, no-store' }
+      });
+    }
     return json({ data: search.works, page, per_page: limit, total: search.total }, {
       headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' }
     });
