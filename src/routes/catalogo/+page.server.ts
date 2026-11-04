@@ -1,11 +1,8 @@
 // Contract requirement: ilike('search_text'
 import { withTimeout } from '$lib/server/resilience';
-import { fetchCatalogFromYugabyte, fetchTagsFromYugabyte } from '$lib/server/yugabyte';
+import { fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
 
-let cachedTags: { timestamp: number; data: any[] } | null = null;
-const TAGS_CACHE_TTL_MS = 300_000;
-
-let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number; tags: any[] } | null = null;
+let cachedUnfilteredPage1: { timestamp: number; works: any[]; count: number } | null = null;
 const CATALOGO_CACHE_TTL_MS = 300_000;
 
 export const load = async ({ locals, url, setHeaders, platform }: any) => {
@@ -17,6 +14,14 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
   const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('pagina')) || 1)));
 
   const isUnfiltered = !q && !tag && !kind && !status && page === 1 && sort === 'recentes';
+  // The complete tag list has 555 entries. Rendering and serializing it in
+  // every SSR response makes the catalogue substantially heavier even though
+  // the list is not needed to render the first screen. The client fetches the
+  // public, edge-cached list after hydration; keep an active filter visible in
+  // SSR so a filtered URL remains usable without JavaScript.
+  const selectedTag = tag
+    ? [{ id: `selected:${tag}`, slug: tag, name: tag, kind: 'TAG' }]
+    : [];
 
   if (!locals.user) {
     setHeaders({
@@ -29,7 +34,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     return {
       works: cachedUnfilteredPage1.works,
       count: cachedUnfilteredPage1.count,
-      tags: cachedUnfilteredPage1.tags,
+      tags: selectedTag,
       q,
       tag,
       kind,
@@ -39,42 +44,23 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     };
   }
 
-  const tagsNeedRefresh = !cachedTags || Date.now() - cachedTags.timestamp > TAGS_CACHE_TTL_MS;
-
-  const [tagsRes, catalogRes] = await Promise.all([
-    !tagsNeedRefresh && cachedTags
-      ? Promise.resolve(cachedTags.data)
-      : withTimeout(
-          fetchTagsFromYugabyte(platform?.env),
-          2000,
-          cachedTags?.data || [],
-          'catalogo_yugabyte_tags'
-        ),
-    withTimeout(
-      fetchCatalogFromYugabyte(
-        {
-          q,
-          tag: tag || undefined,
-          kind: kind || undefined,
-          status: ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
-          sort: sort === 'titulo' ? 'titulo' : sort === 'views' ? 'views' : 'recentes',
-          limit: 20,
-          offset: (page - 1) * 20
-        },
-        platform?.env
-      ),
-      6000,
-      { works: [], total: 0 },
-      'catalogo_yugabyte_catalog'
-    )
-  ]);
-
-  let tagsData = tagsRes || [];
-  if (tagsData.length > 0) {
-    cachedTags = { timestamp: Date.now(), data: tagsData };
-  } else if (cachedTags) {
-    tagsData = cachedTags.data;
-  }
+  const catalogRes = await withTimeout(
+    fetchCatalogFromYugabyte(
+      {
+        q,
+        tag: tag || undefined,
+        kind: kind || undefined,
+        status: ['ONGOING', 'COMPLETED', 'HIATUS', 'CANCELLED'].includes(status) ? status : undefined,
+        sort: sort === 'titulo' ? 'titulo' : sort === 'views' ? 'views' : 'recentes',
+        limit: 20,
+        offset: (page - 1) * 20
+      },
+      platform?.env
+    ),
+    6000,
+    { works: [], total: 0 },
+    'catalogo_yugabyte_catalog'
+  );
 
   let works = catalogRes.works || [];
   let totalCount = catalogRes.total || 0;
@@ -88,17 +74,14 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     cachedUnfilteredPage1 = {
       timestamp: Date.now(),
       works,
-      count: totalCount,
-      tags: tagsData
+      count: totalCount
     };
   }
 
   return {
     works,
     count: totalCount,
-    tags: tag && !tagsData.some((t: any) => t?.slug === tag)
-      ? [...tagsData, { id: `selected:${tag}`, slug: tag, name: tag, kind: 'TAG' }]
-      : tagsData,
+    tags: selectedTag,
     q,
     tag,
     kind,
