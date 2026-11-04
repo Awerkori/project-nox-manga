@@ -21,9 +21,9 @@ test('work redesign remains intentional and usable from 320px through desktop', 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await page.goto('/preview-work');
-    await expect(page.locator('.work-hero')).toBeVisible();
+    await expect(page.locator('.work-hero-section')).toBeVisible();
     await expect(page.getByRole('heading', { name: /títulos alternativos/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /gêneros e tags/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /gêneros & temas/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /^capítulos$/i })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${viewport.name} has horizontal overflow`).toBe(true);
     await page.screenshot({ path: `test-results/work-page-redesign/${viewport.name}.png`, fullPage: true });
@@ -34,13 +34,14 @@ test('alternative titles expand and chapter labels omit the site-default languag
   await preview(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/preview-work');
-  await expect(page.getByRole('button', { name: /ver todos/i })).toBeVisible();
-  await page.getByRole('button', { name: /ver todos/i }).click();
+  const aliasesToggle = page.getByRole('button', { name: /ver todos os \d+ títulos/i });
+  await expect(aliasesToggle).toBeVisible();
+  await aliasesToggle.click();
   await expect(page.getByText('Romanized Alternate Title')).toBeVisible();
-  await expect(page.locator('.chapter-name').first()).toHaveText('Capítulo 1');
+  await expect(page.locator('.chapter-label').first()).toHaveText('Capítulo 1');
   await expect(page.getByText('Capítulo 5 · en', { exact: true })).toBeVisible();
   await expect(page.getByText('Capítulo 12.10', { exact: true })).toBeVisible();
   await expect(page.getByText('Capítulo 7 · collector', { exact: true })).toBeVisible();
-  await expect(page.locator('.chapter-list')).not.toContainText('pt-BR');
+  await expect(page.locator('.chapter-list-wrap')).not.toContainText('pt-BR');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
