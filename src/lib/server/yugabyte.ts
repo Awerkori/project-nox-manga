@@ -1311,7 +1311,7 @@ export async function fetchCatalogFromYugabyte(
     return { works, total: includeTotal ? 0 : offset + works.length, hasMore };
   };
 
-  return withYugabyteLkg(
+  return withYugabyteLkg<{ works: YugabyteWork[]; total: number; hasMore: boolean; isDegraded?: boolean }>(
     cacheKey,
     async () => {
       if (isUnfiltered) {
