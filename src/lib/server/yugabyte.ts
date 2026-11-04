@@ -57,8 +57,7 @@ export async function withYugabyteLkg<T>(
   op: string,
   fetcher: () => Promise<T>,
   fallbackDefault: T,
-  cacheTtlMs = 0,
-  onFresh?: (data: T) => void
+  cacheTtlMs = 0
 ): Promise<T> {
   const isTestEnv = typeof process !== 'undefined' && Boolean(process.env?.VITEST || process.env?.NODE_ENV === 'test');
   if (cacheTtlMs > 0 && !isTestEnv) {
@@ -79,10 +78,7 @@ export async function withYugabyteLkg<T>(
       const data = await Promise.resolve().then(fetcher);
       // A flight replaced after the maximum age may still finish later. Its
       // older result must not overwrite a newer successful response.
-      if (!superseded) {
-        setLkg(op, data);
-        try { onFresh?.(data); } catch { /* cache is best-effort */ }
-      }
+      if (!superseded) setLkg(op, data);
       return data;
     } catch (err: any) {
       const dur = Math.round(performance.now() - start);
@@ -1284,8 +1280,7 @@ export async function fetchTagsFromYugabyte(platformEnv?: any): Promise<Yugabyte
  */
 export async function fetchCatalogFromYugabyte(
   options: YugabyteCatalogOptions = {},
-  platformEnv?: any,
-  onFresh?: (data: { works: YugabyteWork[]; total: number; hasMore: boolean; isDegraded?: boolean }) => void
+  platformEnv?: any
 ): Promise<{ works: YugabyteWork[]; total: number; hasMore: boolean; isDegraded?: boolean }> {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
@@ -1444,8 +1439,7 @@ export async function fetchCatalogFromYugabyte(
       return { ...page, total: includeTotal && res.rows.length > 0 ? Number(res.rows[0].total_count) : page.total };
     },
     { works: [], total: 0, hasMore: false, isDegraded: true },
-    isUnfiltered ? 60_000 : 45_000,
-    onFresh
+    isUnfiltered ? 60_000 : 45_000
   );
 }
 

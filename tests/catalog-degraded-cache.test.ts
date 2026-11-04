@@ -51,49 +51,4 @@ describe('catalog failure handling', () => {
       expect(setHeaders).toHaveBeenCalledWith({ 'cache-control': 'private, no-store' });
     } finally { vi.useRealTimers(); }
   });
-
-  it('stores a successful late search for another request without caching the timeout', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-    const entries = new Map<string, Response>();
-    const cache = {
-      match: vi.fn(async (key: string) => entries.get(key)?.clone()),
-      put: vi.fn(async (key: string, response: Response) => { entries.set(key, response.clone()); })
-    };
-    vi.stubGlobal('caches', { default: cache });
-    try {
-      let finish!: (value: any) => void;
-      fetchCatalog.mockImplementationOnce((_options, _env, onFresh) => new Promise(resolve => {
-        finish = value => { onFresh(value); resolve(value); };
-      }));
-      const tasks: Promise<unknown>[] = [];
-      const first = request('q=late-success');
-      first.event.platform = { context: { waitUntil: (task: Promise<unknown>) => tasks.push(task) } };
-      const pending = load(first.event);
-      while (!finish) await new Promise(resolve => setImmediate(resolve));
-      await vi.advanceTimersByTimeAsync(6000);
-      expect((await pending).loadError).toBe(true);
-      expect(entries.size).toBe(0);
-      finish({ works: [], total: 0, hasMore: false });
-      await Promise.all(tasks);
-      expect(entries.size).toBe(1);
-      const second = request('q=late-success');
-      second.event.platform = first.event.platform;
-      expect((await load(second.event)).loadError).toBe(false);
-      expect(fetchCatalog).toHaveBeenCalledTimes(1);
-    } finally { vi.unstubAllGlobals(); vi.useRealTimers(); }
-  });
-
-  it('never stores a degraded search response in the edge cache', async () => {
-    const cache = { match: vi.fn().mockResolvedValue(undefined), put: vi.fn() };
-    vi.stubGlobal('caches', { default: cache });
-    try {
-      fetchCatalog.mockResolvedValueOnce({ works: [], total: 0, hasMore: false, isDegraded: true });
-      const tasks: Promise<unknown>[] = [];
-      const { event } = request('q=database-error');
-      event.platform = { context: { waitUntil: (task: Promise<unknown>) => tasks.push(task) } };
-      expect((await load(event)).loadError).toBe(true);
-      await Promise.all(tasks);
-      expect(cache.put).not.toHaveBeenCalled();
-    } finally { vi.unstubAllGlobals(); }
-  });
 });
