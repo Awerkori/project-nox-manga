@@ -83,6 +83,16 @@
     return stage?.color || '#8b5cf6';
   }
 
+  // Stage-specific contextual placeholder for observations
+  function getContextualNotesPlaceholder(stage: any): string {
+    const name = getCanonicalStageName(stage);
+    if (name === 'Tradução') return 'Ex.: Pretendo concluir a tradução amanhã.';
+    if (name === 'Clean/Redraw') return 'Ex.: Vou finalizar a limpeza e o redraw das páginas.';
+    if (name === 'Typeset') return 'Ex.: Pretendo concluir a diagramação até sexta.';
+    if (name === 'Revisor (QC)') return 'Ex.: Vou revisar as páginas e registrar eventuais correções.';
+    return 'Ex.: Pretendo entregar esta etapa no prazo planejado.';
+  }
+
   let stageDisplayName = $derived(getCanonicalStageName(stageItem?.stage));
   let stageDisplayColor = $derived(getCanonicalStageColor(stageItem?.stage));
 
@@ -99,29 +109,12 @@
   });
 
   // Dynamically derive allowed date options according to backend rule:
-  // Strictly up to 3 calendar days ahead in America/Sao_Paulo timezone.
-  // Can be bounded if stageItem defines maxAllowedDays, maxDays or chapter.due_at.
+  // Strictly 4 options: Hoje, Amanhã, +2 dias, +3 dias ahead in America/Sao_Paulo timezone.
   let maxAllowedOffset = $derived.by(() => {
-    // Current SP time is tracked reactively via currentTimestamp
     const _ = currentTimestamp;
     let limit = 3;
     if (typeof stageItem?.maxAllowedDays === 'number') {
-      limit = Math.min(limit, Math.max(0, stageItem.maxAllowedDays));
-    } else if (typeof stageItem?.maxDays === 'number') {
-      limit = Math.min(limit, Math.max(0, stageItem.maxDays));
-    }
-    const chapterDue = stageItem?.chapter?.due_at || stageItem?.productionChapter?.due_at || stageItem?.chapterDueAt;
-    if (chapterDue) {
-      const nowSp = getSaoPauloDateParts(currentTimestamp);
-      const chDueSp = getSaoPauloDateParts(chapterDue);
-      const nowUtc = Date.UTC(nowSp.year, nowSp.month, nowSp.day);
-      const chUtc = Date.UTC(chDueSp.year, chDueSp.month, chDueSp.day);
-      const diffDays = Math.floor((chUtc - nowUtc) / (1000 * 60 * 60 * 24));
-      if (diffDays >= 0 && diffDays < limit) {
-        limit = diffDays;
-      } else if (diffDays < 0) {
-        limit = 0;
-      }
+      limit = Math.min(3, Math.max(0, stageItem.maxAllowedDays));
     }
     return limit;
   });
@@ -135,6 +128,7 @@
       weekday: string;
       dayMonth: string;
       fullDateStr: string;
+      formattedSummary: string;
     }> = [];
 
     for (let offset = 0; offset <= maxAllowedOffset; offset++) {
@@ -150,6 +144,8 @@
       else label = `+${offset} dias`;
 
       const weekdayShort = d.toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
+      const weekdayLong = d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' });
+      const monthLong = d.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'UTC' });
       const day = String(d.getUTCDate()).padStart(2, '0');
       const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       const dayMonth = `${day}/${month}`;
@@ -161,17 +157,25 @@
         timeZone: 'UTC'
       });
 
+      // Format for compact summary: "sábado, 7 de novembro, até 23h59."
+      const formattedSummary = `${weekdayLong}, ${d.getUTCDate()} de ${monthLong}, até 23h59.`;
+
       list.push({
         offset,
         label,
         ymd,
         weekday: weekdayShort.charAt(0).toUpperCase() + weekdayShort.slice(1),
         dayMonth,
-        fullDateStr: fullDateStr.charAt(0).toUpperCase() + fullDateStr.slice(1)
+        fullDateStr: fullDateStr.charAt(0).toUpperCase() + fullDateStr.slice(1),
+        formattedSummary
       });
     }
     return list;
   });
+
+  let contextualPlaceholder = $derived(
+    getContextualNotesPlaceholder(stageItem?.stage)
+  );
 
   // State management
   let selectedYMD = $state('');
@@ -237,8 +241,8 @@
             <CalendarIcon size={16} />
           </div>
           <div class="header-titles">
-            <h2 id="claim-modal-title" class="modal-title">Assumir Etapa</h2>
-            <p class="modal-subtitle">Escolha o prazo de entrega (até 3 dias corridos).</p>
+            <h2 id="claim-modal-title" class="modal-title">Defina seu prazo de entrega</h2>
+            <p class="modal-subtitle">Escolha quando pretende concluir esta etapa. Você tem até 3 dias corridos.</p>
           </div>
         </div>
         <button
@@ -358,14 +362,14 @@
           <div class="selected-summary-card">
             <Clock size={15} class="summary-clock-icon text-purple-400" />
             <div class="summary-text-block">
-              <span class="summary-sub-txt">Entrega definida para:</span>
+              <span class="summary-sub-txt">Entrega prevista:</span>
               <strong class="summary-val-txt">
-                {selectedOption?.fullDateStr} às 23:59 (Horário de Brasília)
+                {selectedOption?.formattedSummary || 'Selecione uma data'}
               </strong>
             </div>
           </div>
 
-          <!-- 5. OBSERVAÇÕES OPCIONAIS -->
+          <!-- 5. OBSERVAÇÕES OPCIONAIS (Contextual por etapa) -->
           <div class="notes-block">
             <div class="notes-label-bar">
               <label for="claim-notes" class="notes-lbl">Observações (opcional)</label>
@@ -377,7 +381,7 @@
               bind:value={notes}
               maxlength="500"
               rows="2"
-              placeholder="Ex.: Tradução em andamento; revisarei até o final da tarde."
+              placeholder={contextualPlaceholder}
               class="notes-input"
               disabled={isSubmitting}
             ></textarea>

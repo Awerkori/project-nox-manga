@@ -116,6 +116,7 @@
   let activeViewMode = $state<'MONTH' | 'AGENDA'>('MONTH');
 
   // Filters State
+  let filterScope = $state<'ALL' | 'EDITORIAL' | 'HISTORY'>('ALL'); // ALL | EDITORIAL (active SLA) | HISTORY (RAW / done)
   let filterStageSlug = $state<string>('ALL');
   let filterAssigneeId = $state<string>('ALL');
   let filterStatus = $state<string>('ALL'); // ALL | IN_PROGRESS | DUE_SOON | DONE | OVERDUE | EXTENDED
@@ -143,13 +144,14 @@
   }
 
   function clearAllFilters() {
+    filterScope = 'ALL';
     filterStageSlug = 'ALL';
     filterAssigneeId = 'ALL';
     filterStatus = 'ALL';
   }
 
   let hasActiveFilters = $derived(
-    filterStageSlug !== 'ALL' || filterAssigneeId !== 'ALL' || filterStatus !== 'ALL'
+    filterScope !== 'ALL' || filterStageSlug !== 'ALL' || filterAssigneeId !== 'ALL' || filterStatus !== 'ALL'
   );
 
   // Month navigation
@@ -252,6 +254,10 @@
       const chapterNumber = pc?.chapter_number || '1';
       const chapterLabel = pc?.chapter_label || null;
 
+      const isEditorialStage = ['traducao', 'clean_redraw', 'clean', 'typeset', 'revisor_qc', 'qc', 'revisao'].includes(stageSlug.toLowerCase());
+      const isHistorical = ['raw', 'raw_provider', 'pre_aprovado', 'publicado'].includes(stageSlug.toLowerCase()) || (stageSlug.toLowerCase() === 'raw');
+      const category: 'EDITORIAL' | 'HISTORY' = isEditorialStage ? 'EDITORIAL' : 'HISTORY';
+
       const assigneeObj = cs.assignee || cs.completer || (cs.assigned_to ? teamMap.get(cs.assigned_to) : (cs.completed_by ? teamMap.get(cs.completed_by) : null));
 
       let dueYMD = '';
@@ -313,9 +319,9 @@
       let statusLabel = 'Em andamento';
 
       if (cs.status === 'DONE') {
-        statusClass = 'done';
+        statusClass = isHistorical ? 'done historical' : 'done';
         statusColor = '#10b981';
-        statusLabel = 'Concluído';
+        statusLabel = isHistorical ? 'Histórico (Concluído)' : 'Concluído';
       } else if (isOverdue) {
         statusClass = 'overdue';
         statusColor = '#ef4444';
@@ -364,7 +370,10 @@
         unlockDateTimeStr,
         extendedDateTimeStr,
         isMine,
-        canUserExtend
+        canUserExtend,
+        isEditorialStage,
+        isHistorical,
+        category
       });
     }
 
@@ -428,7 +437,10 @@
         unlockDateTimeStr: '',
         extendedDateTimeStr: '',
         isMine: t.assigned_to === currentUserId,
-        canUserExtend: false
+        canUserExtend: false,
+        isEditorialStage: false,
+        isHistorical: t.status === 'DONE',
+        category: 'TASK'
       });
     }
 
@@ -438,6 +450,10 @@
   // Filtered commitments based on active filters, strictly sorted chronologically
   let filteredCommitments = $derived.by(() => {
     const list = allCommitments.filter((item) => {
+      // Scope filter (Editorial SLA vs Production History)
+      if (filterScope === 'EDITORIAL' && !item.isEditorialStage) return false;
+      if (filterScope === 'HISTORY' && !item.isHistorical && item.status !== 'DONE') return false;
+
       // Stage filter
       if (filterStageSlug !== 'ALL' && item.stageSlug !== filterStageSlug) {
         return false;
@@ -464,6 +480,24 @@
       const bTime = b.dueAt ? new Date(b.dueAt).getTime() : (b.completedAt ? new Date(b.completedAt).getTime() : 0);
       return aTime - bTime;
     });
+  });
+
+  // Accurate breakdown counters
+  let activeEditorialCount = $derived(
+    filteredCommitments.filter((c) => c.isEditorialStage && c.status === 'IN_PROGRESS').length
+  );
+  let completedHistoryCount = $derived(
+    filteredCommitments.filter((c) => c.isHistorical || c.status === 'DONE').length
+  );
+
+  // My next impending active delivery (only if user has active editorial assignment)
+  let myNextCommitment = $derived.by(() => {
+    const myActive = allCommitments.filter(
+      (c) => c.isMine && c.status === 'IN_PROGRESS' && c.isEditorialStage && c.dueAt
+    );
+    if (myActive.length === 0) return null;
+    myActive.sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+    return myActive[0];
   });
 
   // Group commitments by YMD date
@@ -519,6 +553,70 @@
       return list;
     }
 
+    function getMobileCellRepresentation(coms: any[]): {
+      visibleAssignees: Array<{
+        user: any;
+        color: string;
+        isMine: boolean;
+        hasOverdue: boolean;
+        isDueSoon: boolean;
+        isDone: boolean;
+      }>;
+      hiddenCount: number;
+    } {
+      if (!coms || coms.length === 0) {
+        return { visibleAssignees: [], hiddenCount: 0 };
+      }
+
+      // Prioritize: Overdue > Mine/DueSoon > InProgress > Concluded
+      const sorted = [...coms].sort((a, b) => {
+        if (a.isOverdue && !b.isOverdue) return -1;
+        if (!a.isOverdue && b.isOverdue) return 1;
+        if (a.isMine && a.isDueSoon && !(b.isMine && b.isDueSoon)) return -1;
+        if (!(a.isMine && a.isDueSoon) && b.isMine && b.isDueSoon) return 1;
+        if (a.isMine && !b.isMine) return -1;
+        if (!a.isMine && b.isMine) return 1;
+        if (a.isDueSoon && !b.isDueSoon) return -1;
+        if (!a.isDueSoon && b.isDueSoon) return 1;
+        if (a.status === 'IN_PROGRESS' && b.status !== 'IN_PROGRESS') return -1;
+        if (a.status !== 'IN_PROGRESS' && b.status === 'IN_PROGRESS') return 1;
+        return 0;
+      });
+
+      const seenUserIds = new Set<string>();
+      const visible: Array<{
+        user: any;
+        color: string;
+        isMine: boolean;
+        hasOverdue: boolean;
+        isDueSoon: boolean;
+        isDone: boolean;
+      }> = [];
+
+      for (const c of sorted) {
+        const u = c.assignee;
+        const uid = u?.id || c.assignedTo || 'anon_' + visible.length;
+        if (!seenUserIds.has(uid) && visible.length < 2) {
+          seenUserIds.add(uid);
+          visible.push({
+            user: u,
+            color: c.stageColor || '#8b5cf6',
+            isMine: c.isMine,
+            hasOverdue: c.isOverdue,
+            isDueSoon: c.isDueSoon,
+            isDone: c.status === 'DONE'
+          });
+        }
+      }
+
+      const hiddenCount = Math.max(0, coms.length - visible.length);
+
+      return {
+        visibleAssignees: visible,
+        hiddenCount
+      };
+    }
+
     // Leading days
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const day = daysInPrevMonth - i;
@@ -526,6 +624,7 @@
       const ymd = formatYMDFromParts(prevDate.getFullYear(), prevDate.getMonth(), prevDate.getDate());
       const coms = commitmentsByDateMap.get(ymd) || [];
       const pubs = publicationsByDateMap.get(ymd) || [];
+      const rep = getMobileCellRepresentation(coms);
       cells.push({
         dayNumber: day,
         ymd,
@@ -534,6 +633,8 @@
         isSelected: ymd === selectedDateYMD,
         commitments: coms,
         uniqueAssignees: getUniqueAssignees(coms),
+        mobileAssignees: rep.visibleAssignees,
+        mobileHiddenCount: rep.hiddenCount,
         publications: pubs,
         hasOverdue: coms.some((c: any) => c.isOverdue),
         hasMine: coms.some((c: any) => c.isMine),
@@ -547,6 +648,7 @@
       const ymd = formatYMDFromParts(currentYear, currentMonth, day);
       const coms = commitmentsByDateMap.get(ymd) || [];
       const pubs = publicationsByDateMap.get(ymd) || [];
+      const rep = getMobileCellRepresentation(coms);
       cells.push({
         dayNumber: day,
         ymd,
@@ -555,6 +657,8 @@
         isSelected: ymd === selectedDateYMD,
         commitments: coms,
         uniqueAssignees: getUniqueAssignees(coms),
+        mobileAssignees: rep.visibleAssignees,
+        mobileHiddenCount: rep.hiddenCount,
         publications: pubs,
         hasOverdue: coms.some((c: any) => c.isOverdue),
         hasMine: coms.some((c: any) => c.isMine),
@@ -572,6 +676,7 @@
         const ymd = formatYMDFromParts(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
         const coms = commitmentsByDateMap.get(ymd) || [];
         const pubs = publicationsByDateMap.get(ymd) || [];
+        const rep = getMobileCellRepresentation(coms);
         cells.push({
           dayNumber: day,
           ymd,
@@ -580,6 +685,8 @@
           isSelected: ymd === selectedDateYMD,
           commitments: coms,
           uniqueAssignees: getUniqueAssignees(coms),
+          mobileAssignees: rep.visibleAssignees,
+          mobileHiddenCount: rep.hiddenCount,
           publications: pubs,
           hasOverdue: coms.some((c: any) => c.isOverdue),
           hasMine: coms.some((c: any) => c.isMine),
@@ -707,6 +814,14 @@
   // Active filter chips for quick removal
   let activeFilterChips = $derived.by(() => {
     const chips: Array<{ id: string; label: string; onRemove: () => void }> = [];
+    if (filterScope !== 'ALL') {
+      const scopeLabel = filterScope === 'EDITORIAL' ? 'Entregas (SLA)' : 'Histórico';
+      chips.push({
+        id: 'scope',
+        label: `Escopo: ${scopeLabel}`,
+        onRemove: () => { filterScope = 'ALL'; }
+      });
+    }
     if (filterStageSlug !== 'ALL') {
       const stageName = filterStageSlug === 'tarefa' ? 'Tarefas Gerais' : getCanonicalStageName(filterStageSlug);
       chips.push({
@@ -895,6 +1010,19 @@
         <span>Minhas entregas</span>
       </button>
 
+      <!-- Scope Filter (Entregas vs Histórico) -->
+      <div class="filter-select-wrapper">
+        <select
+          bind:value={filterScope}
+          class="filter-native-select"
+          aria-label="Filtrar por escopo"
+        >
+          <option value="ALL">Todas as tarefas & histórico</option>
+          <option value="EDITORIAL">Entregas editoriais (SLA)</option>
+          <option value="HISTORY">Histórico (RAW / Concluídos)</option>
+        </select>
+      </div>
+
       <!-- Stage Filter -->
       <div class="filter-select-wrapper">
         <select
@@ -995,7 +1123,10 @@
         {/if}
 
         <span class="mobile-stat-count">
-          <strong>{filteredCommitments.length}</strong> {filteredCommitments.length === 1 ? 'item' : 'itens'}
+          <strong>{activeEditorialCount}</strong> {activeEditorialCount === 1 ? 'entrega' : 'entregas'}
+          {#if completedHistoryCount > 0}
+            <span class="stat-sub">({completedHistoryCount} hist.)</span>
+          {/if}
         </span>
       </div>
 
@@ -1019,7 +1150,11 @@
     <!-- Total Commitments Counter (Desktop) -->
     <div class="filters-right-meta desktop-only-filters">
       <span class="commitments-stat-pill">
-        <strong>{filteredCommitments.length}</strong> compromisso{filteredCommitments.length === 1 ? '' : 's'}
+        <strong>{activeEditorialCount}</strong> {activeEditorialCount === 1 ? 'entrega ativa' : 'entregas ativas'}
+        {#if completedHistoryCount > 0}
+          <span class="stat-sep">•</span>
+          <span class="stat-muted">{completedHistoryCount} histórico</span>
+        {/if}
       </span>
     </div>
   </section>
@@ -1029,6 +1164,65 @@
     <!-- LEFT / MAIN: MONTH GRID OR AGENDA VIEW -->
     <main class="calendar-primary-container">
       {#if activeViewMode === 'MONTH'}
+        <!-- ANDROID / MOBILE: MINHA PRÓXIMA ENTREGA (Compact Highlight Card) -->
+        {#if myNextCommitment}
+          <div class="mobile-next-delivery-card mobile-only-widget">
+            <div class="mobile-next-left">
+              <div class="mobile-next-thumb">
+                {#if myNextCommitment.workCoverId}
+                  <img
+                    src="/media/{myNextCommitment.workCoverId}"
+                    alt={myNextCommitment.workTitle}
+                    class="mobile-next-cover-img"
+                    loading="lazy"
+                  />
+                {:else}
+                  <div class="mobile-next-cover-fallback">
+                    <BookOpen size={14} />
+                  </div>
+                {/if}
+              </div>
+              <div class="mobile-next-info">
+                <div class="mobile-next-tag-row">
+                  <span class="mobile-next-kicker">Minha entrega</span>
+                  <span class="mobile-next-stage-pill" style="--st-c: {myNextCommitment.stageColor}">
+                    {myNextCommitment.stageName}
+                  </span>
+                </div>
+                <div class="mobile-next-work-title">
+                  <strong>{myNextCommitment.workTitle}</strong> #{myNextCommitment.chapterNumber}
+                </div>
+                <div class="mobile-next-due-line">
+                  <span>{formatDueDisplay(myNextCommitment.dueAt)}</span>
+                  <span class="mobile-next-dot">•</span>
+                  <span class="mobile-next-rem">{getRemainingText(myNextCommitment)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mobile-next-right">
+              {#if myNextCommitment.extensionState === 'AVAILABLE'}
+                <button
+                  type="button"
+                  class="btn-mobile-next-extend"
+                  onclick={() => openExtensionModal(myNextCommitment)}
+                >
+                  <Zap size={12} />
+                  <span>Prorrogar +2d</span>
+                </button>
+              {:else if myNextCommitment.extensionState === 'EXTENDED'}
+                <span class="mobile-next-badge-ext" title="Prorrogado até {myNextCommitment.extendedDateTimeStr}">
+                  <Check size={11} /> +2d
+                </span>
+              {:else if myNextCommitment.extensionState === 'LOCKED'}
+                <span class="mobile-next-badge-lock" title="Disponível nas últimas 24h">
+                  <Lock size={11} /> 24h
+                </span>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
         <div class="calendar-monthly-card">
           <!-- Weekday Labels Header -->
           <div class="weekday-labels-row">
@@ -1071,6 +1265,7 @@
                   {#each cell.commitments.slice(0, 2) as item}
                     <div
                       class="day-event-card {item.statusClass}"
+                      class:historical={item.isHistorical}
                       style="--stage-accent: {item.stageColor}"
                       title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || item.assignee?.username || 'Membro'}"
                       onclick={(e) => { e.stopPropagation(); handleSelectDay(cell.ymd); contextPanelExpandedId = item.id; }}
@@ -1080,9 +1275,12 @@
                     >
                       <div class="event-card-top-row">
                         <span class="event-stage-tag">{item.stageName}</span>
+                        <span class="event-dot-sep">·</span>
                         <span class="event-work-text">{item.workTitle}</span>
-                        <span class="event-ch-pill">#{item.chapterNumber}</span>
-                        {#if item.extensionCount > 0 && item.status !== 'DONE'}
+                        <span class="event-ch-pill">Cap. #{item.chapterNumber}</span>
+                        {#if item.isHistorical}
+                          <span class="event-hist-tag">Histórico</span>
+                        {:else if item.extensionCount > 0 && item.status !== 'DONE'}
                           <span class="event-ext-tag">+2d</span>
                         {/if}
                         {#if item.status === 'DONE'}
@@ -1091,11 +1289,16 @@
                       </div>
                       <div class="event-card-sub-row">
                         <div class="event-avatar-wrap">
-                          <UserAvatar user={item.assignee} size={16} />
+                          <UserAvatar user={item.assignee} size={18} />
                         </div>
                         <span class="event-user-text">
                           {item.assignee?.display_name || item.assignee?.username || 'Membro'}
                         </span>
+                        {#if item.isOverdue}
+                          <span class="event-inline-status overdue">Atrasado</span>
+                        {:else if item.isDueSoon}
+                          <span class="event-inline-status due-soon">Vence hoje</span>
+                        {/if}
                       </div>
                     </div>
                   {/each}
@@ -1116,30 +1319,27 @@
                   {/each}
                 </div>
 
-                <!-- ANDROID / MOBILE CELL CONTENT: CLEAN UNIFIED INDICATORS -->
+                <!-- ANDROID / MOBILE CELL CONTENT: REAL AVATARS + DISCREET COUNT -->
                 <div class="mobile-day-cell-content">
-                  {#if cell.commitments.length > 0}
-                    <div
-                      class="mobile-commitment-capsule"
-                      class:has-overdue={cell.hasOverdue}
-                      class:has-mine={cell.hasMine}
-                      class:is-all-done={cell.allDone}
-                    >
-                      {#if cell.hasOverdue}
-                        <span class="mobile-capsule-pip overdue" title="Compromisso em atraso"></span>
+                  {#if cell.mobileAssignees && cell.mobileAssignees.length > 0}
+                    <div class="mobile-cell-avatars-row">
+                      {#each cell.mobileAssignees as itemAssignee}
+                        <div class="mobile-avatar-badge" style="--st-c: {itemAssignee.color}">
+                          <UserAvatar user={itemAssignee.user} size={18} />
+                          {#if itemAssignee.hasOverdue}
+                            <span class="mobile-avatar-pip overdue" title="Em atraso"></span>
+                          {:else if itemAssignee.isMine}
+                            <span class="mobile-avatar-pip mine" title="Sua entrega"></span>
+                          {:else if itemAssignee.isDueSoon}
+                            <span class="mobile-avatar-pip due-soon" title="Vence em breve"></span>
+                          {:else if itemAssignee.isDone}
+                            <span class="mobile-avatar-pip done" title="Concluído"></span>
+                          {/if}
+                        </div>
+                      {/each}
+                      {#if cell.mobileHiddenCount > 0}
+                        <span class="mobile-more-pill">+{cell.mobileHiddenCount}</span>
                       {/if}
-                      {#if cell.hasMine}
-                        <span class="mobile-capsule-pip mine" title="Sua entrega agendada"></span>
-                      {/if}
-                      {#if !cell.hasOverdue && !cell.hasMine}
-                        <span
-                          class="mobile-capsule-pip"
-                          class:done={cell.allDone}
-                          class:normal={!cell.allDone}
-                          title={cell.allDone ? 'Entrega concluída' : 'Entrega agendada'}
-                        ></span>
-                      {/if}
-                      <span class="mobile-capsule-count">{cell.commitments.length}</span>
                     </div>
                   {/if}
                 </div>
@@ -1151,7 +1351,7 @@
           <div class="mobile-calendar-legend">
             <div class="legend-chip"><span class="legend-pip mine"></span><span>Minha entrega</span></div>
             <div class="legend-chip"><span class="legend-pip overdue"></span><span>Atrasada</span></div>
-            <div class="legend-chip"><span class="legend-pip pending"></span><span>Agendada</span></div>
+            <div class="legend-chip"><span class="legend-pip pending"></span><span>Vence em breve</span></div>
             <div class="legend-chip"><span class="legend-pip done"></span><span>Concluída</span></div>
           </div>
 
@@ -1296,6 +1496,89 @@
       </header>
 
       <div class="context-panel-body">
+        <!-- MINHA PRÓXIMA ENTREGA (Desktop Pinned Hero) -->
+        {#if myNextCommitment}
+          <div class="next-delivery-hero-card">
+            <div class="next-hero-top">
+              <div class="next-hero-badge">
+                <Sparkles size={12} class="text-amber-400" />
+                <span>Minha próxima entrega</span>
+              </div>
+              {#if myNextCommitment.isOverdue}
+                <span class="next-hero-status overdue">Em atraso</span>
+              {:else if myNextCommitment.extensionCount > 0}
+                <span class="next-hero-status extended">Prorrogado (+2d)</span>
+              {:else if myNextCommitment.isDueSoon}
+                <span class="next-hero-status due-soon">Vence em breve</span>
+              {:else}
+                <span class="next-hero-status normal">No prazo</span>
+              {/if}
+            </div>
+
+            <div class="next-hero-body">
+              <div class="next-hero-cover-box">
+                {#if myNextCommitment.workCoverId}
+                  <img
+                    src="/media/{myNextCommitment.workCoverId}"
+                    alt={myNextCommitment.workTitle}
+                    class="next-hero-cover-img"
+                    loading="lazy"
+                  />
+                {:else}
+                  <div class="next-hero-cover-fallback">
+                    <BookOpen size={16} />
+                  </div>
+                {/if}
+              </div>
+
+              <div class="next-hero-meta">
+                <h4 class="next-hero-title">{myNextCommitment.workTitle}</h4>
+                <div class="next-hero-sub-row">
+                  <span class="next-hero-ch">Capítulo #{myNextCommitment.chapterNumber}</span>
+                  <span class="next-hero-stage" style="--st-c: {myNextCommitment.stageColor}">
+                    {myNextCommitment.stageName}
+                  </span>
+                </div>
+                <div class="next-hero-due-row">
+                  <Clock size={12} class="text-purple-400" />
+                  <span class="next-hero-due-txt">
+                    Vence: <strong>{formatDueDisplay(myNextCommitment.dueAt)}</strong> ({getRemainingText(myNextCommitment)})
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ação Direta de Prorrogação -->
+            <div class="next-hero-action-bar">
+              {#if myNextCommitment.extensionState === 'AVAILABLE'}
+                <button
+                  type="button"
+                  class="btn-next-extend available"
+                  onclick={() => openExtensionModal(myNextCommitment)}
+                >
+                  <Zap size={13} />
+                  <span>⚡ Prorrogar +2 dias</span>
+                </button>
+              {:else if myNextCommitment.extensionState === 'EXTENDED'}
+                <div class="next-ext-notice extended">
+                  <Check size={12} class="text-emerald-400" />
+                  <span>Prazo prorrogado até {myNextCommitment.extendedDateTimeStr || formatDueDisplay(myNextCommitment.dueAt)}.</span>
+                </div>
+              {:else if myNextCommitment.extensionState === 'LOCKED'}
+                <div class="next-ext-notice locked">
+                  <Lock size={12} class="text-cyan-400" />
+                  <span>Prorrogação disponível nas últimas 24h (a partir de {myNextCommitment.unlockDateTimeStr}).</span>
+                </div>
+              {:else if myNextCommitment.extensionState === 'EXPIRED'}
+                <div class="next-ext-notice expired">
+                  <AlertCircle size={12} class="text-rose-400" />
+                  <span>Prazo expirado para prorrogação.</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
         {#if selectedDayCommitments.length > 0}
           <!-- COMMITMENTS FOR SELECTED DAY -->
           <div class="context-commitments-stack">
@@ -1668,6 +1951,9 @@
                 <span class="st-dot"></span>
                 {bottomSheetItem.stageName}
               </span>
+              {#if bottomSheetItem.isHistorical}
+                <span class="sheet-hist-tag">Histórico</span>
+              {/if}
             </div>
           </div>
         </div>
@@ -1689,7 +1975,7 @@
             <div class="sheet-meta-cell">
               <span class="sheet-label">Responsável</span>
               <div class="sheet-user-lockup">
-                <UserAvatar user={bottomSheetItem.assignee} size={18} />
+                <UserAvatar user={bottomSheetItem.assignee} size={20} />
                 <span class="sheet-username">{bottomSheetItem.assignee?.display_name || bottomSheetItem.assignee?.username || 'Membro'}</span>
               </div>
             </div>
@@ -1703,42 +1989,31 @@
           </div>
         </section>
 
-        <!-- 2. Prazo e tempo restante -->
+        <!-- 2. Prazo ou data de conclusão (Sem repetições redundantes) -->
         <section class="sheet-section">
-          <div class="sheet-deadline-banner">
-            <div class="sheet-deadline-left">
-              <span class="sheet-label">
-                {bottomSheetItem.status === 'DONE' ? 'Entrega concluída' : 'Prazo vigente'}
-              </span>
-              {#if bottomSheetItem.status === 'DONE'}
-                <strong class="sheet-due-text done">
-                  {bottomSheetItem.completedAt ? formatDateWithTime(bottomSheetItem.completedAt) : 'Concluído'}
-                </strong>
-              {:else if bottomSheetItem.dueAt}
-                <strong class="sheet-due-text">{formatDueDisplay(bottomSheetItem.dueAt)}</strong>
-              {:else}
-                <strong class="sheet-due-text unrecorded">Sem prazo registrado</strong>
-              {/if}
+          {#if bottomSheetItem.status === 'DONE'}
+            <div class="sheet-concluded-simple-row">
+              <span class="sheet-label">Data de conclusão</span>
+              <strong class="sheet-concluded-date">
+                {bottomSheetItem.completedAt ? formatDateWithTime(bottomSheetItem.completedAt) : (bottomSheetItem.dueAt ? formatDateWithTime(bottomSheetItem.dueAt) : 'Concluído')}
+              </strong>
             </div>
-            {#if bottomSheetItem.status === 'DONE'}
-              <span class="sheet-time-badge done">
-                <Check size={11} />
-                <span>Concluído</span>
-              </span>
-            {:else if bottomSheetItem.isOverdue}
-              <span class="sheet-time-badge overdue">
-                <span>Prazo encerrado</span>
-              </span>
-            {:else if bottomSheetItem.extensionCount > 0}
-              <span class="sheet-time-badge extended">
-                <span>Prorrogado (+2d)</span>
-              </span>
-            {:else if bottomSheetItem.dueAt}
+          {:else if bottomSheetItem.dueAt}
+            <div class="sheet-deadline-banner">
+              <div class="sheet-deadline-left">
+                <span class="sheet-label">Prazo vigente</span>
+                <strong class="sheet-due-text">{formatDueDisplay(bottomSheetItem.dueAt)}</strong>
+              </div>
               <span class="sheet-time-badge {bottomSheetItem.statusClass}">
                 {getRemainingText(bottomSheetItem)}
               </span>
-            {/if}
-          </div>
+            </div>
+          {:else}
+            <div class="sheet-concluded-simple-row">
+              <span class="sheet-label">Prazo</span>
+              <span class="sheet-muted-val">Sem prazo registrado</span>
+            </div>
+          {/if}
         </section>
 
         <!-- 4. Ação de prorrogação (Strictly States A, B, C & Permanence - Hidden for DONE) -->
@@ -2071,6 +2346,27 @@
       </header>
 
       <div class="filter-sheet-body">
+        <!-- Scope section -->
+        <div class="filter-section-block">
+          <span class="filter-section-title">Tipo de Compromisso</span>
+          <div class="filter-pills-flow">
+            {#each [
+              { scope: 'ALL', label: 'Todas as tarefas & histórico' },
+              { scope: 'EDITORIAL', label: 'Entregas editoriais (SLA)' },
+              { scope: 'HISTORY', label: 'Histórico (RAWs / Concluídos)' }
+            ] as opt}
+              <button
+                type="button"
+                class="filter-chip-option"
+                class:is-chosen={filterScope === opt.scope}
+                onclick={() => (filterScope = opt.scope)}
+              >
+                {opt.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+
         <!-- Stage section -->
         <div class="filter-section-block">
           <span class="filter-section-title">Etapa Editorial</span>
@@ -2537,26 +2833,27 @@
   .day-event-card {
     display: flex;
     flex-direction: column;
-    gap: 0.12rem;
-    background: rgba(15, 23, 42, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 0.16rem;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-left: 3px solid var(--stage-accent, #8b5cf6);
-    border-radius: 0.35rem;
-    padding: 0.22rem 0.35rem;
+    border-radius: 0.38rem;
+    padding: 0.26rem 0.42rem;
     overflow: hidden;
     transition: transform 0.1s ease, border-color 0.1s ease;
   }
 
   .day-event-card:hover {
     transform: translateY(-1px);
-    border-color: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.25);
   }
 
-  .day-event-card.in-progress { background: rgba(139, 92, 246, 0.1); }
-  .day-event-card.due-soon { background: rgba(245, 158, 11, 0.12); border-left-color: #f59e0b; }
-  .day-event-card.done { background: rgba(16, 185, 129, 0.1); border-left-color: #10b981; }
-  .day-event-card.overdue { background: rgba(239, 68, 68, 0.12); border-left-color: #ef4444; }
-  .day-event-card.extended { background: rgba(6, 182, 212, 0.1); border-left-color: #06b6d4; }
+  .day-event-card.in-progress { background: rgba(139, 92, 246, 0.12); }
+  .day-event-card.due-soon { background: rgba(245, 158, 11, 0.14); border-left-color: #f59e0b; }
+  .day-event-card.done { background: rgba(16, 185, 129, 0.12); border-left-color: #10b981; }
+  .day-event-card.overdue { background: rgba(239, 68, 68, 0.14); border-left-color: #ef4444; }
+  .day-event-card.extended { background: rgba(6, 182, 212, 0.12); border-left-color: #06b6d4; }
+  .day-event-card.historical { background: rgba(30, 41, 59, 0.45); border-left-color: #64748b; opacity: 0.88; }
 
   .event-card-top-row {
     display: flex;
@@ -2567,15 +2864,21 @@
   }
 
   .event-stage-tag {
-    font-size: 0.68rem;
+    font-size: 0.74rem;
     font-weight: 700;
     color: var(--stage-accent, #c084fc);
     white-space: nowrap;
     flex-shrink: 0;
   }
 
-  .event-work-text {
+  .event-dot-sep {
+    color: rgba(255, 255, 255, 0.35);
     font-size: 0.72rem;
+    flex-shrink: 0;
+  }
+
+  .event-work-text {
+    font-size: 0.80rem;
     font-weight: 600;
     color: #f8fafc;
     white-space: nowrap;
@@ -2586,23 +2889,34 @@
   }
 
   .event-ch-pill {
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: #f1f5f9;
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0.04rem 0.28rem;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.04rem 0.32rem;
     border-radius: 0.22rem;
     flex-shrink: 0;
   }
 
-  .event-ext-tag {
+  .event-hist-tag {
     font-size: 0.62rem;
+    font-weight: 700;
+    color: #94a3b8;
+    background: rgba(100, 116, 139, 0.2);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+    padding: 0.02rem 0.24rem;
+    border-radius: 0.2rem;
+    flex-shrink: 0;
+  }
+
+  .event-ext-tag {
+    font-size: 0.64rem;
     font-weight: 700;
     background: rgba(6, 182, 212, 0.25);
     border: 1px solid rgba(6, 182, 212, 0.35);
     color: #22d3ee;
-    padding: 0.04rem 0.24rem;
+    padding: 0.04rem 0.26rem;
     border-radius: 0.2rem;
     flex-shrink: 0;
   }
@@ -2615,7 +2929,7 @@
   .event-card-sub-row {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.32rem;
     width: 100%;
     min-width: 0;
   }
@@ -2625,11 +2939,30 @@
   }
 
   .event-user-text {
-    font-size: 0.68rem;
-    color: #cbd5e1;
+    font-size: 0.74rem;
+    color: #e2e8f0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .event-inline-status {
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 0.02rem 0.28rem;
+    border-radius: 0.22rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .event-inline-status.overdue {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.16);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+  .event-inline-status.due-soon {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.16);
+    border: 1px solid rgba(245, 158, 11, 0.3);
   }
 
   .event-overflow-pill {
@@ -2897,6 +3230,201 @@
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
+  }
+
+  .mobile-only-widget {
+    display: none !important;
+  }
+
+  /* MINHA PRÓXIMA ENTREGA (Desktop Pinned Hero) */
+  .next-delivery-hero-card {
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.28) 0%, rgba(15, 23, 42, 0.96) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 0.65rem;
+    padding: 0.65rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+
+  .next-hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .next-hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #f59e0b;
+  }
+
+  .next-hero-status {
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 0.12rem 0.4rem;
+    border-radius: 0.3rem;
+  }
+  .next-hero-status.overdue {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+  }
+  .next-hero-status.extended {
+    background: rgba(6, 182, 212, 0.2);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    color: #22d3ee;
+  }
+  .next-hero-status.due-soon {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+  }
+  .next-hero-status.normal {
+    background: rgba(139, 92, 246, 0.2);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #c084fc;
+  }
+
+  .next-hero-body {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .next-hero-cover-box {
+    width: 42px;
+    height: 56px;
+    border-radius: 0.35rem;
+    overflow: hidden;
+    background: #020617;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+  }
+
+  .next-hero-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .next-hero-cover-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+  }
+
+  .next-hero-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .next-hero-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .next-hero-sub-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .next-hero-ch {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.06rem 0.35rem;
+    border-radius: 0.25rem;
+  }
+
+  .next-hero-stage {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--st-c, #c084fc);
+  }
+
+  .next-hero-due-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+
+  .next-hero-due-txt strong {
+    color: #f1f5f9;
+  }
+
+  .next-hero-action-bar {
+    padding-top: 0.2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .btn-next-extend {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.65rem;
+    background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 0.38rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+    transition: transform 0.1s ease, filter 0.1s ease;
+  }
+
+  .btn-next-extend:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
+  .next-ext-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 0.35rem;
+  }
+  .next-ext-notice.extended {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #34d399;
+  }
+  .next-ext-notice.locked {
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    color: #22d3ee;
+  }
+  .next-ext-notice.expired {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #f87171;
   }
 
   .context-commitments-stack {
@@ -3718,6 +4246,28 @@
   .sheet-time-badge.extended { background: rgba(6, 182, 212, 0.25); color: #22d3ee; }
   .sheet-time-badge.done { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 
+  /* 3.1 Linha simples de conclusão para itens finalizados */
+  .sheet-concluded-simple-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.65rem;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.22);
+    border-radius: 0.45rem;
+  }
+
+  .sheet-concluded-date {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #34d399;
+  }
+
+  .sheet-muted-val {
+    font-size: 0.78rem;
+    color: #64748b;
+  }
+
   /* 4. Ação de prorrogação */
   .sheet-extension-box {
     display: flex;
@@ -4314,6 +4864,160 @@
       display: none !important;
     }
 
+    .mobile-only-widget {
+      display: flex !important;
+    }
+
+    /* Mobile Next Delivery Strip */
+    .mobile-next-delivery-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(135deg, rgba(88, 28, 135, 0.35) 0%, rgba(15, 23, 42, 0.98) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      border-radius: 0.65rem;
+      padding: 0.45rem 0.65rem;
+      margin-bottom: 0.5rem;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .mobile-next-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .mobile-next-thumb {
+      width: 32px;
+      height: 44px;
+      border-radius: 0.25rem;
+      overflow: hidden;
+      background: #020617;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      flex-shrink: 0;
+    }
+
+    .mobile-next-cover-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .mobile-next-cover-fallback {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+    }
+
+    .mobile-next-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .mobile-next-tag-row {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .mobile-next-kicker {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #f59e0b;
+    }
+
+    .mobile-next-stage-pill {
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: var(--st-c, #c084fc);
+    }
+
+    .mobile-next-work-title {
+      font-size: 0.76rem;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mobile-next-work-title strong {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .mobile-next-due-line {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.66rem;
+      color: #94a3b8;
+    }
+
+    .mobile-next-dot {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .mobile-next-rem {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+
+    .mobile-next-right {
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .btn-mobile-next-extend {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.32rem 0.55rem;
+      background: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 0.35rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4);
+      white-space: nowrap;
+    }
+
+    .mobile-next-badge-ext {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.2rem 0.4rem;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+      font-size: 0.64rem;
+      font-weight: 700;
+      border-radius: 0.3rem;
+    }
+
+    .mobile-next-badge-lock {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.2rem 0.4rem;
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: #22d3ee;
+      font-size: 0.64rem;
+      font-weight: 700;
+      border-radius: 0.3rem;
+    }
+
     .mobile-filter-controls {
       display: flex;
       flex-direction: column;
@@ -4346,7 +5050,7 @@
       display: none;
     }
 
-    /* Mobile Day Content inside cell: Unified Capsule */
+    /* Mobile Day Content inside cell: Real Avatars */
     .mobile-day-cell-content {
       display: flex;
       flex-direction: column;
@@ -4354,6 +5058,57 @@
       justify-content: center;
       width: 100%;
       margin-top: auto;
+    }
+
+    .mobile-cell-avatars-row {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.16rem;
+      padding: 0.05rem;
+    }
+
+    .mobile-avatar-badge {
+      position: relative;
+      display: inline-flex;
+      border-radius: 9999px;
+    }
+
+    .mobile-avatar-pip {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      border: 1.5px solid #090d16;
+    }
+    .mobile-avatar-pip.overdue {
+      background: #ef4444;
+      box-shadow: 0 0 4px rgba(239, 68, 68, 0.8);
+    }
+    .mobile-avatar-pip.mine {
+      background: #38bdf8;
+      box-shadow: 0 0 4px rgba(56, 189, 248, 0.8);
+    }
+    .mobile-avatar-pip.due-soon {
+      background: #f59e0b;
+      box-shadow: 0 0 4px rgba(245, 158, 11, 0.8);
+    }
+    .mobile-avatar-pip.done {
+      background: #10b981;
+    }
+
+    .mobile-more-pill {
+      font-size: 0.58rem;
+      font-weight: 800;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 0.04rem 0.22rem;
+      border-radius: 9999px;
+      line-height: 1;
+      margin-left: 0.06rem;
     }
 
     .mobile-commitment-capsule {
