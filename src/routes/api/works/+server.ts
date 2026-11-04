@@ -6,6 +6,7 @@ export const GET = async ({ url, platform }: any) => {
   const q = (url.searchParams.get('q') || url.searchParams.get('search') || '').trim();
   const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
   const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get('limit') || '8', 10)));
+  const includeTotal = url.searchParams.get('include_total') !== 'false';
 
   const sort = sortParam === 'most_read' || sortParam === 'popular' ? 'views'
     : sortParam === 'titulo' ? 'titulo' : 'recentes';
@@ -15,7 +16,8 @@ export const GET = async ({ url, platform }: any) => {
       q: q || undefined,
       sort,
       limit,
-      offset
+      offset,
+      includeTotal
     },
     platform?.env
   );
@@ -30,8 +32,8 @@ export const GET = async ({ url, platform }: any) => {
   return json(
     {
       works: result.works,
-      total: result.total,
-      hasMore: offset + result.works.length < result.total
+      ...(includeTotal ? { total: result.total } : {}),
+      hasMore: includeTotal ? offset + result.works.length < result.total : result.hasMore
     },
     {
       headers: {

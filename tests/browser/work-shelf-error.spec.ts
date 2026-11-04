@@ -7,6 +7,7 @@ test('shows a recoverable error when loading more works fails', async ({ page })
   }));
   let attempts = 0;
   await page.route('**/api/works?*', route => {
+    expect(new URL(route.request().url()).searchParams.get('include_total')).toBe('false');
     attempts++;
     return attempts === 1
       ? route.fulfill({ status: 503, json: { error: 'Indisponível' } })

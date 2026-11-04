@@ -106,7 +106,7 @@
     loadMoreError = false;
     try {
       // Fetch 12 items to neatly fill responsive grid rows (divisible by 6, 4, 3, 2)
-      const res = await fetch(`/api/works?sort=${loadMoreSort}&offset=${currentWorks.length}&limit=12`);
+      const res = await fetch(`/api/works?sort=${loadMoreSort}&offset=${currentWorks.length}&limit=12&include_total=false`);
       if (!res.ok) throw new Error('Falha ao carregar mais obras');
       const data = await res.json();
       const newItems: Work[] = data.works || [];
