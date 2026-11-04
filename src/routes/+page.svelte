@@ -108,7 +108,7 @@
           bind:this={continueContainer}
           use:bindContinueScroll
         >
-          {#each data.recent as item (item.workId)}
+          {#each data.recent as item, idx (item.workId)}
             {@const isAdult = item.contentRating === 'ADULT_18'}
             {@const effectiveBlur = isAdult && (data.blurNsfw ?? true)}
             <a href={item.destinationUrl} class="continue-card">
@@ -122,7 +122,7 @@
                     height="90"
                     class="thumb-img"
                     class:blurred-cover={effectiveBlur}
-                    loading="lazy"
+                    loading={idx < 4 ? 'eager' : 'lazy'}
                     decoding="async"
                   />
                 {:else}

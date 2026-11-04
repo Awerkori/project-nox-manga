@@ -1,5 +1,3 @@
-import { safeDbQuery, withTimeout } from '$lib/server/resilience';
-
 import {
   fetchHomeBundleFromYugabyte,
   fetchHomeWorksFromYugabyte,
@@ -13,9 +11,16 @@ import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 async function fetchUserReadingFromYugabyte(userId: string, platformEnv?: any): Promise<{ data: any[] }> {
   try {
     const res = await executeYugabyteSql(
-      `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at
+      `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at,
+              c.id AS chapter_catalog_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
+              c.canonical_chapter_key, c.chapter_order_key, c.title AS chapter_title,
+              c.work_id AS chapter_work_id, c.published_at AS chapter_published_at,
+              w.id AS work_catalog_id, w.slug AS work_slug, w.title AS work_title, w.cover_id AS work_cover_id,
+              w.kind AS work_kind, w.status AS work_status, w.published AS work_published,
+              w.content_rating AS work_content_rating
        FROM reading r
        JOIN chapters c ON c.id = r.chapter_id
+       JOIN works w ON w.id = c.work_id AND (w.published = true OR w.published IS NULL)
        WHERE r.user_id = $1
        ORDER BY r.updated_at DESC
        LIMIT 20;`,

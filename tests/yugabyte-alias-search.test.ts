@@ -66,6 +66,9 @@ describe('Yugabyte alias search', () => {
     expect(result).toEqual({ works: [{ id: 'work-1', title: 'First' }], total: 1, hasMore: true });
     const [sql, params] = query.mock.calls[0];
     expect(sql).not.toContain('COUNT(*) OVER()');
+    expect(sql).toContain('WITH matched AS MATERIALIZED');
+    expect(sql).toContain('works.id = ANY(ARRAY(');
+    expect(sql).toContain('JOIN works ON works.id = paged.id');
     expect(params).toEqual(['action', 2, 0]);
   });
 
@@ -96,9 +99,14 @@ describe('Yugabyte alias search', () => {
     });
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain('search_text ILIKE $1');
+    expect(query.mock.calls[1][0]).toContain('WITH matched AS MATERIALIZED');
+    expect(query.mock.calls[1][0]).toContain('SELECT works.id, works.updated_at');
+    expect(query.mock.calls[1][0]).toContain('JOIN works ON works.id = paged.id');
     expect(query.mock.calls[1][0]).toContain('title ILIKE $1 OR CASE');
     expect(query.mock.calls[1][0]).toContain("array_to_string(COALESCE(works.aliases, ARRAY[]::text[]), ' ') ILIKE $1");
     expect(query.mock.calls[1][0]).toContain('unnest(COALESCE(works.aliases');
+    expect(query.mock.calls[1][0]).toContain("concat_ws(' ', works.title, works.author, works.artist");
+    expect(query.mock.calls[1][0]).not.toContain('COALESCE(works.search_text');
   });
 
   it('serves public API alias searches from the authoritative catalog', async () => {

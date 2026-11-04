@@ -77,4 +77,44 @@ describe('withYugabyteReadSession connection multiplexing', () => {
     expect(activeConnected).toBe(0);
     expect(clientInstances.every((c) => c.ended)).toBe(true);
   });
+
+  it('creates a new session when a shared platform env still points to a closed prior session', async () => {
+    const baseEnv = {
+      HYPERDRIVE: { connectionString: 'postgres://hyperdrive.local/nox' }
+    };
+    let staleSessionEnv: any;
+
+    await withYugabyteReadSession(baseEnv, async (sessionEnv) => {
+      staleSessionEnv = sessionEnv;
+      await executeYugabyteSql('SELECT first_request', [], sessionEnv);
+    });
+
+    await withYugabyteReadSession(staleSessionEnv, async (sessionEnv) => {
+      expect(sessionEnv).not.toBe(staleSessionEnv);
+      await executeYugabyteSql('SELECT second_request', [], sessionEnv);
+    });
+
+    expect(clientInstances).toHaveLength(2);
+    expect(clientInstances.map((client) => client.queries)).toEqual([
+      ['SELECT first_request'],
+      ['SELECT second_request']
+    ]);
+    expect(clientInstances.every((client) => client.ended)).toBe(true);
+  });
+
+  it('rejects late work on a closed request session without opening another connection', async () => {
+    const baseEnv = {
+      HYPERDRIVE: { connectionString: 'postgres://hyperdrive.local/nox' }
+    };
+    let closedSessionEnv: any;
+
+    await withYugabyteReadSession(baseEnv, async (sessionEnv) => {
+      closedSessionEnv = sessionEnv;
+    });
+
+    await expect(executeYugabyteSql('SELECT too_late', [], closedSessionEnv)).rejects.toThrow(
+      'YUGABYTE_READ_SESSION_CLOSED'
+    );
+    expect(clientInstances).toHaveLength(0);
+  });
 });

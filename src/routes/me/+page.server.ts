@@ -1,6 +1,4 @@
 import { redirect, fail } from '@sveltejs/kit';
-import { WORK_FIELDS } from '$lib/server/db';
-import { withTimeout } from '$lib/server/resilience';
 import { normalizeAvatarCrop } from '$lib/avatar';
 import { storeImage, RateLimitError } from '$lib/server/media';
 import { invalidateUserSession } from '$lib/server/session-cache';
@@ -20,7 +18,6 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
   let allAchievementsData: any[] = [];
   let memberAchievementsData: any[] = [];
   let inventoryData: any[] = [];
-  let ybSuccess = false;
 
   try {
     const [
@@ -43,10 +40,18 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
         platform?.env
       ),
       executeYugabyteSql(
-        `SELECT chapter_id, work_id, page, max_page, completed_at, updated_at
-         FROM public.reading
-         WHERE user_id = $1
-         ORDER BY updated_at DESC
+        `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at,
+                c.id AS chapter_catalog_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
+                c.canonical_chapter_key, c.chapter_order_key, c.title AS chapter_title,
+                c.work_id AS chapter_work_id, c.published_at AS chapter_published_at,
+                w.id AS work_catalog_id, w.slug AS work_slug, w.title AS work_title, w.cover_id AS work_cover_id,
+                w.kind AS work_kind, w.status AS work_status, w.published AS work_published,
+                w.content_rating AS work_content_rating
+         FROM public.reading r
+         JOIN public.chapters c ON c.id = r.chapter_id
+         JOIN public.works w ON w.id = c.work_id AND (w.published = true OR w.published IS NULL)
+         WHERE r.user_id = $1
+         ORDER BY r.updated_at DESC
          LIMIT 60;`,
         [locals.user.id],
         platform?.env

@@ -40,9 +40,17 @@ export const load = async ({ locals, params, url, platform }: any) => {
       libraryCount = libraryData.length > 0 ? parseInt(libraryData[0].full_count || '0', 10) : 0;
     } else if (params.area === 'historico') {
       const ybRes = await executeYugabyteSql(
-        `SELECT r.user_id, r.chapter_id, r.page, r.max_page, r.completed_at, r.updated_at,
+        `SELECT r.user_id, r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at,
+                c.id AS chapter_catalog_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
+                c.canonical_chapter_key, c.chapter_order_key, c.title AS chapter_title,
+                c.work_id AS chapter_work_id, c.published_at AS chapter_published_at,
+                w.id AS work_catalog_id, w.slug AS work_slug, w.title AS work_title, w.cover_id AS work_cover_id,
+                w.kind AS work_kind, w.status AS work_status, w.published AS work_published,
+                w.content_rating AS work_content_rating,
                 count(*) OVER() AS full_count
          FROM reading r
+         JOIN public.chapters c ON c.id = r.chapter_id
+         JOIN public.works w ON w.id = c.work_id AND (w.published = true OR w.published IS NULL)
          WHERE r.user_id = $1
          ORDER BY r.updated_at DESC, r.chapter_id
          LIMIT $2 OFFSET $3;`,
@@ -107,7 +115,9 @@ export const load = async ({ locals, params, url, platform }: any) => {
         platform?.env
       );
       unreadCount = parseInt(unreadRes.rows[0]?.count || '0', 10);
-    } catch {}
+    } catch {
+      // Non-critical unread badge count fallback.
+    }
   }
 
   const enrichedHistory =

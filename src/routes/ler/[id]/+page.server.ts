@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { safeDbQuery, withTimeout } from '$lib/server/resilience';
+import { safeDbQuery } from '$lib/server/resilience';
 import { readerChapter, readerContent, readerPreviewTarget, readerPreviewWork } from '$lib/server/reader-editorial';
 import { sanitizeComments } from '$lib/comments';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
@@ -156,7 +156,9 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       try {
         const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env);
         if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
-      } catch {}
+      } catch {
+        // Non-critical age status lookup fallback.
+      }
     }
     if (ageStatus === 'MINOR') {
       error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
@@ -170,7 +172,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   // 3. Auxiliary metadata (comments, scans, reading progress)
   const auxPromise = (async () => {
     try {
-      const [commRes, csRes, wsRes, readRes] = await Promise.all([
+      const [commRes, scansRes, readRes] = await Promise.all([
         executeYugabyteSql(
           `SELECT c.id, c.user_id, c.body, c.created_at, c.parent_id, c.removed,
                   json_build_object(
@@ -194,19 +196,20 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
           platform?.env
         ),
         executeYugabyteSql(
-          `SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS scans
-           FROM chapter_scans cs
-           JOIN scans s ON s.id = cs.scan_id
-           WHERE cs.chapter_id = $1;`,
-          [chapter.id],
-          platform?.env
-        ),
-        executeYugabyteSql(
-          `SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS scans
+          `WITH cs AS (
+             SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS scans
+             FROM chapter_scans cs
+             JOIN scans s ON s.id = cs.scan_id
+             WHERE cs.chapter_id = $1
+           )
+           SELECT scans FROM cs
+           UNION ALL
+           SELECT json_build_object('id', s.id, 'name', s.name, 'slug', s.slug) AS scans
            FROM work_scans ws
            JOIN scans s ON s.id = ws.scan_id
-           WHERE ws.work_id = $1;`,
-          [chapter.work_id],
+           WHERE ws.work_id = $2
+             AND NOT EXISTS (SELECT 1 FROM cs);`,
+          [chapter.id, chapter.work_id],
           platform?.env
         ),
         locals.user
@@ -221,8 +224,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       return [
         { data: readRes.rows[0] || null },
         { data: commRes.rows || [] },
-        { data: csRes.rows || [] },
-        { data: wsRes.rows || [] }
+        { data: scansRes.rows || [] },
+        { data: [] }
       ];
     } catch {
       return [{ data: null }, { data: [] }, { data: [] }, { data: [] }];

@@ -469,7 +469,7 @@
 
 <!-- Cinematic Ambient Backdrop -->
 <div class="work-backdrop" aria-hidden="true">
-  <img src={obraCover} alt="" class="backdrop-img" />
+  <img src={obraCover} alt="" class="backdrop-img" decoding="async" />
   <div class="backdrop-gradient"></div>
 </div>
 
@@ -492,6 +492,8 @@
           width="280"
           height="392"
           class="work-cover-img"
+          fetchpriority="high"
+          decoding="async"
         />
         {#if isAdult}
           <span class="badge-adult-seal">+18</span>
