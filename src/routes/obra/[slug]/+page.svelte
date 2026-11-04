@@ -322,11 +322,10 @@
 
   let optimisticLiked = $state<boolean | null>(null);
   let optimisticLikeDelta = $state<number>(0);
-  let serverLikesCount = $derived((data.likes || []).length);
+  let serverLikesCount = $derived(Number(data.likesCount || 0));
   let isLiked = $derived.by(() => {
     if (optimisticLiked !== null) return optimisticLiked;
-    if (!data.profile?.id || !data.likes) return false;
-    return data.likes.some((like: any) => like.user_id === data.profile?.id);
+    return Boolean(data.viewerHasLiked);
   });
   let likeCount = $derived(Math.max(0, serverLikesCount + optimisticLikeDelta));
 
@@ -616,9 +615,9 @@
           <span class="metric-lbl">caps</span>
         </span>
         <span class="metric-dot" aria-hidden="true">•</span>
-        <span class="metric-inline-item" title="{data.likes.length} curtidas na comunidade">
+        <span class="metric-inline-item" title="{serverLikesCount} curtidas na comunidade">
           <Heart size={14} class="metric-icon" />
-          <strong>{data.likes.length}</strong>
+          <strong>{serverLikesCount}</strong>
           <span class="metric-lbl">curtidas</span>
         </span>
       </div>

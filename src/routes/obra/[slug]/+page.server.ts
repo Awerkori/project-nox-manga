@@ -101,13 +101,15 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     }
   }
 
-  // Check in-memory aux cache for public comments, likes, metrics and scans with single-flight deduplication
+  // Check in-memory aux cache for public comments, aggregate likes, metrics and scans with single-flight deduplication.
+  // The page only needs a total and, for a signed-in visitor, its own like state.
+  // Fetching every liker ID made popular works needlessly expensive to read and hydrate.
   const cachedAuxEntry = getObraAuxCache(work.id);
 
   const publicAuxPromise = cachedAuxEntry
     ? Promise.resolve({
         comments: cachedAuxEntry.comments,
-        likes: cachedAuxEntry.likes,
+        likesCount: cachedAuxEntry.likesCount,
         metrics: cachedAuxEntry.metrics,
         workScans: cachedAuxEntry.workScans
       })
@@ -136,7 +138,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
               [work.id],
               platform?.env
             ),
-            executeYugabyteSql(`SELECT user_id FROM likes WHERE work_id = $1;`, [work.id], platform?.env),
+            executeYugabyteSql(`SELECT COUNT(*)::int AS count FROM likes WHERE work_id = $1;`, [work.id], platform?.env),
             executeYugabyteSql(`SELECT * FROM public.work_metrics($1);`, [work.id], platform?.env),
             executeYugabyteSql(
               `SELECT ws.is_primary,
@@ -161,7 +163,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
 
           const entry = {
             comments: sanitizeComments(commentsRes?.rows || []),
-            likes: likesRes?.rows || [],
+            likesCount: Number(likesRes?.rows?.[0]?.count || 0),
             metrics: metricsRes?.rows?.[0] || null,
             workScans: scansRes?.rows || []
           };
@@ -170,10 +172,10 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
         } catch {
           return {
             timestamp: Date.now(),
-            comments: cachedAuxEntry?.comments || [],
-            likes: cachedAuxEntry?.likes || [],
-            metrics: cachedAuxEntry?.metrics || null,
-            workScans: cachedAuxEntry?.workScans || []
+            comments: [],
+            likesCount: 0,
+            metrics: null,
+            workScans: []
           };
         }
       });
@@ -181,8 +183,16 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   const personalPromise = locals.user
     ? (async () => {
         try {
-          const [libRes, readRes] = await Promise.all([
-            executeYugabyteSql(`SELECT * FROM library WHERE user_id = $1 AND work_id = $2 LIMIT 1;`, [locals.user.id, work.id], platform?.env),
+          const [preferenceRes, readRes] = await Promise.all([
+            executeYugabyteSql(
+              `SELECT
+                 (SELECT row_to_json(library_row)
+                    FROM (SELECT * FROM library WHERE user_id = $1 AND work_id = $2 LIMIT 1) library_row
+                 ) AS library,
+                 EXISTS(SELECT 1 FROM likes WHERE user_id = $1 AND work_id = $2) AS has_liked;`,
+              [locals.user.id, work.id],
+              platform?.env
+            ),
             executeYugabyteSql(
               `SELECT r.chapter_id, r.page, r.completed_at
                FROM reading r
@@ -193,13 +203,17 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
               platform?.env
             )
           ]);
-          return [{ data: libRes.rows[0] || null }, { data: readRes.rows || [] }];
+          return {
+            library: preferenceRes.rows[0]?.library || null,
+            hasLiked: Boolean(preferenceRes.rows[0]?.has_liked),
+            progress: readRes.rows || []
+          };
         } catch (err) {
           console.warn('[OBRA_PERSONAL_DATA_WARN]', err);
-          return [{ data: null }, { data: [] }];
+          return { library: null, hasLiked: false, progress: [] };
         }
       })()
-    : Promise.resolve([{ data: null }, { data: [] }]);
+    : Promise.resolve({ library: null, hasLiked: false, progress: [] });
 
   const hasYugabyteWorkBundle = Boolean(yugabyteBundle?.work);
 
@@ -216,7 +230,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     : getWorkRating(work.id, visitorId, locals.user?.id, platform?.env);
 
   // Concurrently resolve remaining data
-  const [resolvedChapters, resolvedTags, publicAux, [libraryRes, progressRes], resolvedRating] = await Promise.all([
+  const [resolvedChapters, resolvedTags, publicAux, personalData, resolvedRating] = await Promise.all([
     chaptersPromise,
     tagsPromise,
     publicAuxPromise,
@@ -225,11 +239,11 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   ]);
 
   const comments = publicAux.comments || [];
-  const likes = publicAux.likes || [];
+  const likesCount = publicAux.likesCount || 0;
   const metrics = publicAux.metrics;
   const scansList = (publicAux.workScans || []).map((ws: any) => ws.scans).filter(Boolean);
-  const library = libraryRes?.data || null;
-  const progress = progressRes?.data || [];
+  const library = personalData.library;
+  const progress = personalData.progress;
   const tagsList = resolvedTags || [];
   const isAdult = (work as any).content_rating === 'ADULT_18';
   const coverUrl = work.cover_id
@@ -250,7 +264,8 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
     structuredData: structuredDataScript(workStructuredData(work, tagsList, url.origin)),
     comments,
     library,
-    likes,
+    likesCount,
+    viewerHasLiked: personalData.hasLiked,
     progress,
     metrics,
     rating: resolvedRating,
