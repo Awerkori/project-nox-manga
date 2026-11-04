@@ -1221,6 +1221,11 @@
 
   main#conteudo {
     position: relative;
+    z-index: 1;
+  }
+
+  :global(main#conteudo:has(.modal-backdrop, .rating-modal-backdrop, .confirm-modal-backdrop, .modal-backdrop-layer, .drawer-backdrop, .day-drawer-panel)) {
+    z-index: 100;
   }
 
   :global(body:has(.workspace-sidebar.mobile-open)) {

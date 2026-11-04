@@ -32,6 +32,7 @@
   } from '@lucide/svelte';
   import { evaluateStageClaim, normalizePositionName } from '$lib/scan-roles';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
+  import ClaimStageModal from './ClaimStageModal.svelte';
 
   interface Props {
     stageSlug?: string;
@@ -43,6 +44,7 @@
     productionFiles?: any[];
     tasks?: any[];
     qcIssues?: any[];
+    team?: any[];
     currentUserId?: string;
     userRole?: string;
     userPositions?: any[];
@@ -64,6 +66,7 @@
     productionFiles = [],
     tasks = [],
     qcIssues = [],
+    team = [],
     currentUserId = '',
     userRole = 'MEMBER',
     userPositions = [],
@@ -253,6 +256,36 @@
   let isReleasingStageId = $state<string | null>(null);
   let claimFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
   let completeFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
+
+  // Claim Stage with Deadline Modal
+  let claimModalOpen = $state(false);
+  let claimModalStageItem = $state<any>(null);
+
+  function isDeadlineMandatory(slug?: string | null): boolean {
+    if (!slug) return false;
+    const s = slug.toLowerCase().trim();
+    return ['traducao', 'clean_redraw', 'clean', 'typeset', 'revisor_qc', 'qc', 'revisao'].includes(s);
+  }
+
+  function handleOpenClaimModal(cs: any, ch: any, work: any, config: any, cSlug: string) {
+    claimModalStageItem = {
+      id: cs.id,
+      stage: {
+        name: config?.label || 'Etapa Editorial',
+        slug: cSlug,
+        color: config?.color || '#8b5cf6'
+      },
+      chapter: {
+        chapter_number: ch?.chapter_number || '1',
+        chapter_label: ch?.chapter_label || '',
+        work: {
+          title: work?.title || 'Obra',
+          cover_id: work?.cover_id || null
+        }
+      }
+    };
+    claimModalOpen = true;
+  }
 
   // Helper to reliably retrieve work cover url
   function getWorkCoverUrl(work: any): string | null {
@@ -805,35 +838,13 @@
 
           <!-- Card Action Footer -->
           <div class="card-action-footer">
-            <form
-              method="POST"
-              action="?/claimStage"
-              use:enhance={() => {
-                isClaimingStageId = item.cs.id;
-                claimFeedback = null;
-                return async ({ result, update }) => {
-                  isClaimingStageId = null;
-                  if (result.type === 'failure') {
-                    claimFeedback = {
-                      stageId: item.cs.id,
-                      type: 'error',
-                      text: result.data?.message || 'Não foi possível assumir este capítulo.'
-                    };
-                  } else {
-                    await update();
-                    selectCategory('mine');
-                    expandedChapterIds[item.cs.id] = true;
-                  }
-                };
-              }}
-              class="claim-form-full"
-            >
-              <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+            {#if isDeadlineMandatory(canonicalSlug)}
               <button
-                type="submit"
+                type="button"
                 class="btn-editorial-claim"
                 class:btn-disabled={!canClaimStrict}
-                disabled={!canClaimStrict || isClaimingStageId === item.cs.id}
+                disabled={!canClaimStrict}
+                onclick={() => handleOpenClaimModal(item.cs, item.ch, item.work, stageConfig, canonicalSlug)}
                 title={!claimEvaluation.canClaim
                   ? `Requer o cargo ${stageConfig.roleRequiredName}`
                   : isTypeset && !typesetPrereqs?.isEligible
@@ -842,10 +853,7 @@
                       ? qcPrereqs?.blockedReason
                       : stageConfig.claimActionLabel}
               >
-                {#if isClaimingStageId === item.cs.id}
-                  <span class="spinner-editorial-xs"></span>
-                  <span>Assumindo...</span>
-                {:else if !claimEvaluation.canClaim}
+                {#if !claimEvaluation.canClaim}
                   <Lock size={13} />
                   <span>Cargo {stageConfig.roleRequiredName} necessário</span>
                 {:else if isTypeset && !typesetPrereqs?.isEligible}
@@ -859,7 +867,63 @@
                   <span>{stageConfig.claimActionLabel}</span>
                 {/if}
               </button>
-            </form>
+            {:else}
+              <form
+                method="POST"
+                action="?/claimStage"
+                use:enhance={() => {
+                  isClaimingStageId = item.cs.id;
+                  claimFeedback = null;
+                  return async ({ result, update }) => {
+                    isClaimingStageId = null;
+                    if (result.type === 'failure') {
+                      claimFeedback = {
+                        stageId: item.cs.id,
+                        type: 'error',
+                        text: result.data?.message || 'Não foi possível assumir este capítulo.'
+                      };
+                    } else {
+                      await update();
+                      selectCategory('mine');
+                      expandedChapterIds[item.cs.id] = true;
+                    }
+                  };
+                }}
+                class="claim-form-full"
+              >
+                <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                <button
+                  type="submit"
+                  class="btn-editorial-claim"
+                  class:btn-disabled={!canClaimStrict}
+                  disabled={!canClaimStrict || isClaimingStageId === item.cs.id}
+                  title={!claimEvaluation.canClaim
+                    ? `Requer o cargo ${stageConfig.roleRequiredName}`
+                    : isTypeset && !typesetPrereqs?.isEligible
+                      ? typesetPrereqs?.blockedReason
+                      : isRevisorQc && !qcPrereqs?.isEligible
+                        ? qcPrereqs?.blockedReason
+                        : stageConfig.claimActionLabel}
+                >
+                  {#if isClaimingStageId === item.cs.id}
+                    <span class="spinner-editorial-xs"></span>
+                    <span>Assumindo...</span>
+                  {:else if !claimEvaluation.canClaim}
+                    <Lock size={13} />
+                    <span>Cargo {stageConfig.roleRequiredName} necessário</span>
+                  {:else if isTypeset && !typesetPrereqs?.isEligible}
+                    <Clock size={13} />
+                    <span>Pré-requisitos pendentes</span>
+                  {:else if isRevisorQc && !qcPrereqs?.isEligible}
+                    <Clock size={13} />
+                    <span>Aguardando Typeset</span>
+                  {:else}
+                    <Zap size={14} class="btn-icon-zap" />
+                    <span>{stageConfig.claimActionLabel}</span>
+                  {/if}
+                </button>
+              </form>
+            {/if}
 
             <button
               type="button"
@@ -2632,6 +2696,21 @@
     </div>
   </div>
 {/if}
+
+<!-- Claim Stage with Deadline Modal -->
+<ClaimStageModal
+  isOpen={claimModalOpen}
+  stageItem={claimModalStageItem}
+  currentUser={team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId) || { id: currentUserId }}
+  onClose={() => {
+    claimModalOpen = false;
+    claimModalStageItem = null;
+  }}
+  onSuccess={() => {
+    claimFeedback = null;
+    selectCategory('mine');
+  }}
+/>
 
 <style>
   /* ==========================================================================

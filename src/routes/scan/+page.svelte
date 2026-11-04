@@ -1341,6 +1341,7 @@
                 currentUserId={data.userId}
                 userRole={data.userRole}
                 userPositions={data.userPositions || []}
+                team={data.team || []}
                 seenStages={data.seenStages || []}
                 isOwnerOrAdmin={['OWNER', 'ADMIN'].includes(data.userRole)}
                 scanId={data.currentScan?.id || ''}
@@ -2362,7 +2363,15 @@
         <CalendarTab
           tasks={data.tasks}
           chapters={data.chapters}
-          team={data.team}
+          chapterStages={data.chapterStages || []}
+          productionChapters={data.productionChapters || []}
+          stages={data.stages || []}
+          works={data.works || []}
+          team={data.team || []}
+          currentUserId={data.userId}
+          userRole={data.userRole}
+          currentScan={data.currentScan}
+          onOpenChapter={handleOpenChapter}
         />
 
       <!-- TAB PANE: ONBOARDING -->

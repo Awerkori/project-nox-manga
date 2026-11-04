@@ -36,6 +36,7 @@
   import EditorialStageWorkspace from './EditorialStageWorkspace.svelte';
   import PreAprovadoStageView from './PreAprovadoStageView.svelte';
   import PublicadoStageView from './PublicadoStageView.svelte';
+  import ClaimStageModal from './ClaimStageModal.svelte';
 
   let {
     currentStageSlug = 'clean_redraw',
@@ -48,6 +49,7 @@
     tasks = [],
     qcIssues = [],
     chapterTimeline = [],
+    team = [],
     currentUserId = '',
     userRole = 'MEMBER',
     userPositions = [],
@@ -68,6 +70,36 @@
 
   // Optimistic seen set for immediate UI feedback on click/expansion
   let localSeenSet = new SvelteSet<string>();
+
+  // Claim Stage with Deadline Modal
+  let claimModalOpen = $state(false);
+  let claimModalStageItem = $state<any>(null);
+
+  function isDeadlineMandatory(slug?: string | null): boolean {
+    if (!slug) return false;
+    const s = slug.toLowerCase().trim();
+    return ['traducao', 'clean_redraw', 'clean', 'typeset', 'revisor_qc', 'qc', 'revisao'].includes(s);
+  }
+
+  function handleOpenClaimModal(cs: any, ch: any, work: any, stageObj: any) {
+    claimModalStageItem = {
+      id: cs.id,
+      stage: {
+        name: stageObj?.name || 'Etapa Editorial',
+        slug: stageObj?.slug || 'etapa',
+        color: stageObj?.color || '#8b5cf6'
+      },
+      chapter: {
+        chapter_number: ch?.chapter_number || '1',
+        chapter_label: ch?.chapter_label || '',
+        work: {
+          title: work?.title || 'Obra',
+          cover_id: work?.cover_id || null
+        }
+      }
+    };
+    claimModalOpen = true;
+  }
 
   // Reactive seen set: combination of server loaded seen records and local clicks
   let seenStageMap = $derived.by(() => {
@@ -654,6 +686,7 @@
     {productionFiles}
     {tasks}
     {qcIssues}
+    {team}
     {currentUserId}
     {userRole}
     {userPositions}
@@ -1130,41 +1163,19 @@
 
                   <div class="accordion-header-right">
                     <!-- Quick Claim Button in Header -->
-                    <form
-                      method="POST"
-                      action="?/claimStage"
-                      use:enhance={() => {
-                        isClaimingStageId = item.cs.id;
-                        return async ({ result, update }) => {
-                          isClaimingStageId = null;
-                          if (result.type === 'failure') {
-                            claimFeedback = {
-                              stageId: item.cs.id,
-                              type: 'error',
-                              text: result.data?.message || 'Este capítulo acabou de ser pego por outro membro.'
-                            };
-                            expandedAvailable[item.cs.id] = true;
-                          } else {
-                            claimFeedback = null;
-                            await update();
-                          }
-                        };
-                      }}
-                      class="inline-claim-form"
-                    >
-                      <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                    {#if isDeadlineMandatory(activeCanonical.slug)}
                       <button
-                        type="submit"
+                        type="button"
                         class="btn-claim-primary-compact"
                         class:btn-claim-disabled={!claimEvaluation.canClaim}
-                        disabled={isClaiming || !claimEvaluation.canClaim}
-                        onclick={(e) => e.stopPropagation()}
-                        title={claimEvaluation.disabledReason || (claimEvaluation.isAdminOverride ? 'Assumir via Intervenção Administrativa' : 'Pegar etapa')}
+                        disabled={!claimEvaluation.canClaim}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          handleOpenClaimModal(item.cs, item.ch, item.work, activeCanonical);
+                        }}
+                        title={claimEvaluation.disabledReason || (claimEvaluation.isAdminOverride ? 'Assumir via Intervenção Administrativa' : 'Pegar etapa e definir prazo')}
                       >
-                        {#if isClaiming}
-                          <span class="spinner-xs"></span>
-                          <span>Pegando...</span>
-                        {:else if !claimEvaluation.canClaim}
+                        {#if !claimEvaluation.canClaim}
                           <Lock size={13} />
                           <span>Bloqueado</span>
                         {:else if claimEvaluation.isAdminOverride}
@@ -1175,7 +1186,54 @@
                           <span>Pegar</span>
                         {/if}
                       </button>
-                    </form>
+                    {:else}
+                      <form
+                        method="POST"
+                        action="?/claimStage"
+                        use:enhance={() => {
+                          isClaimingStageId = item.cs.id;
+                          return async ({ result, update }) => {
+                            isClaimingStageId = null;
+                            if (result.type === 'failure') {
+                              claimFeedback = {
+                                stageId: item.cs.id,
+                                type: 'error',
+                                text: (result.data as any)?.message || 'Este capítulo acabou de ser pego por outro membro.'
+                              };
+                              expandedAvailable[item.cs.id] = true;
+                            } else {
+                              claimFeedback = null;
+                              await update();
+                            }
+                          };
+                        }}
+                        class="inline-claim-form"
+                      >
+                        <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                        <button
+                          type="submit"
+                          class="btn-claim-primary-compact"
+                          class:btn-claim-disabled={!claimEvaluation.canClaim}
+                          disabled={isClaiming || !claimEvaluation.canClaim}
+                          onclick={(e) => e.stopPropagation()}
+                          title={claimEvaluation.disabledReason || (claimEvaluation.isAdminOverride ? 'Assumir via Intervenção Administrativa' : 'Pegar etapa')}
+                        >
+                          {#if isClaiming}
+                            <span class="spinner-xs"></span>
+                            <span>Pegando...</span>
+                          {:else if !claimEvaluation.canClaim}
+                            <Lock size={13} />
+                            <span>Bloqueado</span>
+                          {:else if claimEvaluation.isAdminOverride}
+                            <Shield size={13} />
+                            <span>Pegar (Admin)</span>
+                          {:else}
+                            <CheckCircle2 size={14} />
+                            <span>Pegar</span>
+                          {/if}
+                        </button>
+                      </form>
+                    {/if}
 
                     <button
                       type="button"
@@ -1323,39 +1381,17 @@
 
                       <!-- Right: Prominent Primary Claim CTA -->
                       <div class="footer-primary-cta">
-                        <form
-                          method="POST"
-                          action="?/claimStage"
-                          use:enhance={() => {
-                            isClaimingStageId = item.cs.id;
-                            return async ({ result, update }) => {
-                              isClaimingStageId = null;
-                              if (result.type === 'failure') {
-                                claimFeedback = {
-                                  stageId: item.cs.id,
-                                  type: 'error',
-                                  text: result.data?.message || 'Este capítulo acabou de ser pego por outro membro.'
-                                };
-                              } else {
-                                claimFeedback = null;
-                                await update();
-                              }
-                            };
-                          }}
-                        >
-                          <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                        {#if isDeadlineMandatory(activeCanonical.slug)}
                           <button
-                            type="submit"
+                            type="button"
                             class="btn-claim-prominent"
                             class:btn-claim-disabled={!claimEvaluation.canClaim}
                             class:btn-claim-admin-override={claimEvaluation.isAdminOverride}
-                            disabled={isClaiming || !claimEvaluation.canClaim}
-                            title={claimEvaluation.disabledReason}
+                            disabled={!claimEvaluation.canClaim}
+                            onclick={() => handleOpenClaimModal(item.cs, item.ch, item.work, activeCanonical)}
+                            title={claimEvaluation.disabledReason || 'Pegar etapa e definir prazo de entrega'}
                           >
-                            {#if isClaiming}
-                              <span class="spinner-sm"></span>
-                              <span>Assumindo capítulo...</span>
-                            {:else if !claimEvaluation.canClaim}
+                            {#if !claimEvaluation.canClaim}
                               <Lock size={17} />
                               <span>{claimEvaluation.buttonLabel}</span>
                             {:else if claimEvaluation.isAdminOverride}
@@ -1366,7 +1402,52 @@
                               <span>{claimEvaluation.buttonLabel}</span>
                             {/if}
                           </button>
-                        </form>
+                        {:else}
+                          <form
+                            method="POST"
+                            action="?/claimStage"
+                            use:enhance={() => {
+                              isClaimingStageId = item.cs.id;
+                              return async ({ result, update }) => {
+                                isClaimingStageId = null;
+                                if (result.type === 'failure') {
+                                  claimFeedback = {
+                                    stageId: item.cs.id,
+                                    type: 'error',
+                                    text: (result.data as any)?.message || 'Este capítulo acabou de ser pego por outro membro.'
+                                  };
+                                } else {
+                                  claimFeedback = null;
+                                  await update();
+                                }
+                              };
+                            }}
+                          >
+                            <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                            <button
+                              type="submit"
+                              class="btn-claim-prominent"
+                              class:btn-claim-disabled={!claimEvaluation.canClaim}
+                              class:btn-claim-admin-override={claimEvaluation.isAdminOverride}
+                              disabled={isClaiming || !claimEvaluation.canClaim}
+                              title={claimEvaluation.disabledReason}
+                            >
+                              {#if isClaiming}
+                                <span class="spinner-sm"></span>
+                                <span>Assumindo capítulo...</span>
+                              {:else if !claimEvaluation.canClaim}
+                                <Lock size={17} />
+                                <span>{claimEvaluation.buttonLabel}</span>
+                              {:else if claimEvaluation.isAdminOverride}
+                                <Shield size={17} />
+                                <span>{claimEvaluation.buttonLabel}</span>
+                              {:else}
+                                <CheckCircle2 size={17} />
+                                <span>{claimEvaluation.buttonLabel}</span>
+                              {/if}
+                            </button>
+                          </form>
+                        {/if}
                         {#if !claimEvaluation.canClaim && claimEvaluation.disabledReason}
                           <div class="claim-disabled-hint">
                             <Info size={13} />
@@ -2066,6 +2147,20 @@
   </div>
 {/if}
 {/if}
+
+<!-- Claim Stage with Deadline Modal -->
+<ClaimStageModal
+  isOpen={claimModalOpen}
+  stageItem={claimModalStageItem}
+  currentUser={team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId) || { id: currentUserId }}
+  onClose={() => {
+    claimModalOpen = false;
+    claimModalStageItem = null;
+  }}
+  onSuccess={() => {
+    invalidateAll();
+  }}
+/>
 
 <style>
   .pipeline-stage-view-root {

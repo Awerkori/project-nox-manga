@@ -29,6 +29,7 @@
   import { invalidateAll } from '$app/navigation';
   import { relativeTime } from '$lib/types';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
+  import ClaimStageModal from './ClaimStageModal.svelte';
 
   let {
     tasks = [],
@@ -100,6 +101,58 @@
   let overrideAction = $state<string>('FORCE_COMPLETE');
   let overrideReason = $state<string>('');
   let overrideTargetUserId = $state<string>('');
+
+  // Claim stage deadline modal state
+  let claimModalOpen = $state(false);
+  let claimModalStageItem = $state<any>(null);
+
+  function isDeadlineMandatory(slug?: string | null): boolean {
+    if (!slug) return false;
+    const s = slug.toLowerCase().trim();
+    return ['traducao', 'clean_redraw', 'clean', 'typeset', 'revisor_qc', 'qc', 'revisao'].includes(s);
+  }
+
+  function handleOpenClaimModal(item: any) {
+    claimModalStageItem = {
+      id: item.id,
+      stage: item.stage || {
+        name: item.stageName,
+        slug: item.stageSlug,
+        color: item.stageColor
+      },
+      chapter: item.chapter || {
+        chapter_number: item.chapterNumber,
+        chapter_label: item.chapterLabel,
+        work: {
+          title: item.workTitle,
+          cover_id: item.coverId
+        }
+      }
+    };
+    claimModalOpen = true;
+  }
+
+  function canExtendItem(item: any): boolean {
+    if (item.type !== 'stage') return false;
+    const cs = item.chapterStage;
+    if (!cs || !cs.due_at) return false;
+    if (cs.status !== 'IN_PROGRESS') return false;
+    if (cs.assigned_to !== currentUserId) return false;
+    if (Number(cs.extension_count || 0) > 0) return false;
+
+    const nowMs = Date.now();
+    const dueMs = new Date(cs.due_at).getTime();
+    const diffMs = dueMs - nowMs;
+    const remainingHours = diffMs / (1000 * 60 * 60);
+
+    const spToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const dueSp = new Date(new Date(cs.due_at).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const isSameDay = spToday.getFullYear() === dueSp.getFullYear() &&
+                      spToday.getMonth() === dueSp.getMonth() &&
+                      spToday.getDate() === dueSp.getDate();
+
+    return (remainingHours <= 24 || isSameDay) && diffMs > -(4 * 60 * 60 * 1000);
+  }
 
   // Effective positions for logged-in user
   let effectivePositions = $derived(
@@ -810,12 +863,19 @@
                       {/if}
                     </div>
 
-                    {#if item.isRework || item.isOverdue || item.formattedDue || item.isStale}
+                    {#if item.isRework || item.isOverdue || item.formattedDue || item.isStale || (item.chapterStage?.extension_count > 0)}
                       <div class="card-meta-row secondary-meta">
                         {#if item.isRework}
                           <span class="meta-pill rework">
                             <AlertTriangle size={11} />
                             Retrabalho
+                          </span>
+                        {/if}
+
+                        {#if item.chapterStage?.extension_count > 0}
+                          <span class="meta-pill extended" title="Prorrogação de +2 dias já utilizada nesta atribuição">
+                            <Clock size={11} />
+                            Prorrogado (+2d)
                           </span>
                         {/if}
 
@@ -844,6 +904,20 @@
 
                 <!-- Bottom Region (Mobile) / Right Column (Desktop): Action Buttons -->
                 <div class="card-actions-col">
+                  {#if canExtendItem(item)}
+                    <form method="POST" action="?/extendStageDeadline" use:enhance class="action-form-full">
+                      <input type="hidden" name="chapter_stage_id" value={item.id} />
+                      <button
+                        type="submit"
+                        class="btn-action-extend"
+                        title="Prorrogar prazo de entrega em +2 dias (uma única vez)"
+                      >
+                        <Clock size={13} />
+                        <span>+2 dias</span>
+                      </button>
+                    </form>
+                  {/if}
+
                   <button
                     type="button"
                     class="btn-action-continue"
@@ -1055,13 +1129,25 @@
 
                 <!-- Right / Bottom: Actions -->
                 <div class="card-actions-col">
-                  <form method="POST" action="?/claimStage" use:enhance class="action-form-full">
-                    <input type="hidden" name="chapter_stage_id" value={item.id} />
-                    <button type="submit" class="btn-action-claim" title="Assumir esta etapa para trabalhar">
+                  {#if isDeadlineMandatory(item.stageSlug)}
+                    <button
+                      type="button"
+                      class="btn-action-claim"
+                      onclick={() => handleOpenClaimModal(item)}
+                      title="Assumir esta etapa e definir prazo de entrega"
+                    >
                       <Zap size={14} />
                       <span>Pegar Tarefa</span>
                     </button>
-                  </form>
+                  {:else}
+                    <form method="POST" action="?/claimStage" use:enhance class="action-form-full">
+                      <input type="hidden" name="chapter_stage_id" value={item.id} />
+                      <button type="submit" class="btn-action-claim" title="Assumir esta etapa para trabalhar">
+                        <Zap size={14} />
+                        <span>Pegar Tarefa</span>
+                      </button>
+                    </form>
+                  {/if}
 
                   <button
                     type="button"
@@ -1542,6 +1628,20 @@
       </div>
     </div>
   {/if}
+
+  <!-- Claim Stage with Deadline Modal -->
+  <ClaimStageModal
+    isOpen={claimModalOpen}
+    stageItem={claimModalStageItem}
+    currentUser={team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId) || { id: currentUserId }}
+    onClose={() => {
+      claimModalOpen = false;
+      claimModalStageItem = null;
+    }}
+    onSuccess={() => {
+      invalidateAll();
+    }}
+  />
 </div>
 
 <style>
@@ -2157,6 +2257,40 @@
     color: #f87171;
     border: 1px solid rgba(239, 68, 68, 0.3);
     font-weight: 600;
+  }
+
+  .meta-pill.extended {
+    background: rgba(245, 158, 11, 0.14);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    font-weight: 600;
+  }
+
+  .btn-action-extend {
+    flex: 1.2 1 0%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 46px;
+    min-height: 46px;
+    padding: 0 16px;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.25);
+    transition: transform 0.12s ease, filter 0.15s ease;
+    width: 100%;
+  }
+
+  .btn-action-extend:hover {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.38);
   }
 
   .category-context-notice {

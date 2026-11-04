@@ -1252,6 +1252,12 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
     channelReadStates = [];
   }
 
+  if (platform?.context?.waitUntil) {
+    platform.context.waitUntil(
+      executeYugabyteSql('SELECT public.check_and_send_deadline_warnings_ysql($1)', [currentScan.id], platform?.env).catch(() => {})
+    );
+  }
+
   return {
     authenticated: true,
     isMember: true,
@@ -3773,13 +3779,24 @@ export const actions: Actions = {
     if (!locals.user) return fail(401, { message: 'Não autenticado' });
     const formData = await request.formData();
     const stageId = String(formData.get('chapter_stage_id') || '');
+    const dueDateRaw = formData.get('due_date') ? String(formData.get('due_date')).trim() : null;
+    const notesRaw = formData.get('notes') ? String(formData.get('notes')).trim() : null;
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
+
+    let targetDueAt: string | null = null;
+    if (dueDateRaw) {
+      const dateMatch = dueDateRaw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!dateMatch) {
+        return fail(400, { message: 'Formato de data de entrega inválido. Utilize o calendário do modal.' });
+      }
+      targetDueAt = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T23:59:59-03:00`;
+    }
 
     let data: any;
     try {
       const result = await executeYugabyteSql<{ result: any }>(`
-        SELECT public.claim_scan_chapter_stage_ysql($1, $2, $3) AS result
-      `, [stageId, locals.user.id, locals.role === 'ADMIN'], platform?.env);
+        SELECT public.claim_scan_chapter_stage_ysql($1, $2, $3, $4, $5) AS result
+      `, [stageId, locals.user.id, locals.role === 'ADMIN', targetDueAt, notesRaw || null], platform?.env);
       data = result.rows[0]?.result;
       if (!data?.success) throw new Error('YSQL_STAGE_CLAIM_EMPTY_RESULT');
     } catch (error: any) {
@@ -3789,6 +3806,15 @@ export const actions: Actions = {
         code: typeof error?.code === 'string' ? error.code : null,
         message: detail.slice(0, 240)
       });
+      if (/DEADLINE_SELECTION_REQUIRED/.test(detail)) {
+        return fail(400, { message: 'Para as etapas de Tradução, Clean/Redraw, Typeset e Revisor (QC), a definição de uma data de entrega de até 3 dias corridos é obrigatória.' });
+      }
+      if (/DEADLINE_CANNOT_BE_IN_PAST/.test(detail)) {
+        return fail(400, { message: 'A data de entrega não pode ser anterior ao dia de hoje.' });
+      }
+      if (/DEADLINE_EXCEEDS_MAX_THREE_DAYS/.test(detail)) {
+        return fail(400, { message: 'O prazo de entrega não pode exceder o limite máximo de 3 dias corridos.' });
+      }
       const conflict = /STAGE_ALREADY_CLAIMED/.test(detail);
       const actionable = /CHAPTER_STAGE_NOT_FOUND|SCAN_MEMBERSHIP_REQUIRED|WORKFLOW_STAGE_NOT_FOUND|FINAL_STAGE_NOT_CLAIMABLE|LEADERSHIP_CLAIM_REQUIRED|STAGE_POSITION_REQUIRED/.test(detail);
       return fail(conflict || actionable ? 409 : 503, {
@@ -3803,6 +3829,66 @@ export const actions: Actions = {
       platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
     }
     return { success: true, result: data };
+  },
+
+  extendStageDeadline: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const stageId = String(formData.get('chapter_stage_id') || '');
+    if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
+
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(`
+        SELECT public.extend_scan_chapter_stage_ysql($1, $2, $3) AS result
+      `, [stageId, locals.user.id, locals.role === 'ADMIN'], platform?.env);
+      const data = result.rows[0]?.result;
+      if (!data?.success) throw new Error('YSQL_EXTEND_STAGE_EMPTY_RESULT');
+      return { success: true, extended: data };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      console.error('scan_extend_stage_deadline_failed', {
+        chapterStageId: stageId,
+        actorId: locals.user.id,
+        message: detail.slice(0, 240)
+      });
+      if (/EXTENSION_ALREADY_USED/.test(detail)) {
+        return fail(400, { message: 'A prorrogação automática de 2 dias já foi utilizada nesta atribuição.' });
+      }
+      if (/EXTENSION_ONLY_ALLOWED_WITHIN_24H/.test(detail)) {
+        return fail(400, { message: 'A prorrogação de 2 dias só pode ser solicitada nas últimas 24 horas antes do prazo (ou no dia do vencimento).' });
+      }
+      if (/DEADLINE_ALREADY_EXPIRED/.test(detail)) {
+        return fail(400, { message: 'O prazo desta etapa já expirou e não pode mais ser prorrogado.' });
+      }
+      if (/STAGE_NOT_IN_PROGRESS/.test(detail)) {
+        return fail(409, { message: 'Esta etapa não está mais em andamento.' });
+      }
+      if (/STAGE_NOT_ASSIGNED_TO_ACTOR/.test(detail)) {
+        return fail(403, { message: 'Apenas o responsável atual pode prorrogar o prazo desta etapa.' });
+      }
+      return fail(500, { message: 'Não foi possível prorrogar o prazo no momento. Tente novamente.' });
+    }
+  },
+
+  updateStageNotes: async ({ request, locals, platform }) => {
+    if (!locals.user) return fail(401, { message: 'Não autenticado' });
+    const formData = await request.formData();
+    const stageId = String(formData.get('chapter_stage_id') || '');
+    const notes = formData.get('notes') ? String(formData.get('notes')).slice(0, 1000) : '';
+    if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
+
+    try {
+      const result = await executeYugabyteSql<{ result: any }>(`
+        SELECT public.update_scan_chapter_stage_notes_ysql($1, $2, $3, $4) AS result
+      `, [stageId, locals.user.id, locals.role === 'ADMIN', notes], platform?.env);
+      return { success: true, notes: result.rows[0]?.result?.notes || notes };
+    } catch (error: any) {
+      const detail = String(error?.message || 'unknown');
+      if (/NOTE_UPDATE_FORBIDDEN/.test(detail)) {
+        return fail(403, { message: 'Você não tem permissão para editar as anotações desta etapa.' });
+      }
+      return fail(500, { message: 'Não foi possível atualizar as anotações.' });
+    }
   },
 
   releaseStage: async ({ request, locals, platform }) => {

@@ -32,6 +32,7 @@
   import { relativeTime } from '$lib/types';
   import UserAvatar from '$lib/components/UserAvatar.svelte';
   import PipelineDeliverableUpload from './PipelineDeliverableUpload.svelte';
+  import ClaimStageModal from './ClaimStageModal.svelte';
 
   let {
     chapterId,
@@ -44,6 +45,7 @@
     chapterTimeline = [],
     chapterNotes = [],
     qcIssues = [],
+    team = [],
     onBackToPipeline = () => {}
   } = $props();
 
@@ -116,6 +118,32 @@
   let activeStageItem = $derived(
     currentChapterStages.find((s: any) => s.id === selectedStageId) || currentChapterStages[0] || null
   );
+
+  // Claim Stage with Deadline Modal
+  let claimModalOpen = $state(false);
+  let claimModalStageItem = $state<any>(null);
+
+  function isDeadlineMandatory(slug?: string | null): boolean {
+    if (!slug) return false;
+    const s = slug.toLowerCase().trim();
+    return ['traducao', 'clean_redraw', 'clean', 'typeset', 'revisor_qc', 'qc', 'revisao'].includes(s);
+  }
+
+  function handleOpenClaimModal(stageItem: any) {
+    claimModalStageItem = {
+      id: stageItem.id,
+      stage: stageItem.stage || { name: 'Etapa', slug: 'etapa', color: '#8b5cf6' },
+      chapter: {
+        chapter_number: chapterData.chapter_number || '1',
+        chapter_label: chapterData.chapter_label || '',
+        work: {
+          title: workData.title || 'Obra',
+          cover_id: workData.cover_id || null
+        }
+      }
+    };
+    claimModalOpen = true;
+  }
 
   // Upstream dependency files for active stage
   let upstreamFiles = $derived(() => {
@@ -419,13 +447,24 @@
             <!-- Stage Claim / Release Actions -->
             <div class="stage-hero-actions">
               {#if activeStageItem.status === 'AVAILABLE' || activeStageItem.status === 'REWORK'}
-                <form method="POST" action="?/claimStage" use:enhance>
-                  <input type="hidden" name="chapter_stage_id" value={activeStageItem.id} />
-                  <button type="submit" class="btn-claim-primary">
+                {#if isDeadlineMandatory(activeStageItem.stage?.slug)}
+                  <button
+                    type="button"
+                    class="btn-claim-primary"
+                    onclick={() => handleOpenClaimModal(activeStageItem)}
+                  >
                     <CheckSquare size={15} />
                     <span>Pegar Esta Etapa</span>
                   </button>
-                </form>
+                {:else}
+                  <form method="POST" action="?/claimStage" use:enhance>
+                    <input type="hidden" name="chapter_stage_id" value={activeStageItem.id} />
+                    <button type="submit" class="btn-claim-primary">
+                      <CheckSquare size={15} />
+                      <span>Pegar Esta Etapa</span>
+                    </button>
+                  </form>
+                {/if}
               {:else if activeStageItem.status === 'IN_PROGRESS' && activeStageItem.assigned_to === currentUserId}
                 <form method="POST" action="?/releaseStage" use:enhance>
                   <input type="hidden" name="chapter_stage_id" value={activeStageItem.id} />
@@ -1028,6 +1067,20 @@
     </div>
   </div>
 {/if}
+
+<!-- Claim Stage with Deadline Modal -->
+<ClaimStageModal
+  isOpen={claimModalOpen}
+  stageItem={claimModalStageItem}
+  currentUser={team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId) || { id: currentUserId }}
+  onClose={() => {
+    claimModalOpen = false;
+    claimModalStageItem = null;
+  }}
+  onSuccess={() => {
+    invalidateAll();
+  }}
+/>
 
 <style>
   .workspace-shell {
