@@ -311,6 +311,19 @@ export const load: PageServerLoad = async ({ locals, url, platform, depends }: a
   const needsCreditSnapshots = isMyQueue;
   const needsMural = isMural || isHome;
 
+  // Real-time automatic devolution of expired stages back to queue
+  try {
+    await withTimeout(
+      executeYugabyteSql(`SELECT public.process_expired_scan_stages_ysql($1)`, [currentScan.id], platform?.env),
+      2_000,
+      null,
+      'EXPIRED_STAGES_AUTO_DEVOLUTION',
+      'YUGABYTE'
+    );
+  } catch (err) {
+    // Non-blocking in case of transient timeout
+  }
+
   // Start the authoritative editorial graph immediately. It deliberately runs
   // beside the rest of the workspace batch: a member should not wait for
   // unrelated backoffice widgets before the pipeline can render.

@@ -70,7 +70,7 @@
   import ObrasDaScanView from './components/ObrasDaScanView.svelte';
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { invalidate } from '$app/navigation';
+  import { invalidate, goto } from '$app/navigation';
   import {
     Menu,
     Search,
@@ -192,117 +192,93 @@
   }
 
   let currentWorkspaceTab = $state<string>(normalizeTab(page.url.searchParams.get('tab')));
-  let currentPipelineStage = $state<string>(page.url.searchParams.get('stage') || (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(page.url.searchParams.get('tab') || '') ? (page.url.searchParams.get('tab') as string) : 'clean_redraw'));
+  let currentPipelineStage = $state<string>(
+    page.url.searchParams.get('stage') ||
+    (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(page.url.searchParams.get('tab') || '')
+      ? (page.url.searchParams.get('tab') as string)
+      : 'clean_redraw')
+  );
   let sidebarMobileOpen = $state(false);
 
-  // Global Realtime synchronization across sessions
+  onMount(() => {
+    // 100% reliable popstate synchronization for browser Back / Forward buttons
+    const onPopState = () => {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      const rawTab = url.searchParams.get('tab');
+      const tabParam = normalizeTab(rawTab);
+      const stageParam =
+        url.searchParams.get('stage') ||
+        (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(rawTab || '')
+          ? (rawTab as string)
+          : null);
+      const chParam = url.searchParams.get('id') || url.searchParams.get('chapter_id');
 
-
-  let lastNavigatedHref = '';
-
-  $effect(() => {
-    const currentHref = page.url.href;
-    if (currentHref === lastNavigatedHref) return;
-    lastNavigatedHref = currentHref;
-
-    const rawTab = page.url.searchParams.get('tab');
-    const tabParam = normalizeTab(rawTab);
-    const stageParam = page.url.searchParams.get('stage') || (['revisor_qc', 'typeset', 'clean_redraw', 'traducao', 'raw_provider'].includes(rawTab || '') ? rawTab : null);
-    const chParam = page.url.searchParams.get('id') || page.url.searchParams.get('chapter_id');
-    untrack(() => {
-      if (tabParam && tabParam !== currentWorkspaceTab) {
+      if (tabParam) {
         currentWorkspaceTab = tabParam;
         triggerModuleLoadForTab(tabParam);
       }
-      if (stageParam && stageParam !== currentPipelineStage) {
+      if (stageParam) {
         currentPipelineStage = stageParam;
       }
       if (tabParam === 'capitulo' && chParam) {
         const all = [...(data.productionChapters || []), ...(chapters || [])];
         const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
         activeWorkspaceChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
-      } else if (tabParam !== 'capitulo' && !chParam && activeWorkspaceChapter) {
+      } else if (tabParam !== 'capitulo') {
         activeWorkspaceChapter = null;
       }
       if (tabParam === 'qc_leitor' && chParam) {
         const all = [...(data.productionChapters || []), ...(chapters || [])];
         const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
         activeQcReaderChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
-      } else if (tabParam !== 'qc_leitor' && !chParam && activeQcReaderChapter) {
+      } else if (tabParam !== 'qc_leitor') {
         activeQcReaderChapter = null;
       }
-    });
-  });
-
-  onMount(() => {
-    const onPopState = () => {
-      if (typeof window === 'undefined') return;
-      const url = new URL(window.location.href);
-      const tab = normalizeTab(url.searchParams.get('tab'));
-      const stage = url.searchParams.get('stage') || 'clean_redraw';
-      const chParam = url.searchParams.get('id') || url.searchParams.get('chapter_id');
-      currentWorkspaceTab = tab;
-      currentPipelineStage = stage;
-      if (tab === 'capitulo' && chParam) {
-        const all = [...(data.productionChapters || []), ...(chapters || [])];
-        const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
-        activeWorkspaceChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
-      } else {
-        activeWorkspaceChapter = null;
-      }
-      if (tab === 'qc_leitor' && chParam) {
-        const all = [...(data.productionChapters || []), ...(chapters || [])];
-        const found = all.find((c: any) => c.id === chParam || c.chapters?.id === chParam || c.target_chapter_id === chParam);
-        activeQcReaderChapter = found ? (found.chapters || found) : { id: chParam, chapter_number: 1, chapter_title: 'Capítulo' };
-      } else {
-        activeQcReaderChapter = null;
-      }
-      lastNavigatedHref = window.location.href;
-      triggerModuleLoadForTab(tab);
     };
+
     window.addEventListener('popstate', onPopState);
 
     // Passive touch listeners directly bound to window for 100% Android Chrome/Firefox compatibility
-    if (typeof window !== 'undefined') {
-      window.addEventListener('touchstart', handleWindowTouchStart, { passive: true });
-      window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
-      window.addEventListener('touchend', handleWindowTouchEnd, { passive: true });
-      window.addEventListener('touchcancel', handleWindowTouchCancel, { passive: true });
-    }
+    window.addEventListener('touchstart', handleWindowTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+    window.addEventListener('touchend', handleWindowTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleWindowTouchCancel, { passive: true });
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('touchstart', handleWindowTouchStart);
-        window.removeEventListener('touchmove', handleWindowTouchMove);
-        window.removeEventListener('touchend', handleWindowTouchEnd);
-        window.removeEventListener('touchcancel', handleWindowTouchCancel);
-      }
+      window.removeEventListener('touchstart', handleWindowTouchStart);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', handleWindowTouchEnd);
+      window.removeEventListener('touchcancel', handleWindowTouchCancel);
     };
   });
 
   function handleSelectTab(tab: string, stage?: string) {
     tab = normalizeTab(tab);
+    // Instant optimistic update (0ms latency)
     currentWorkspaceTab = tab;
     activeWorkspaceChapter = null;
     activeQcReaderChapter = null;
     if (stage) {
       currentPipelineStage = stage;
     }
+
+    triggerModuleLoadForTab(tab);
+
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', tab);
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set('tab', tab);
       if (tab === 'pipeline') {
-        url.searchParams.set('stage', currentPipelineStage);
+        targetUrl.searchParams.set('stage', stage || currentPipelineStage);
       } else {
-        url.searchParams.delete('stage');
+        targetUrl.searchParams.delete('stage');
       }
-      window.history.pushState(window.history.state, '', url.pathname + url.search);
-      lastNavigatedHref = window.location.href;
-      triggerModuleLoadForTab(tab);
-      if (tab === 'pipeline' || tab === 'calendario' || tab === 'minha_fila') {
-        invalidate('scan:workspace');
-      }
+      targetUrl.searchParams.delete('id');
+      targetUrl.searchParams.delete('chapter_id');
+      targetUrl.searchParams.delete('from_stage');
+
+      window.history.pushState({ tab, stage: stage || currentPipelineStage }, '', targetUrl.pathname + targetUrl.search);
     }
   }
 
@@ -323,31 +299,31 @@
     }
     const targetId = activeWorkspaceChapter?.id || activeWorkspaceChapter?.target_chapter_id || (typeof ch === 'string' ? ch : ch?.id);
     if (typeof window !== 'undefined' && targetId) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'capitulo');
-      url.searchParams.set('id', String(targetId));
+      currentWorkspaceTab = 'capitulo';
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set('tab', 'capitulo');
+      targetUrl.searchParams.set('id', String(targetId));
       if (currentPipelineStage) {
-        url.searchParams.set('from_stage', currentPipelineStage);
+        targetUrl.searchParams.set('from_stage', currentPipelineStage);
       }
-      window.history.pushState({ tab: 'capitulo', id: targetId }, '', url.pathname + url.search);
-      lastNavigatedHref = window.location.href;
+      window.history.pushState({ tab: 'capitulo', id: String(targetId) }, '', targetUrl.pathname + targetUrl.search);
     }
   }
 
   function handleBackFromChapter() {
     activeWorkspaceChapter = null;
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      const fromStage = url.searchParams.get('from_stage') || currentPipelineStage || 'traducao';
-      url.searchParams.set('tab', 'pipeline');
-      url.searchParams.set('stage', fromStage);
-      url.searchParams.delete('id');
-      url.searchParams.delete('from_stage');
-      url.searchParams.delete('chapter_id');
-      window.history.pushState({ tab: 'pipeline', stage: fromStage }, '', url.pathname + url.search);
-      lastNavigatedHref = window.location.href;
+      const currentUrl = new URL(window.location.href);
+      const fromStage = currentUrl.searchParams.get('from_stage') || currentPipelineStage || 'traducao';
       currentWorkspaceTab = 'pipeline';
       currentPipelineStage = fromStage;
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set('tab', 'pipeline');
+      targetUrl.searchParams.set('stage', fromStage);
+      targetUrl.searchParams.delete('id');
+      targetUrl.searchParams.delete('from_stage');
+      targetUrl.searchParams.delete('chapter_id');
+      window.history.pushState({ tab: 'pipeline', stage: fromStage }, '', targetUrl.pathname + targetUrl.search);
     }
   }
 
@@ -357,36 +333,35 @@
     if (typeof ch === 'string') {
       const all = [...(data.productionChapters || []), ...(chapters || [])];
       const found = all.find((c: any) => c.id === ch || c.chapters?.id === ch || c.target_chapter_id === ch);
-      activeQcReaderChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Capítulo' };
+      activeQcReaderChapter = found ? (found.chapters || found) : { id: ch, chapter_number: 1, chapter_title: 'Capítulo QC' };
     } else {
       activeQcReaderChapter = ch.chapters || ch;
     }
     const targetId = activeQcReaderChapter?.id || activeQcReaderChapter?.target_chapter_id || (typeof ch === 'string' ? ch : ch?.id);
     if (typeof window !== 'undefined' && targetId) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'qc_leitor');
-      url.searchParams.set('id', String(targetId));
-      url.searchParams.set('from_stage', fromStage);
-      window.history.pushState({ tab: 'qc_leitor', id: targetId }, '', url.pathname + url.search);
-      lastNavigatedHref = window.location.href;
       currentWorkspaceTab = 'qc_leitor';
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set('tab', 'qc_leitor');
+      targetUrl.searchParams.set('id', String(targetId));
+      targetUrl.searchParams.set('from_stage', fromStage);
+      window.history.pushState({ tab: 'qc_leitor', id: String(targetId), from_stage: fromStage }, '', targetUrl.pathname + targetUrl.search);
     }
   }
 
   function handleBackFromQcReader() {
     activeQcReaderChapter = null;
-    const stageToReturn = activeQcReaderFromStage || (typeof window !== 'undefined' ? new URL(window.location.href).searchParams.get('from_stage') : null) || currentPipelineStage || 'revisor_qc';
     if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'pipeline');
-      url.searchParams.set('stage', stageToReturn);
-      url.searchParams.delete('id');
-      url.searchParams.delete('from_stage');
-      url.searchParams.delete('chapter_id');
-      window.history.pushState({ tab: 'pipeline', stage: stageToReturn }, '', url.pathname + url.search);
-      lastNavigatedHref = window.location.href;
+      const currentUrl = new URL(window.location.href);
+      const fromStage = currentUrl.searchParams.get('from_stage') || activeQcReaderFromStage || 'revisor_qc';
       currentWorkspaceTab = 'pipeline';
-      currentPipelineStage = stageToReturn;
+      currentPipelineStage = fromStage;
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set('tab', 'pipeline');
+      targetUrl.searchParams.set('stage', fromStage);
+      targetUrl.searchParams.delete('id');
+      targetUrl.searchParams.delete('from_stage');
+      targetUrl.searchParams.delete('chapter_id');
+      window.history.pushState({ tab: 'pipeline', stage: fromStage }, '', targetUrl.pathname + targetUrl.search);
     }
   }
 

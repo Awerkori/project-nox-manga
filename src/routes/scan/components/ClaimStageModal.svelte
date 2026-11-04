@@ -5,6 +5,8 @@
     X,
     Check,
     AlertCircle,
+    AlertTriangle,
+    Info,
     Briefcase
   } from '@lucide/svelte';
   import { enhance } from '$app/forms';
@@ -159,6 +161,7 @@
 
       // Format for compact summary: "sábado, 7 de novembro, até 23h59."
       const formattedSummary = `${weekdayLong}, ${d.getUTCDate()} de ${monthLong}, até 23h59.`;
+      const targetDateDisplay = `${d.getUTCDate()} de ${monthLong}`;
 
       list.push({
         offset,
@@ -167,7 +170,8 @@
         weekday: weekdayShort.charAt(0).toUpperCase() + weekdayShort.slice(1),
         dayMonth,
         fullDateStr: fullDateStr.charAt(0).toUpperCase() + fullDateStr.slice(1),
-        formattedSummary
+        formattedSummary,
+        targetDateDisplay
       });
     }
     return list;
@@ -176,6 +180,20 @@
   let contextualPlaceholder = $derived(
     getContextualNotesPlaceholder(stageItem?.stage)
   );
+
+  // Dynamic Red Warning Text: adapts reactively to the chosen deadline
+  let reactiveWarningText = $derived.by(() => {
+    if (!selectedOption) {
+      return 'A data escolhida será o prazo máximo para concluir esta etapa. Se o prazo vencer sem a entrega concluída, a etapa será devolvida automaticamente à fila para outro membro assumir.';
+    }
+    if (selectedOption.offset === 0) {
+      return 'Você precisa concluir esta etapa até hoje, às 23h59. Se não entregar dentro do prazo, ela será devolvida automaticamente à fila para outro membro assumir.';
+    }
+    if (selectedOption.offset === 1) {
+      return 'Você precisa concluir esta etapa até amanhã, às 23h59. Se não entregar dentro do prazo, ela será devolvida automaticamente à fila para outro membro assumir.';
+    }
+    return `Você precisa concluir esta etapa até ${selectedOption.targetDateDisplay}, às 23h59. Se o prazo vencer sem a entrega, ela será devolvida automaticamente à fila para outro membro assumir.`;
+  });
 
   // State management
   let selectedYMD = $state('');
@@ -366,6 +384,21 @@
               <strong class="summary-val-txt">
                 {selectedOption?.formattedSummary || 'Selecione uma data'}
               </strong>
+            </div>
+          </div>
+
+          <!-- 4.1 AVISO OBRIGATÓRIO DE PRAZO E RESPONSABILIDADE (Vermelho Destacado) -->
+          <div class="deadline-obligation-warning" role="alert">
+            <div class="warning-top-row">
+              <AlertTriangle size={15} class="warning-alert-icon" />
+              <strong class="warning-title">ATENÇÃO — PRAZO DE ENTREGA</strong>
+            </div>
+            <p class="warning-main-text">
+              {reactiveWarningText}
+            </p>
+            <div class="warning-sub-note">
+              <Info size={12} class="warning-info-icon" />
+              <span>Se precisar de mais tempo, você poderá utilizar uma única prorrogação de +2 dias nas últimas 24 horas do prazo.</span>
             </div>
           </div>
 
@@ -805,6 +838,62 @@
     font-size: 0.8rem;
     font-weight: 700;
     color: #f1f5f9;
+  }
+
+  /* 4.1 Deadline Obligation & Automatic Devolution Warning */
+  .deadline-obligation-warning {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.55rem 0.75rem;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.32);
+    border-left: 3.5px solid #ef4444;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);
+  }
+
+  .warning-top-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  :global(.warning-alert-icon) {
+    color: #f87171;
+    flex-shrink: 0;
+  }
+
+  .warning-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #f87171;
+    text-transform: uppercase;
+  }
+
+  .warning-main-text {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #fca5a5;
+    margin: 0;
+  }
+
+  .warning-sub-note {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.69rem;
+    color: #fda4af;
+    background: rgba(239, 68, 68, 0.06);
+    padding: 0.22rem 0.45rem;
+    border-radius: 0.3rem;
+    border: 1px solid rgba(239, 68, 68, 0.15);
+  }
+
+  :global(.warning-info-icon) {
+    color: #fb7185;
+    flex-shrink: 0;
   }
 
   /* 5. Notes Block */

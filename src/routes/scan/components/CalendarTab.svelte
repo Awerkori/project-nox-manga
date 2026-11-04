@@ -1208,15 +1208,17 @@
                   onclick={() => openExtensionModal(myNextCommitment)}
                 >
                   <Zap size={12} />
-                  <span>Prorrogar +2d</span>
+                  <span>Prorrogar +2 dias</span>
                 </button>
               {:else if myNextCommitment.extensionState === 'EXTENDED'}
-                <span class="mobile-next-badge-ext" title="Prorrogado até {myNextCommitment.extendedDateTimeStr}">
-                  <Check size={11} /> +2d
+                <span class="mobile-next-badge-ext" title="Prazo prorrogado até {myNextCommitment.extendedDateTimeStr || formatDueDisplay(myNextCommitment.dueAt)}">
+                  <Check size={11} />
+                  <span>Prazo prorrogado</span>
                 </span>
               {:else if myNextCommitment.extensionState === 'LOCKED'}
-                <span class="mobile-next-badge-lock" title="Disponível nas últimas 24h">
-                  <Lock size={11} /> 24h
+                <span class="mobile-next-badge-lock" title="Prorrogação disponível nas últimas 24h (a partir de {myNextCommitment.unlockDateTimeStr})">
+                  <Lock size={11} />
+                  <span>Prorrogação nas últimas 24h</span>
                 </span>
               {/if}
             </div>
@@ -4995,27 +4997,29 @@
     .mobile-next-badge-ext {
       display: inline-flex;
       align-items: center;
-      gap: 0.2rem;
-      padding: 0.2rem 0.4rem;
+      gap: 0.25rem;
+      padding: 0.25rem 0.45rem;
       background: rgba(16, 185, 129, 0.15);
       border: 1px solid rgba(16, 185, 129, 0.35);
       color: #34d399;
       font-size: 0.64rem;
       font-weight: 700;
-      border-radius: 0.3rem;
+      border-radius: 0.35rem;
+      white-space: nowrap;
     }
 
     .mobile-next-badge-lock {
       display: inline-flex;
       align-items: center;
-      gap: 0.2rem;
-      padding: 0.2rem 0.4rem;
+      gap: 0.25rem;
+      padding: 0.25rem 0.45rem;
       background: rgba(6, 182, 212, 0.12);
       border: 1px solid rgba(6, 182, 212, 0.3);
       color: #22d3ee;
       font-size: 0.64rem;
       font-weight: 700;
-      border-radius: 0.3rem;
+      border-radius: 0.35rem;
+      text-align: right;
     }
 
     .mobile-filter-controls {
