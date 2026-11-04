@@ -512,6 +512,15 @@
   }
 
   let manageTabsNavEl = $state<HTMLElement | null>(null);
+  let tabsCanScrollLeft = $state(false);
+  let tabsCanScrollRight = $state(true);
+
+  function updateTabsScrollIndicators() {
+    if (!manageTabsNavEl) return;
+    const { scrollLeft, scrollWidth, clientWidth } = manageTabsNavEl;
+    tabsCanScrollLeft = scrollLeft > 6;
+    tabsCanScrollRight = scrollLeft < scrollWidth - clientWidth - 6;
+  }
 
   function switchManageTab(tab: 'overview' | 'info' | 'chapters' | 'history') {
     activeManageTab = tab;
@@ -521,9 +530,23 @@
         if (activeBtn) {
           activeBtn.scrollIntoView({ inline: 'center', behavior: 'smooth', block: 'nearest' });
         }
+        updateTabsScrollIndicators();
       }, 50);
     }
   }
+
+  $effect(() => {
+    if (selectedWorkForManage && manageTabsNavEl) {
+      setTimeout(updateTabsScrollIndicators, 120);
+    }
+  });
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => updateTabsScrollIndicators();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  });
 
   function formatChapterTitle(number: number | string, title?: string): string {
     if (!title) return '';
@@ -1236,51 +1259,62 @@
       </header>
 
       <!-- MANAGEMENT WORKSPACE TABS -->
-      <nav class="manage-tabs-nav" aria-label="Abas de gerenciamento da obra" bind:this={manageTabsNavEl}>
-        <button
-          type="button"
-          class="manage-tab-btn"
-          class:is-active={activeManageTab === 'overview'}
-          onclick={() => switchManageTab('overview')}
+      <div
+        class="manage-tabs-wrapper"
+        class:has-scroll-right={tabsCanScrollRight}
+        class:has-scroll-left={tabsCanScrollLeft}
+      >
+        <nav
+          class="manage-tabs-nav"
+          aria-label="Abas de gerenciamento da obra"
+          bind:this={manageTabsNavEl}
+          onscroll={updateTabsScrollIndicators}
         >
-          <BookOpen size={15} class="tab-ico" />
-          <span class="tab-label-desktop">Visão Geral</span>
-          <span class="tab-label-mobile">Visão Geral</span>
-        </button>
+          <button
+            type="button"
+            class="manage-tab-btn"
+            class:is-active={activeManageTab === 'overview'}
+            onclick={() => switchManageTab('overview')}
+          >
+            <BookOpen size={15} class="tab-ico" />
+            <span class="tab-label-desktop">Visão Geral</span>
+            <span class="tab-label-mobile">Visão Geral</span>
+          </button>
 
-        <button
-          type="button"
-          class="manage-tab-btn"
-          class:is-active={activeManageTab === 'info'}
-          onclick={() => switchManageTab('info')}
-        >
-          <FileText size={15} class="tab-ico" />
-          <span class="tab-label-desktop">Informações & Metadados</span>
-          <span class="tab-label-mobile">Informações</span>
-        </button>
+          <button
+            type="button"
+            class="manage-tab-btn"
+            class:is-active={activeManageTab === 'info'}
+            onclick={() => switchManageTab('info')}
+          >
+            <FileText size={15} class="tab-ico" />
+            <span class="tab-label-desktop">Informações & Metadados</span>
+            <span class="tab-label-mobile">Informações & Metadados</span>
+          </button>
 
-        <button
-          type="button"
-          class="manage-tab-btn"
-          class:is-active={activeManageTab === 'chapters'}
-          onclick={() => switchManageTab('chapters')}
-        >
-          <Layers size={15} class="tab-ico" />
-          <span class="tab-label-desktop">Capítulos ({totalScanManagedCount} da scan)</span>
-          <span class="tab-label-mobile">Capítulos ({totalScanManagedCount})</span>
-        </button>
+          <button
+            type="button"
+            class="manage-tab-btn"
+            class:is-active={activeManageTab === 'chapters'}
+            onclick={() => switchManageTab('chapters')}
+          >
+            <Layers size={15} class="tab-ico" />
+            <span class="tab-label-desktop">Capítulos ({totalScanManagedCount} da scan)</span>
+            <span class="tab-label-mobile">Capítulos</span>
+          </button>
 
-        <button
-          type="button"
-          class="manage-tab-btn"
-          class:is-active={activeManageTab === 'history'}
-          onclick={() => switchManageTab('history')}
-        >
-          <History size={15} class="tab-ico" />
-          <span class="tab-label-desktop">Histórico Editorial</span>
-          <span class="tab-label-mobile">Histórico</span>
-        </button>
-      </nav>
+          <button
+            type="button"
+            class="manage-tab-btn"
+            class:is-active={activeManageTab === 'history'}
+            onclick={() => switchManageTab('history')}
+          >
+            <History size={15} class="tab-ico" />
+            <span class="tab-label-desktop">Histórico Editorial</span>
+            <span class="tab-label-mobile">Histórico Editorial</span>
+          </button>
+        </nav>
+      </div>
 
       <!-- TAB 1: VISÃO GERAL -->
       {#if activeManageTab === 'overview'}
@@ -2885,6 +2919,52 @@
     color: #cbd5e1;
   }
 
+  .manage-tabs-wrapper {
+    position: relative;
+    width: 100%;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Fade gradient hint on right edge when more tabs exist */
+  .manage-tabs-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 38px;
+    background: linear-gradient(to right, rgba(11, 15, 23, 0) 0%, rgba(11, 15, 23, 0.95) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 3;
+    border-radius: 0 8px 0 0;
+  }
+
+  .manage-tabs-wrapper.has-scroll-right::after {
+    opacity: 1;
+  }
+
+  /* Fade gradient hint on left edge when scrolled right */
+  .manage-tabs-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 28px;
+    background: linear-gradient(to left, rgba(11, 15, 23, 0) 0%, rgba(11, 15, 23, 0.95) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 3;
+    border-radius: 8px 0 0 0;
+  }
+
+  .manage-tabs-wrapper.has-scroll-left::before {
+    opacity: 1;
+  }
+
   .manage-tabs-nav {
     display: flex;
     align-items: center;
@@ -2892,10 +2972,12 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     padding-bottom: 0;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     -ms-overflow-style: none;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
+    padding-right: 24px;
   }
 
   .manage-tabs-nav::-webkit-scrollbar {
@@ -3719,6 +3801,13 @@
   }
 
   @media (max-width: 480px) {
+    .tab-label-desktop { display: none; }
+    .tab-label-mobile { display: inline; }
+    .manage-tab-btn {
+      padding: 0.6rem 0.8rem;
+      font-size: 0.79rem;
+    }
+
     .obras-page-header {
       flex-direction: column;
       align-items: stretch;

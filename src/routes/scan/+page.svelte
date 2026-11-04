@@ -2823,7 +2823,7 @@
               name="message"
               rows={3}
               bind:value={projectMessage}
-              placeholder="Ex: Nossa equipe já trabalha nesta obra em outro site e gostaríamos de associar nossa scan à obra no Project Nox para disponibilizar nossos lançamentos."
+              placeholder="Nossa equipe já trabalha nesta obra e deseja vinculá-la à scan no Project Nox."
               class="form-textarea"
             ></textarea>
           </div>
@@ -5125,6 +5125,32 @@
     gap: 0.4rem;
   }
 
+  .project-search-modal .form-textarea {
+    width: 100%;
+    min-height: 86px;
+    padding: 0.75rem 0.95rem;
+    background: #0f1420;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    color: #ffffff;
+    font-size: 13.5px;
+    line-height: 1.5;
+    outline: none;
+    resize: vertical;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .project-search-modal .form-textarea::placeholder {
+    color: #64748b;
+    opacity: 0.95;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .project-search-modal .form-textarea:focus {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+  }
+
   /* Robust Specificity & Search Field Architecture */
   .form-field .search-input-wrap,
   .search-input-wrap {
@@ -5206,8 +5232,9 @@
 
   .search-results-list {
     margin-top: 8px;
-    max-height: 250px;
+    max-height: 240px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
@@ -5215,7 +5242,7 @@
     border-radius: 10px;
     background: rgba(10, 14, 22, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 6px;
+    padding: 6px 6px 12px;
   }
   .search-result-item {
     display: flex;
@@ -5381,8 +5408,21 @@
     }
     .project-search-modal {
       width: 96%;
-      max-height: calc(100dvh - 24px);
+      max-height: calc(100dvh - 20px);
       border-radius: 12px;
+    }
+    .project-search-modal .modal-form {
+      padding: 0.85rem 1rem 1rem;
+      gap: 0.9rem;
+    }
+    .project-search-modal .form-textarea {
+      min-height: 82px;
+      font-size: 13px;
+      padding: 0.7rem 0.85rem;
+    }
+    .search-results-list {
+      max-height: 215px;
+      padding-bottom: 14px;
     }
     .form-field .search-input-wrap .smart-search-input {
       font-size: 13.5px;
