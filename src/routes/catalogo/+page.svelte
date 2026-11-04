@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
   import WorkCard from '$lib/components/WorkCard.svelte';
   import Empty from '$lib/components/Empty.svelte';
@@ -6,6 +7,29 @@
   import { Search, Sparkles } from '@lucide/svelte';
 
   let { data } = $props();
+  let loadedTags = $state<any[]>(data.tags || []);
+  let tagsLoading = $state(false);
+
+  const filterTags = $derived.by(() => {
+    const selected = data.tag && !loadedTags.some((tag) => tag?.slug === data.tag)
+      ? { id: `selected:${data.tag}`, slug: data.tag, name: data.tag, kind: 'TAG' }
+      : null;
+    return selected ? [selected, ...loadedTags] : loadedTags;
+  });
+
+  onMount(() => {
+    if (loadedTags.length > 1 || tagsLoading) return;
+    tagsLoading = true;
+    void fetch('/api/catalog/tags', { cache: 'force-cache' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (Array.isArray(payload?.tags)) loadedTags = payload.tags;
+      })
+      .catch(() => {
+        // A failed enhancement must not block search or change an active URL.
+      })
+      .finally(() => { tagsLoading = false; });
+  });
 
   const pageUrl = (n: number) => {
     const params = new SvelteURLSearchParams();
@@ -49,7 +73,7 @@
     <div class="filters-selects-group">
       <select name="tag" value={data.tag} aria-label="Gênero ou tag" class="filter-select">
         <option value="">Todos os gêneros</option>
-        {#each data.tags as tag (tag?.id)}
+        {#each filterTags as tag (tag?.id)}
           <option value={tag.slug}>{tag.name}</option>
         {/each}
       </select>
