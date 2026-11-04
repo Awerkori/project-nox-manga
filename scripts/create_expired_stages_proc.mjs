@@ -63,6 +63,7 @@ BEGIN
         previous_assigned_to = r.assigned_to,
         assigned_to = NULL,
         claimed_at = NULL,
+        due_at = NULL,
         availability_version = v_availability_version,
         availability_reason = 'expired_returned_to_queue',
         notified_available = false,

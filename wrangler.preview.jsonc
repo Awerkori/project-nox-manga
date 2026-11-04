@@ -2,6 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "home-preview-manga",
   "main": "src/worker-wrapper.js",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   "compatibility_date": "2026-09-01",
   "compatibility_flags": [
     "nodejs_compat"

@@ -473,7 +473,7 @@
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(139, 92, 246, 0.12);
     width: 100%;
     max-width: 440px;
-    max-height: min(92vh, 520px);
+    max-height: min(94dvh, 560px);
     margin: auto 0;
     display: flex;
     flex-direction: column;
@@ -679,12 +679,13 @@
   }
 
   .claim-form-scrollable {
-    padding: 0.85rem 1rem;
+    padding: 0.85rem 1rem 1.5rem;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.65rem;
+    scroll-padding-bottom: 2rem;
   }
 
   .alert-banner.error {
@@ -844,8 +845,8 @@
   .deadline-obligation-warning {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.55rem 0.75rem;
+    gap: 0.28rem;
+    padding: 0.45rem 0.7rem;
     background: rgba(239, 68, 68, 0.08);
     border: 1px solid rgba(239, 68, 68, 0.32);
     border-left: 3.5px solid #ef4444;
@@ -865,7 +866,7 @@
   }
 
   .warning-title {
-    font-size: 0.72rem;
+    font-size: 0.70rem;
     font-weight: 800;
     letter-spacing: 0.04em;
     color: #f87171;
@@ -873,8 +874,8 @@
   }
 
   .warning-main-text {
-    font-size: 0.75rem;
-    line-height: 1.35;
+    font-size: 0.73rem;
+    line-height: 1.32;
     color: #fca5a5;
     margin: 0;
   }
@@ -882,11 +883,11 @@
   .warning-sub-note {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.69rem;
+    gap: 0.3rem;
+    font-size: 0.67rem;
     color: #fda4af;
     background: rgba(239, 68, 68, 0.06);
-    padding: 0.22rem 0.45rem;
+    padding: 0.18rem 0.4rem;
     border-radius: 0.3rem;
     border: 1px solid rgba(239, 68, 68, 0.15);
   }
@@ -901,6 +902,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    margin-bottom: 0.35rem;
   }
 
   .notes-label-bar {
@@ -932,6 +934,7 @@
     line-height: 1.4;
     resize: none;
     font-family: inherit;
+    min-height: 48px;
     transition: all 0.14s ease;
   }
 
@@ -952,8 +955,10 @@
     justify-content: flex-end;
     gap: 0.55rem;
     padding: 0.75rem 1rem;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
   }
 
   .btn-cancel-claim {
@@ -1017,6 +1022,11 @@
 
   /* Mobile Responsive Tweaks */
   @media (max-width: 480px) {
+    .modal-card {
+      max-height: min(94dvh, 580px);
+      border-radius: 0.85rem;
+    }
+
     .modal-header {
       padding: 0.55rem 0.85rem;
     }
@@ -1035,16 +1045,39 @@
     }
 
     .claim-form-scrollable {
-      padding: 0.55rem 0.85rem;
-      gap: 0.5rem;
+      padding: 0.55rem 0.85rem 1.5rem;
+      gap: 0.45rem;
+      scroll-padding-bottom: 2rem;
     }
 
     .selected-summary-card {
+      padding: 0.38rem 0.6rem;
+    }
+
+    .deadline-obligation-warning {
       padding: 0.4rem 0.6rem;
+      gap: 0.22rem;
+    }
+
+    .warning-title {
+      font-size: 0.68rem;
+    }
+
+    .warning-main-text {
+      font-size: 0.70rem;
+    }
+
+    .warning-sub-note {
+      font-size: 0.65rem;
+    }
+
+    .notes-block {
+      margin-bottom: 0.5rem;
     }
 
     .modal-footer-pinned {
-      padding: 0.55rem 0.85rem max(0.55rem, env(safe-area-inset-bottom, 0.55rem));
+      padding: 0.65rem 0.85rem max(0.65rem, env(safe-area-inset-bottom, 0.65rem));
+      gap: 0.45rem;
     }
   }
 
@@ -1078,6 +1111,11 @@
 
     .btn-confirm-stage {
       padding: 0.42rem 0.7rem;
+      font-size: 0.74rem;
+    }
+
+    .btn-cancel-claim {
+      padding: 0.42rem 0.65rem;
       font-size: 0.74rem;
     }
   }

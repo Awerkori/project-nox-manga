@@ -742,19 +742,58 @@
     return allCommitments.find((c) => c.status === 'IN_PROGRESS') || null;
   });
 
-  // Remaining time helper text
+  // Remaining time helper text (accurate, natural, never misleading)
   function getRemainingText(item: any): string {
     if (!item?.dueAt) return '';
     const nowMs = Date.now();
     const dueMs = new Date(item.dueAt).getTime();
     const diffMs = dueMs - nowMs;
-    const hours = Math.round(diffMs / (1000 * 60 * 60));
     if (diffMs < 0) return 'Prazo vencido';
-    if (hours <= 2) return 'Vence em < 2h!';
-    if (hours <= 24) return `Vence em ${hours}h`;
-    const days = Math.ceil(hours / 24);
-    if (days === 1) return 'Vence amanhã';
-    return `Vence em ${days} dias`;
+
+    const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const totalMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (totalHours === 0) {
+      return totalMinutes <= 5 ? 'Vence em instantes!' : `Vence em ${totalMinutes}min`;
+    }
+
+    const dueParts = getSaoPauloDateParts(item.dueAt);
+    const nowParts = getSaoPauloDateParts(new Date(nowMs).toISOString());
+
+    const isToday =
+      dueParts.year === nowParts.year &&
+      dueParts.month === nowParts.month &&
+      dueParts.day === nowParts.day;
+
+    const tomorrowUtc = new Date(nowMs + 86400000);
+    const tomorrowParts = getSaoPauloDateParts(tomorrowUtc.toISOString());
+    const isTomorrow =
+      dueParts.year === tomorrowParts.year &&
+      dueParts.month === tomorrowParts.month &&
+      dueParts.day === tomorrowParts.day;
+
+    const timeStr = `${String(dueParts.hours).padStart(2, '0')}:${String(dueParts.minutes).padStart(2, '0')}`;
+
+    if (isToday) {
+      return `Vence hoje, às ${timeStr}`;
+    }
+
+    if (isTomorrow) {
+      return `Vence amanhã, às ${timeStr}`;
+    }
+
+    const days = Math.floor(totalHours / 24);
+    const remHours = totalHours % 24;
+
+    if (days >= 1 && remHours > 0) {
+      return `Faltam ${days} ${days === 1 ? 'dia' : 'dias'} e ${remHours}h`;
+    }
+
+    if (days >= 1) {
+      return `Faltam ${days} ${days === 1 ? 'dia' : 'dias'}`;
+    }
+
+    return `Vence em ${totalHours}h`;
   }
 
   // Format due date for clean display with accurate time
@@ -785,7 +824,9 @@
     const parts = getSaoPauloDateParts(completedAt);
     const day = String(parts.day).padStart(2, '0');
     const month = String(parts.month + 1).padStart(2, '0');
-    return `Concluído em ${day}/${month}`;
+    const hours = String(parts.hours).padStart(2, '0');
+    const mins = String(parts.minutes).padStart(2, '0');
+    return `Concluído em ${day}/${month} às ${hours}:${mins}`;
   }
 
   // Format proposed new date (+2 days at 23:59 SP) with weekday
@@ -803,12 +844,16 @@
   // Helper to determine if an item has historical metadata to display
   function hasHistoryData(item: any): boolean {
     if (!item) return false;
-    return (
+    // For completed items (status === 'DONE'), completedAt is already shown in the primary header/row.
+    // Secondary metadata is only relevant if there's other distinct historical info (claimedAt, originalDueAt, extendedAt).
+    const hasDistinctHistory =
       !!item.claimedAt ||
       (!!item.originalDueAt && item.originalDueAt !== item.dueAt) ||
-      (item.extensionCount > 0 && !!item.extendedAt) ||
-      !!item.completedAt
-    );
+      (item.extensionCount > 0 && !!item.extendedAt);
+    if (item.status === 'DONE') {
+      return hasDistinctHistory;
+    }
+    return hasDistinctHistory || !!item.completedAt;
   }
 
   // Active filter chips for quick removal
@@ -1847,7 +1892,7 @@
                                 <span class="ctx-history-txt">{formatDateWithTime(item.extendedAt)}</span>
                               </div>
                             {/if}
-                            {#if item.completedAt}
+                            {#if item.completedAt && item.status !== 'DONE'}
                               <div class="ctx-history-item">
                                 <span class="ctx-history-lbl">Concluído em:</span>
                                 <span class="ctx-history-txt">{formatDateWithTime(item.completedAt)}</span>
@@ -2163,7 +2208,7 @@
                   <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.extendedAt)}</span>
                 </div>
               {/if}
-              {#if bottomSheetItem.completedAt}
+              {#if bottomSheetItem.completedAt && bottomSheetItem.status !== 'DONE'}
                 <div class="sheet-history-row">
                   <span class="sheet-history-label">Concluído em:</span>
                   <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.completedAt)}</span>
