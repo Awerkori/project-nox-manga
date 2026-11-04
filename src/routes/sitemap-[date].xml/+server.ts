@@ -21,7 +21,7 @@ export const GET = async ({ params, platform }: any) => {
      ORDER BY updated_at DESC;`, [start.toISOString(), end.toISOString()], platform?.env,
   );
   const entries = (result.rows || []).map((work) =>
-    `<url><loc>${ORIGIN}/obra/${encodeURIComponent(work.slug)}</loc><lastmod>${String(work.updated_at).slice(0, 10)}</lastmod></url>`,
+    `<url><loc>${ORIGIN}/obra/${encodeURIComponent(work.slug)}</loc><lastmod>${new Date(work.updated_at).toISOString().slice(0, 10)}</lastmod></url>`,
   ).join('');
   return xml(entries);
 };
