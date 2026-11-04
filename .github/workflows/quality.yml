@@ -48,7 +48,10 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      TEST_BASE_URL: https://manga.project-nox-awerkori.workers.dev
+      # The Worker is published exclusively on these custom domains. The
+      # workers.dev hostname is not provisioned and returns 404 for every
+      # route, which turns this production smoke into a false failure.
+      TEST_BASE_URL: https://projectnox.org
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
