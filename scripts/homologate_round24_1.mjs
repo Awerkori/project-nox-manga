@@ -564,11 +564,9 @@ async function run() {
       // Confirm extension
       const confirmExtBtn = extBPage.locator('.btn-confirm-extend').first();
       await confirmExtBtn.click({ force: true });
-      await extBPage.waitForTimeout(2500);
+      await extBPage.waitForSelector('.extension-modal-card', { state: 'detached', timeout: 10000 });
 
-      // Verify DB update and modal closed
-      const modalClosed = (await extBPage.locator('.extension-modal-card').count()) === 0;
-      recordTest('Estado B: Modal closes cleanly upon confirming extension', modalClosed);
+      recordTest('Estado B: Modal closes cleanly upon confirming extension', true);
 
       const checkSynRes = await client.query(`SELECT extension_count, due_at FROM public.scan_chapter_stages WHERE id = $1`, [liveStageId]);
       const isExtendedInDb = checkSynRes.rows[0]?.extension_count === 1;
@@ -599,10 +597,14 @@ async function run() {
       await day12Cell.click({ force: true });
       await extCPage.waitForTimeout(800);
 
-      const bar93 = extCPage.locator('.context-accordion-bar').filter({ hasText: '93' }).first();
-      if (await bar93.count() > 0) {
-        await bar93.click({ force: true });
-        await extCPage.waitForTimeout(500);
+      const card93 = extCPage.locator('.context-delivery-card').filter({ hasText: '93' }).first();
+      if (await card93.count() > 0) {
+        const isExp93 = (await card93.locator('.context-expanded-content').count()) > 0;
+        if (!isExp93) {
+          const btn93 = card93.locator('.context-accordion-bar');
+          await btn93.click({ force: true });
+          await extCPage.waitForTimeout(500);
+        }
       }
 
       const extConfirmation = extCPage.locator('.ext-discreet-confirmation');
@@ -636,21 +638,25 @@ async function run() {
       await ch88Page.waitForTimeout(600);
     }
 
-    const row88 = ch88Page.locator('.context-accordion-bar').filter({ hasText: '88' }).first();
-    if (await row88.count() > 0) {
-      await row88.click();
-      await ch88Page.waitForTimeout(600);
+    const card88 = ch88Page.locator('.context-delivery-card').filter({ hasText: '88' }).first();
+    if (await card88.count() > 0) {
+      const isExpanded88 = (await card88.locator('.context-expanded-content').count()) > 0;
+      if (!isExpanded88) {
+        const btn88 = card88.locator('.context-accordion-bar');
+        await btn88.click({ force: true });
+        await ch88Page.waitForTimeout(400);
+      }
 
       // Verify that extension action is completely hidden for completed stage
-      const extSectionCount = await ch88Page.locator('.ctx-extension-section').count();
+      const extSectionCount = await card88.locator('.ctx-extension-section').count();
       recordTest('Completed Chapter #88: Extension section completely omitted (no empty box or confusing header)', extSectionCount === 0);
 
-      // Verify deadline badge is clean "Entrega realizada" without "--" string
-      const dueVal = await ch88Page.locator('.ctx-due-val').innerText();
-      recordTest('Completed Chapter #88: No unlabelled "--" deadline string rendered', !dueVal.includes('--') || dueVal.includes('Entrega realizada'), `Due val text: "${dueVal}"`);
+      // Verify deadline badge is clean without "--" string
+      const dueVal = await card88.locator('.ctx-due-val').innerText();
+      recordTest('Completed Chapter #88: No unlabelled "--" deadline string rendered', !dueVal.includes('--'), `Due val text: "${dueVal}"`);
 
       // Verify status pill says "Concluído"
-      const statusPill = await ch88Page.locator('.ctx-status-pill.done').innerText();
+      const statusPill = await card88.locator('.ctx-status-pill.done').innerText();
       recordTest('Completed Chapter #88: Displays status pill "Concluído"', statusPill.includes('Concluído'));
 
       const pCh88 = path.join(ARTIFACT_DIR, '12_completed_chapter_88_clean.png');
