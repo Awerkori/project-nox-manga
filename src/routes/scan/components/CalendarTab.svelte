@@ -533,7 +533,11 @@
         isSelected: ymd === selectedDateYMD,
         commitments: coms,
         uniqueAssignees: getUniqueAssignees(coms),
-        publications: pubs
+        publications: pubs,
+        hasOverdue: coms.some((c: any) => c.isOverdue),
+        hasMine: coms.some((c: any) => c.isMine),
+        hasExtended: coms.some((c: any) => c.extensionCount > 0),
+        allDone: coms.length > 0 && coms.every((c: any) => c.status === 'DONE')
       });
     }
 
@@ -550,7 +554,11 @@
         isSelected: ymd === selectedDateYMD,
         commitments: coms,
         uniqueAssignees: getUniqueAssignees(coms),
-        publications: pubs
+        publications: pubs,
+        hasOverdue: coms.some((c: any) => c.isOverdue),
+        hasMine: coms.some((c: any) => c.isMine),
+        hasExtended: coms.some((c: any) => c.extensionCount > 0),
+        allDone: coms.length > 0 && coms.every((c: any) => c.status === 'DONE')
       });
     }
 
@@ -571,7 +579,11 @@
           isSelected: ymd === selectedDateYMD,
           commitments: coms,
           uniqueAssignees: getUniqueAssignees(coms),
-          publications: pubs
+          publications: pubs,
+          hasOverdue: coms.some((c: any) => c.isOverdue),
+          hasMine: coms.some((c: any) => c.isMine),
+          hasExtended: coms.some((c: any) => c.extensionCount > 0),
+          allDone: coms.length > 0 && coms.every((c: any) => c.status === 'DONE')
         });
       }
     }
@@ -675,6 +687,17 @@
     const day = String(target.getDate()).padStart(2, '0');
     const month = String(target.getMonth() + 1).padStart(2, '0');
     return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day}/${month} às 23:59`;
+  }
+
+  // Helper to determine if an item has historical metadata to display
+  function hasHistoryData(item: any): boolean {
+    if (!item) return false;
+    return (
+      !!item.claimedAt ||
+      (!!item.originalDueAt && item.originalDueAt !== item.dueAt) ||
+      (item.extensionCount > 0 && !!item.extendedAt) ||
+      !!item.completedAt
+    );
   }
 
   // Active filter chips for quick removal
@@ -1043,17 +1066,18 @@
                     >
                       <div class="event-card-top-row">
                         <span class="event-stage-tag">{item.stageName}</span>
-                        <span class="event-work-text">{item.workTitle} #{item.chapterNumber}</span>
+                        <span class="event-work-text">{item.workTitle}</span>
+                        <span class="event-ch-pill">#{item.chapterNumber}</span>
                         {#if item.extensionCount > 0 && item.status !== 'DONE'}
                           <span class="event-ext-tag">+2d</span>
                         {/if}
                         {#if item.status === 'DONE'}
-                          <Check size={10} class="event-done-icon" />
+                          <Check size={11} class="event-done-icon" />
                         {/if}
                       </div>
                       <div class="event-card-sub-row">
                         <div class="event-avatar-wrap">
-                          <UserAvatar user={item.assignee} size={15} />
+                          <UserAvatar user={item.assignee} size={16} />
                         </div>
                         <span class="event-user-text">
                           {item.assignee?.display_name || item.assignee?.username || 'Membro'}
@@ -1072,33 +1096,43 @@
                   <!-- Site publication indicator -->
                   {#each cell.publications.slice(0, 1) as pub}
                     <div class="publication-badge-pill" title="Publicado: {pub.works?.title || 'Obra'} #{pub.number}">
-                      <Sparkles size={9} />
+                      <Sparkles size={10} />
                       <span>Pub. #{pub.number}</span>
                     </div>
                   {/each}
                 </div>
 
-                <!-- ANDROID / MOBILE CELL CONTENT: CLEAN DOTS / AVATAR LOCKUP -->
+                <!-- ANDROID / MOBILE CELL CONTENT: CLEAN UNIFIED INDICATORS -->
                 <div class="mobile-day-cell-content">
-                  {#if cell.uniqueAssignees.length > 0}
-                    <div class="mobile-avatar-lockup">
-                      <div class="mobile-cell-avatar">
-                        <UserAvatar user={cell.uniqueAssignees[0]} size={20} />
-                      </div>
-                      {#if cell.commitments.length > 1}
-                        <span class="mobile-overflow-count">+{cell.commitments.length - 1}</span>
-                      {/if}
-                    </div>
-                  {/if}
-
                   {#if cell.commitments.length > 0}
-                    <div class="mobile-status-dot-wrap">
-                      <span class="mobile-status-dot {cell.commitments[0]?.statusClass}"></span>
+                    <div
+                      class="mobile-commitment-capsule"
+                      class:has-overdue={cell.hasOverdue}
+                      class:has-mine={cell.hasMine}
+                      class:is-all-done={cell.allDone}
+                    >
+                      {#if cell.hasOverdue}
+                        <span class="mobile-capsule-pip overdue" title="Compromisso em atraso"></span>
+                      {:else if cell.hasMine}
+                        <span class="mobile-capsule-pip mine" title="Sua entrega agendada"></span>
+                      {:else if cell.allDone}
+                        <span class="mobile-capsule-pip done" title="Entrega concluída"></span>
+                      {:else}
+                        <span class="mobile-capsule-pip normal" title="Entrega agendada"></span>
+                      {/if}
+                      <span class="mobile-capsule-count">{cell.commitments.length}</span>
                     </div>
                   {/if}
                 </div>
               </div>
             {/each}
+          </div>
+
+          <!-- ANDROID / MOBILE: CONTEXTUAL LEGEND -->
+          <div class="mobile-calendar-legend">
+            <div class="legend-chip"><span class="legend-pip mine"></span><span>Minha entrega</span></div>
+            <div class="legend-chip"><span class="legend-pip overdue"></span><span>Atrasada</span></div>
+            <div class="legend-chip"><span class="legend-pip done"></span><span>Concluída</span></div>
           </div>
 
           <!-- ANDROID / MOBILE: COMPACT DAY PREVIEW DIRECTLY BELOW GRID -->
@@ -1142,7 +1176,7 @@
                         <span class="preview-status-pill {item.statusClass}">{item.statusLabel}</span>
                         <span class="preview-sep">•</span>
                         <span class="preview-due-text">
-                          {item.status === 'DONE' ? (item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído') : formatDueDisplay(item.dueAt)}
+                          {item.status === 'DONE' ? (item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído') : (item.dueAt ? formatDueDisplay(item.dueAt) : 'Sem prazo')}
                         </span>
                       </div>
                     </div>
@@ -1318,18 +1352,41 @@
                     <!-- Section 3: Prazo e Tempo Restante -->
                     <div class="ctx-deadline-row">
                       <div class="ctx-deadline-col">
-                        <span class="ctx-label">Prazo vigente</span>
-                        <strong class="ctx-due-val">{formatDueDisplay(item.dueAt)}</strong>
+                        <span class="ctx-label">
+                          {item.status === 'DONE' ? 'Entrega concluída' : 'Prazo vigente'}
+                        </span>
+                        {#if item.status === 'DONE'}
+                          <strong class="ctx-due-val done">
+                            {item.completedAt ? formatDateWithTime(item.completedAt) : 'Concluído'}
+                          </strong>
+                        {:else if item.dueAt}
+                          <strong class="ctx-due-val">{formatDueDisplay(item.dueAt)}</strong>
+                        {:else}
+                          <strong class="ctx-due-val unrecorded">Sem prazo registrado</strong>
+                        {/if}
                       </div>
-                      {#if item.status !== 'DONE'}
+                      {#if item.status === 'DONE'}
+                        <span class="ctx-remaining-badge done">
+                          <Check size={11} />
+                          <span>Concluído</span>
+                        </span>
+                      {:else if item.extensionCount > 0}
+                        <span class="ctx-remaining-badge extended">
+                          <span>Prorrogado (+2d)</span>
+                        </span>
+                      {:else if item.isOverdue}
+                        <span class="ctx-remaining-badge overdue">
+                          <span>Prazo encerrado</span>
+                        </span>
+                      {:else if item.dueAt}
                         <span class="ctx-remaining-badge {item.statusClass}">
                           {getRemainingText(item)}
                         </span>
                       {/if}
                     </div>
 
-                    <!-- Section 4: Ação de Prorrogação de Prazo (Strictly States A, B, C & Permanence) -->
-                    {#if item.kind === 'EDITORIAL_STAGE'}
+                    <!-- Section 4: Ação de Prorrogação de Prazo (Strictly States A, B, C & Permanence - Hidden for DONE) -->
+                    {#if item.kind === 'EDITORIAL_STAGE' && item.status !== 'DONE' && item.extensionState !== 'NONE'}
                       <div class="ctx-extension-section">
                         {#if item.extensionState === 'EXTENDED'}
                           <!-- Estado C: Prorrogação utilizada -->
@@ -1463,47 +1520,51 @@
                     </div>
 
                     <!-- Section 6: Histórico e Informações Secundárias (Level 3 Progressive Disclosure) -->
-                    <div class="ctx-history-meta-box">
-                      <div class="ctx-history-grid">
-                        {#if item.claimedAt}
-                          <div class="ctx-history-item">
-                            <span class="ctx-history-lbl">Atribuído em:</span>
-                            <span class="ctx-history-txt">{formatDateWithTime(item.claimedAt)}</span>
+                    {#if hasHistoryData(item) || (item.productionChapter && onOpenChapter)}
+                      <div class="ctx-history-meta-box">
+                        {#if hasHistoryData(item)}
+                          <div class="ctx-history-grid">
+                            {#if item.claimedAt}
+                              <div class="ctx-history-item">
+                                <span class="ctx-history-lbl">Atribuído em:</span>
+                                <span class="ctx-history-txt">{formatDateWithTime(item.claimedAt)}</span>
+                              </div>
+                            {/if}
+                            {#if item.originalDueAt && item.originalDueAt !== item.dueAt}
+                              <div class="ctx-history-item">
+                                <span class="ctx-history-lbl">Prazo inicial:</span>
+                                <span class="ctx-history-txt">{formatDueDisplay(item.originalDueAt)}</span>
+                              </div>
+                            {/if}
+                            {#if item.extensionCount > 0 && item.extendedAt}
+                              <div class="ctx-history-item">
+                                <span class="ctx-history-lbl">Prorrogado em:</span>
+                                <span class="ctx-history-txt">{formatDateWithTime(item.extendedAt)}</span>
+                              </div>
+                            {/if}
+                            {#if item.completedAt}
+                              <div class="ctx-history-item">
+                                <span class="ctx-history-lbl">Concluído em:</span>
+                                <span class="ctx-history-txt">{formatDateWithTime(item.completedAt)}</span>
+                              </div>
+                            {/if}
                           </div>
                         {/if}
-                        {#if item.originalDueAt && item.originalDueAt !== item.dueAt}
-                          <div class="ctx-history-item">
-                            <span class="ctx-history-lbl">Prazo inicial:</span>
-                            <span class="ctx-history-txt">{formatDueDisplay(item.originalDueAt)}</span>
-                          </div>
-                        {/if}
-                        {#if item.extendedAt}
-                          <div class="ctx-history-item">
-                            <span class="ctx-history-lbl">Prorrogado em:</span>
-                            <span class="ctx-history-txt">{formatDateWithTime(item.extendedAt)}</span>
-                          </div>
-                        {/if}
-                        {#if item.completedAt}
-                          <div class="ctx-history-item">
-                            <span class="ctx-history-lbl">Concluído em:</span>
-                            <span class="ctx-history-txt">{formatDateWithTime(item.completedAt)}</span>
+
+                        {#if item.productionChapter && onOpenChapter}
+                          <div class="ctx-actions-footer">
+                            <button
+                              type="button"
+                              class="btn-open-in-prod"
+                              onclick={() => onOpenChapter(item.productionChapter)}
+                            >
+                              <span>Abrir na Produção</span>
+                              <ArrowRight size={12} />
+                            </button>
                           </div>
                         {/if}
                       </div>
-
-                      {#if item.productionChapter && onOpenChapter}
-                        <div class="ctx-actions-footer">
-                          <button
-                            type="button"
-                            class="btn-open-in-prod"
-                            onclick={() => onOpenChapter(item.productionChapter)}
-                          >
-                            <span>Abrir na Produção</span>
-                            <ArrowRight size={12} />
-                          </button>
-                        </div>
-                      {/if}
-                    </div>
+                    {/if}
                   </div>
                 {/if}
               </div>
@@ -1634,10 +1695,33 @@
         <section class="sheet-section">
           <div class="sheet-deadline-banner">
             <div class="sheet-deadline-left">
-              <span class="sheet-label">Prazo vigente</span>
-              <strong class="sheet-due-text">{formatDueDisplay(bottomSheetItem.dueAt)}</strong>
+              <span class="sheet-label">
+                {bottomSheetItem.status === 'DONE' ? 'Entrega concluída' : 'Prazo vigente'}
+              </span>
+              {#if bottomSheetItem.status === 'DONE'}
+                <strong class="sheet-due-text done">
+                  {bottomSheetItem.completedAt ? formatDateWithTime(bottomSheetItem.completedAt) : 'Concluído'}
+                </strong>
+              {:else if bottomSheetItem.dueAt}
+                <strong class="sheet-due-text">{formatDueDisplay(bottomSheetItem.dueAt)}</strong>
+              {:else}
+                <strong class="sheet-due-text unrecorded">Sem prazo registrado</strong>
+              {/if}
             </div>
-            {#if bottomSheetItem.status !== 'DONE'}
+            {#if bottomSheetItem.status === 'DONE'}
+              <span class="sheet-time-badge done">
+                <Check size={11} />
+                <span>Concluído</span>
+              </span>
+            {:else if bottomSheetItem.extensionCount > 0}
+              <span class="sheet-time-badge extended">
+                <span>Prorrogado (+2d)</span>
+              </span>
+            {:else if bottomSheetItem.isOverdue}
+              <span class="sheet-time-badge overdue">
+                <span>Prazo encerrado</span>
+              </span>
+            {:else if bottomSheetItem.dueAt}
               <span class="sheet-time-badge {bottomSheetItem.statusClass}">
                 {getRemainingText(bottomSheetItem)}
               </span>
@@ -1645,8 +1729,8 @@
           </div>
         </section>
 
-        <!-- 4. Ação de prorrogação (Strictly States A, B, C & Permanence) -->
-        {#if bottomSheetItem.kind === 'EDITORIAL_STAGE'}
+        <!-- 4. Ação de prorrogação (Strictly States A, B, C & Permanence - Hidden for DONE) -->
+        {#if bottomSheetItem.kind === 'EDITORIAL_STAGE' && bottomSheetItem.status !== 'DONE' && bottomSheetItem.extensionState !== 'NONE'}
           <section class="sheet-section">
             <span class="sheet-label">Prorrogação de prazo (+2 dias)</span>
             <div class="sheet-extension-box">
@@ -1767,34 +1851,37 @@
         </section>
 
         <!-- 6. Histórico e informações secundárias -->
-        <section class="sheet-section">
-          <span class="sheet-label">Histórico e Metadados</span>
-          <div class="sheet-history-box">
-            {#if bottomSheetItem.claimedAt}
-              <div class="sheet-history-row">
-                <span class="sheet-history-label">Atribuído em:</span>
-                <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.claimedAt)}</span>
-              </div>
-            {/if}
-            {#if bottomSheetItem.originalDueAt && bottomSheetItem.originalDueAt !== bottomSheetItem.dueAt}
-              <div class="sheet-history-row">
-                <span class="sheet-history-label">Prazo inicial:</span>
-                <span class="sheet-history-val">{formatDueDisplay(bottomSheetItem.originalDueAt)}</span>
-              </div>
-            {/if}
-            {#if bottomSheetItem.extendedAt}
-              <div class="sheet-history-row">
-                <span class="sheet-history-label">Prorrogado em:</span>
-                <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.extendedAt)}</span>
-              </div>
-            {/if}
-            {#if bottomSheetItem.completedAt}
-              <div class="sheet-history-row">
-                <span class="sheet-history-label">Concluído em:</span>
-                <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.completedAt)}</span>
-              </div>
-            {/if}
-          </div>
+        {#if hasHistoryData(bottomSheetItem) || (bottomSheetItem.productionChapter && onOpenChapter)}
+          <section class="sheet-section">
+            {#if hasHistoryData(bottomSheetItem)}
+            <span class="sheet-label">Histórico e Metadados</span>
+            <div class="sheet-history-box">
+              {#if bottomSheetItem.claimedAt}
+                <div class="sheet-history-row">
+                  <span class="sheet-history-label">Atribuído em:</span>
+                  <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.claimedAt)}</span>
+                </div>
+              {/if}
+              {#if bottomSheetItem.originalDueAt && bottomSheetItem.originalDueAt !== bottomSheetItem.dueAt}
+                <div class="sheet-history-row">
+                  <span class="sheet-history-label">Prazo inicial:</span>
+                  <span class="sheet-history-val">{formatDueDisplay(bottomSheetItem.originalDueAt)}</span>
+                </div>
+              {/if}
+              {#if bottomSheetItem.extensionCount > 0 && bottomSheetItem.extendedAt}
+                <div class="sheet-history-row">
+                  <span class="sheet-history-label">Prorrogado em:</span>
+                  <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.extendedAt)}</span>
+                </div>
+              {/if}
+              {#if bottomSheetItem.completedAt}
+                <div class="sheet-history-row">
+                  <span class="sheet-history-label">Concluído em:</span>
+                  <span class="sheet-history-val">{formatDateWithTime(bottomSheetItem.completedAt)}</span>
+                </div>
+              {/if}
+            </div>
+          {/if}
 
           {#if bottomSheetItem.productionChapter && onOpenChapter}
             <button
@@ -1810,6 +1897,7 @@
             </button>
           {/if}
         </section>
+        {/if}
       </div>
     </div>
   </div>
@@ -2315,8 +2403,8 @@
   /* 3. WORKSPACE LAYOUT: CALENDAR + SINGLE CONTEXTUAL PANEL */
   .calendar-workspace-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 370px;
-    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    gap: 1rem;
     align-items: start;
   }
 
@@ -2336,18 +2424,20 @@
   .weekday-labels-row {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(255, 255, 255, 0.05);
+    gap: 1px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .weekday-label-cell {
-    padding: 0.45rem 0.35rem;
+    background: rgba(15, 23, 42, 0.95);
+    padding: 0.5rem 0.35rem;
     text-align: center;
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     font-weight: 700;
     color: #94a3b8;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
   }
 
   .weekday-label-cell.weekend {
@@ -2363,9 +2453,9 @@
 
   .matrix-day-cell {
     background: #090d16;
-    min-height: 100px;
-    max-height: 130px;
-    padding: 0.4rem;
+    min-height: 116px;
+    max-height: 144px;
+    padding: 0.45rem 0.4rem;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -2386,13 +2476,13 @@
   }
 
   .matrix-day-cell.is-today {
-    background: rgba(139, 92, 246, 0.1);
-    box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.4);
+    background: rgba(139, 92, 246, 0.12);
+    box-shadow: inset 0 0 0 1.5px rgba(168, 85, 247, 0.55);
   }
 
   .matrix-day-cell.is-selected {
-    box-shadow: inset 0 0 0 2px #a855f7;
-    background: rgba(139, 92, 246, 0.16);
+    box-shadow: inset 0 0 0 2px #a855f7, 0 0 12px rgba(168, 85, 247, 0.2);
+    background: rgba(139, 92, 246, 0.18);
   }
 
   .cell-top-bar {
@@ -2403,7 +2493,7 @@
   }
 
   .cell-day-num {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #cbd5e1;
     line-height: 1;
@@ -2414,11 +2504,11 @@
   }
 
   .cell-today-pill {
-    font-size: 0.58rem;
+    font-size: 0.6rem;
     font-weight: 700;
     background: #7c3aed;
     color: #fff;
-    padding: 0.08rem 0.3rem;
+    padding: 0.1rem 0.35rem;
     border-radius: 0.25rem;
     text-transform: uppercase;
   }
@@ -2435,19 +2525,19 @@
   .day-event-card {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    gap: 0.12rem;
     background: rgba(15, 23, 42, 0.88);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-left: 3px solid var(--stage-accent, #8b5cf6);
-    border-radius: 0.32rem;
-    padding: 0.18rem 0.3rem;
+    border-radius: 0.35rem;
+    padding: 0.22rem 0.35rem;
     overflow: hidden;
-    transition: transform 0.1s ease;
+    transition: transform 0.1s ease, border-color 0.1s ease;
   }
 
   .day-event-card:hover {
     transform: translateY(-1px);
-    border-color: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.22);
   }
 
   .day-event-card.in-progress { background: rgba(139, 92, 246, 0.1); }
@@ -2459,13 +2549,13 @@
   .event-card-top-row {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.28rem;
     width: 100%;
     min-width: 0;
   }
 
   .event-stage-tag {
-    font-size: 0.58rem;
+    font-size: 0.62rem;
     font-weight: 700;
     color: var(--stage-accent, #c084fc);
     white-space: nowrap;
@@ -2473,7 +2563,7 @@
   }
 
   .event-work-text {
-    font-size: 0.62rem;
+    font-size: 0.66rem;
     font-weight: 600;
     color: #e2e8f0;
     white-space: nowrap;
@@ -2483,12 +2573,22 @@
     min-width: 0;
   }
 
+  .event-ch-pill {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.12);
+    padding: 0.04rem 0.25rem;
+    border-radius: 0.2rem;
+    flex-shrink: 0;
+  }
+
   .event-ext-tag {
-    font-size: 0.55rem;
+    font-size: 0.58rem;
     font-weight: 700;
     background: rgba(6, 182, 212, 0.25);
     color: #22d3ee;
-    padding: 0.04rem 0.2rem;
+    padding: 0.04rem 0.22rem;
     border-radius: 0.2rem;
     flex-shrink: 0;
   }
@@ -2501,7 +2601,7 @@
   .event-card-sub-row {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.28rem;
     width: 100%;
     min-width: 0;
   }
@@ -2511,7 +2611,7 @@
   }
 
   .event-user-text {
-    font-size: 0.58rem;
+    font-size: 0.62rem;
     color: #94a3b8;
     white-space: nowrap;
     overflow: hidden;
@@ -2519,7 +2619,7 @@
   }
 
   .event-overflow-pill {
-    font-size: 0.58rem;
+    font-size: 0.6rem;
     font-weight: 700;
     color: #a855f7;
     background: rgba(139, 92, 246, 0.15);
@@ -2531,12 +2631,12 @@
   .publication-badge-pill {
     display: flex;
     align-items: center;
-    gap: 0.2rem;
-    font-size: 0.56rem;
+    gap: 0.22rem;
+    font-size: 0.6rem;
     color: #38bdf8;
     background: rgba(56, 189, 248, 0.12);
-    padding: 0.06rem 0.25rem;
-    border-radius: 0.2rem;
+    padding: 0.08rem 0.3rem;
+    border-radius: 0.22rem;
   }
 
   /* Mobile Day Content inside cell */
@@ -2545,6 +2645,10 @@
   }
 
   .mobile-day-preview-strip {
+    display: none;
+  }
+
+  .mobile-calendar-legend {
     display: none;
   }
 
@@ -3038,6 +3142,7 @@
   .ctx-remaining-badge.due-soon { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
   .ctx-remaining-badge.overdue { background: rgba(239, 68, 68, 0.25); color: #f87171; }
   .ctx-remaining-badge.extended { background: rgba(6, 182, 212, 0.25); color: #22d3ee; }
+  .ctx-remaining-badge.done { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 
   /* Extension Section */
   .ctx-extension-section {
@@ -3616,6 +3721,7 @@
   .sheet-time-badge.due-soon { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
   .sheet-time-badge.overdue { background: rgba(239, 68, 68, 0.25); color: #f87171; }
   .sheet-time-badge.extended { background: rgba(6, 182, 212, 0.25); color: #22d3ee; }
+  .sheet-time-badge.done { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 
   /* 4. Ação de prorrogação */
   .sheet-extension-box {
@@ -4245,50 +4351,134 @@
       display: none;
     }
 
-    /* Mobile Day Content inside cell */
+    /* Mobile Day Content inside cell: Unified Capsule */
     .mobile-day-cell-content {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.15rem;
+      justify-content: center;
       width: 100%;
       margin-top: auto;
     }
 
-    .mobile-avatar-lockup {
-      display: flex;
+    .mobile-commitment-capsule {
+      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 0.1rem;
+      gap: 0.22rem;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9999px;
+      padding: 0.1rem 0.32rem;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      transition: transform 0.1s ease;
     }
 
-    .mobile-cell-avatar {
-      flex-shrink: 0;
+    .mobile-commitment-capsule.has-overdue {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.5);
     }
 
-    .mobile-overflow-count {
-      font-size: 0.55rem;
-      font-weight: 700;
-      color: #c084fc;
+    .mobile-commitment-capsule.has-mine {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: rgba(56, 189, 248, 0.5);
     }
 
-    .mobile-status-dot-wrap {
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .mobile-commitment-capsule.is-all-done {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
     }
 
-    .mobile-status-dot {
+    .mobile-capsule-pip {
       width: 5px;
       height: 5px;
       border-radius: 50%;
+      flex-shrink: 0;
     }
 
-    .mobile-status-dot.in-progress { background: #c084fc; }
-    .mobile-status-dot.due-soon { background: #fbbf24; }
-    .mobile-status-dot.done { background: #34d399; }
-    .mobile-status-dot.overdue { background: #ef4444; }
-    .mobile-status-dot.extended { background: #06b6d4; }
+    .mobile-capsule-pip.overdue {
+      background: #ef4444;
+      box-shadow: 0 0 5px rgba(239, 68, 68, 0.8);
+    }
+
+    .mobile-capsule-pip.mine {
+      background: #38bdf8;
+      box-shadow: 0 0 5px rgba(56, 189, 248, 0.8);
+    }
+
+    .mobile-capsule-pip.done {
+      background: #10b981;
+    }
+
+    .mobile-capsule-pip.pending {
+      background: #c084fc;
+      box-shadow: 0 0 5px rgba(192, 132, 252, 0.7);
+    }
+
+    .mobile-capsule-count {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1;
+    }
+
+    .mobile-commitment-capsule.has-overdue .mobile-capsule-count {
+      color: #fca5a5;
+    }
+
+    .mobile-commitment-capsule.has-mine .mobile-capsule-count {
+      color: #7dd3fc;
+    }
+
+    .mobile-commitment-capsule.is-all-done .mobile-capsule-count {
+      color: #6ee7b7;
+    }
+
+    /* Contextual Legend below Mobile Grid */
+    .mobile-calendar-legend {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      padding: 0.45rem 0.6rem;
+      background: rgba(15, 23, 42, 0.75);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.64rem;
+      color: #94a3b8;
+      flex-wrap: wrap;
+    }
+
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+
+    .legend-pip {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .legend-pip.overdue {
+      background: #ef4444;
+      box-shadow: 0 0 5px rgba(239, 68, 68, 0.8);
+    }
+
+    .legend-pip.mine {
+      background: #38bdf8;
+      box-shadow: 0 0 5px rgba(56, 189, 248, 0.8);
+    }
+
+    .legend-pip.pending {
+      background: #c084fc;
+      box-shadow: 0 0 5px rgba(192, 132, 252, 0.7);
+    }
+
+    .legend-pip.done {
+      background: #10b981;
+    }
 
     /* Mobile Day Preview Strip */
     .mobile-day-preview-strip {
@@ -4438,11 +4628,31 @@
   @media (max-width: 360px) {
     .matrix-day-cell {
       min-height: 46px;
-      padding: 0.18rem 0.12rem;
+      padding: 0.16rem 0.1rem;
     }
 
     .cell-day-num {
-      font-size: 0.66rem;
+      font-size: 0.64rem;
+    }
+
+    .mobile-commitment-capsule {
+      padding: 0.08rem 0.24rem;
+      gap: 0.16rem;
+    }
+
+    .mobile-capsule-pip {
+      width: 4px;
+      height: 4px;
+    }
+
+    .mobile-capsule-count {
+      font-size: 0.58rem;
+    }
+
+    .mobile-calendar-legend {
+      gap: 0.4rem;
+      font-size: 0.58rem;
+      padding: 0.35rem 0.45rem;
     }
   }
 
