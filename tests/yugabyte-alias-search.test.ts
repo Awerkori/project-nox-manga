@@ -96,7 +96,8 @@ describe('Yugabyte alias search', () => {
     });
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain('search_text ILIKE $1');
-    expect(query.mock.calls[1][0]).toContain('title ILIKE $1 OR EXISTS');
+    expect(query.mock.calls[1][0]).toContain('title ILIKE $1 OR CASE');
+    expect(query.mock.calls[1][0]).toContain("array_to_string(COALESCE(works.aliases, ARRAY[]::text[]), ' ') ILIKE $1");
     expect(query.mock.calls[1][0]).toContain('unnest(COALESCE(works.aliases');
   });
 

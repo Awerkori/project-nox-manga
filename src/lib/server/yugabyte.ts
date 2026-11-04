@@ -1377,14 +1377,19 @@ export async function fetchCatalogFromYugabyte(
           platformEnv
         );
 
-        // 2. If 0 rows, fall back to alias and accent-insensitive scan
+        // 2. If 0 rows, fall back to alias and accent-insensitive scan.
+        // q has no LIKE wildcards: a matching alias must occur in the joined
+        // text. The EXISTS remains necessary to reject cross-alias matches.
         if (res.rows.length === 0) {
           res = await executeYugabyteSql<YugabyteWork & { total_count: number }>(
             buildSql(`(
-              title ILIKE $${qParamIdx} OR EXISTS (
-                SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
-                WHERE work_alias.alias_text ILIKE $${qParamIdx}
-              ) OR translate(lower(COALESCE(works.search_text, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIKE translate(lower($${qParamIdx}), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
+              title ILIKE $${qParamIdx} OR CASE
+                WHEN array_to_string(COALESCE(works.aliases, ARRAY[]::text[]), ' ') ILIKE $${qParamIdx}
+                THEN EXISTS (
+                  SELECT 1 FROM unnest(COALESCE(works.aliases, ARRAY[]::text[])) AS work_alias(alias_text)
+                  WHERE work_alias.alias_text ILIKE $${qParamIdx}
+                ) ELSE false END
+              OR translate(lower(COALESCE(works.search_text, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn') LIKE translate(lower($${qParamIdx}), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn')
             )`),
             params,
             platformEnv
