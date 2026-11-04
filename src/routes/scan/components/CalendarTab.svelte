@@ -7,6 +7,7 @@
     User,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Sparkles,
     Briefcase,
     Filter,
@@ -557,8 +558,12 @@
     return allCommitments
       .filter((c) => c.assignedTo === currentUserId && c.status === 'IN_PROGRESS' && c.dueAt)
       .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
-      .slice(0, 5);
+      .slice(0, 6);
   });
+
+  // Primary personal delivery (Hero item) and secondary list
+  let primaryMyDelivery = $derived(myUpcomingDeliveries[0] || null);
+  let otherMyDeliveries = $derived(myUpcomingDeliveries.slice(1));
 
   // Overdue items across scan
   let overdueDeliveries = $derived.by(() => {
@@ -568,13 +573,46 @@
       .slice(0, 5);
   });
 
-  // Upcoming items across whole team (Entregas da Equipe)
+  // Upcoming items across team (excluding current user's primary delivery to avoid duplication)
   let teamUpcomingDeliveries = $derived.by(() => {
     return allCommitments
-      .filter((c) => c.status === 'IN_PROGRESS' && c.dueAt)
+      .filter((c) => c.status === 'IN_PROGRESS' && c.dueAt && c.id !== primaryMyDelivery?.id)
       .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
-      .slice(0, 5);
+      .slice(0, 6);
   });
+
+  // Remaining time helper text
+  function getRemainingText(item: any): string {
+    if (!item?.dueAt) return '';
+    const nowMs = Date.now();
+    const dueMs = new Date(item.dueAt).getTime();
+    const diffMs = dueMs - nowMs;
+    const hours = Math.round(diffMs / (1000 * 60 * 60));
+    if (diffMs < 0) return 'Prazo vencido';
+    if (hours <= 2) return 'Vence em < 2h!';
+    if (hours <= 24) return `Vence em ${hours}h`;
+    const days = Math.ceil(hours / 24);
+    if (days === 1) return 'Vence amanhã';
+    return `Vence em ${days} dias`;
+  }
+
+  // Format due date for clean display
+  function formatDueDisplay(dueAt?: string): string {
+    if (!dueAt) return '--';
+    const sp = getSaoPauloDate(dueAt);
+    const day = String(sp.getDate()).padStart(2, '0');
+    const month = String(sp.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month} às 23:59`;
+  }
+
+  // Format completed date for clean display
+  function formatCompletedDisplay(completedAt?: string): string {
+    if (!completedAt) return 'Concluído';
+    const sp = getSaoPauloDate(completedAt);
+    const day = String(sp.getDate()).padStart(2, '0');
+    const month = String(sp.getMonth() + 1).padStart(2, '0');
+    return `Concluído em ${day}/${month}`;
+  }
 
   // Recent Publications across scan (Últimas Publicações)
   let recentPublications = $derived.by(() => {
@@ -920,11 +958,11 @@
                     <div
                       class="day-event-card {item.statusClass}"
                       style="--stage-accent: {item.stageColor}"
-                      title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || item.assignee?.username || 'Membro da equipe'}"
+                      title="{item.workTitle} #{item.chapterNumber} • {item.stageName} • {item.assignee?.display_name || item.assignee?.username || 'Membro'}"
                     >
                       <div class="event-card-top-row">
-                        <div class="event-card-avatar-wrap" title="{item.assignee?.display_name || item.assignee?.username || 'Membro'}">
-                          <UserAvatar user={item.assignee} size={15} />
+                        <div class="event-card-avatar-wrap">
+                          <UserAvatar user={item.assignee} size={18} />
                         </div>
                         <span class="event-card-user-name">
                           {item.assignee?.display_name || item.assignee?.username || 'Membro'}
@@ -933,7 +971,7 @@
                           <span class="event-card-ext-badge">+2d</span>
                         {/if}
                         {#if item.status === 'DONE'}
-                          <Check size={10} class="event-card-done-ico" />
+                          <Check size={11} class="event-card-done-ico" />
                         {/if}
                       </div>
 
@@ -947,7 +985,7 @@
                   <!-- Overflow indicator if > 2 items -->
                   {#if cell.commitments.length > 2}
                     <div class="event-overflow-badge" onclick={(e) => { e.stopPropagation(); handleSelectDay(cell.ymd); }}>
-                      <span>+{cell.commitments.length - 2} entrega{cell.commitments.length - 2 === 1 ? '' : 's'}</span>
+                      <span>+{cell.commitments.length - 2} entregas</span>
                     </div>
                   {/if}
 
@@ -960,26 +998,22 @@
                   {/each}
                 </div>
 
-                <!-- ANDROID / MOBILE AVATARS STRIP (Visible under 768px) -->
+                <!-- ANDROID / MOBILE CELL CONTENT: CLEAN UNCLUTTERED DENSITY -->
                 <div class="mobile-day-cell-content">
                   {#if cell.uniqueAssignees.length > 0}
-                    <div class="mobile-avatars-row">
-                      {#each cell.uniqueAssignees.slice(0, 2) as assignee}
-                        <div class="mobile-cell-avatar">
-                          <UserAvatar user={assignee} size={16} />
-                        </div>
-                      {/each}
-                      {#if cell.commitments.length > 2}
-                        <span class="mobile-overflow-count">+{cell.commitments.length - 2}</span>
+                    <div class="mobile-avatar-lockup">
+                      <div class="mobile-cell-avatar">
+                        <UserAvatar user={cell.uniqueAssignees[0]} size={22} />
+                      </div>
+                      {#if cell.commitments.length > 1}
+                        <span class="mobile-overflow-count">+{cell.commitments.length - 1}</span>
                       {/if}
                     </div>
                   {/if}
 
                   {#if cell.commitments.length > 0}
-                    <div class="mobile-pips-strip">
-                      {#each cell.commitments.slice(0, 3) as item}
-                        <span class="mobile-stage-pip" style="background: {item.statusColor}"></span>
-                      {/each}
+                    <div class="mobile-status-dot-wrap">
+                      <span class="mobile-status-dot {cell.commitments[0]?.statusClass}"></span>
                     </div>
                   {/if}
                 </div>
@@ -987,39 +1021,44 @@
             {/each}
           </div>
 
-          <!-- ANDROID / MOBILE: SELECTED DAY ACTIVE PREVIEW (Fills empty void below calendar) -->
+          <!-- ANDROID / MOBILE: NÍVEL 1 — RESUMO RÁPIDO DO DIA SELECIONADO -->
           <div class="mobile-day-preview-strip">
             <div class="preview-strip-header">
               <div class="preview-header-left">
                 <CalendarIcon size={14} class="text-purple-400" />
-                <span class="preview-day-title">{formattedSelectedDayHeader}</span>
+                <div class="preview-title-col">
+                  <span class="preview-day-title">Compromissos do dia ({selectedDayCommitments.length})</span>
+                  <span class="preview-date-sub">{formattedSelectedDayHeader}</span>
+                </div>
               </div>
-              <button
-                type="button"
-                class="btn-view-drawer-trigger"
-                onclick={() => (showDayDrawer = true)}
-              >
-                <span>Ver detalhes</span>
-                <ArrowRight size={12} />
-              </button>
+              {#if selectedDayCommitments.length > 0}
+                <button
+                  type="button"
+                  class="btn-view-drawer-trigger"
+                  onclick={() => (showDayDrawer = true)}
+                >
+                  <span>Ver detalhes</span>
+                  <ArrowRight size={12} />
+                </button>
+              {/if}
             </div>
 
             {#if selectedDayCommitments.length === 0}
               <div class="preview-empty-note">
-                <span>Nenhuma entrega prevista para este dia. Toque em qualquer dia com avatar para ver os compromissos.</span>
+                <span>Nenhum compromisso agendado para esta data. Toque em um dia no calendário para ver as entregas.</span>
               </div>
             {:else}
               <div class="preview-items-row">
-                {#each selectedDayCommitments.slice(0, 2) as item}
+                {#each selectedDayCommitments as item}
                   <div
-                    class="preview-mini-card"
+                    class="preview-mini-card {item.statusClass}"
                     onclick={() => (showDayDrawer = true)}
                     role="button"
                     tabindex="0"
                     onkeydown={(e) => { if (e.key === 'Enter') showDayDrawer = true; }}
                   >
                     <div class="preview-card-avatar">
-                      <UserAvatar user={item.assignee} size={22} />
+                      <UserAvatar user={item.assignee} size={28} />
                     </div>
                     <div class="preview-card-text">
                       <div class="preview-work-line">
@@ -1027,11 +1066,20 @@
                         {#if item.chapterNumber}
                           <span class="preview-chapter-badge">#{item.chapterNumber}</span>
                         {/if}
+                        <span class="preview-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
                       </div>
                       <div class="preview-meta-line">
-                        <span class="preview-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                        <span class="preview-assignee-text">{item.assignee?.display_name || item.assignee?.username || 'Membro'}</span>
+                        <span class="preview-sep">•</span>
                         <span class="preview-status-pill {item.statusClass}">{item.statusLabel}</span>
+                        <span class="preview-sep">•</span>
+                        <span class="preview-due-text">
+                          {item.status === 'DONE' ? (item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído') : formatDueDisplay(item.dueAt)}
+                        </span>
                       </div>
+                    </div>
+                    <div class="preview-card-chevron">
+                      <ArrowRight size={13} />
                     </div>
                   </div>
                 {/each}
@@ -1133,70 +1181,134 @@
 
     <!-- RIGHT: COMPLEMENTARY SIDE PANELS (Desktop) -->
     <aside class="calendar-side-column">
-      <!-- Panel 1: Minhas Próximas Entregas -->
-      <section class="side-widget-card">
+      <!-- NÍVEL 3 — BLOCO PRINCIPAL: Minha Próxima Entrega -->
+      <section class="side-widget-card hero-my-delivery-card">
         <header class="widget-header">
           <Clock size={15} class="text-cyan-400" />
-          <h3 class="widget-title">Minhas Próximas Entregas ({myUpcomingDeliveries.length})</h3>
+          <h3 class="widget-title">Minha Próxima Entrega</h3>
         </header>
 
-        {#if myUpcomingDeliveries.length === 0}
+        {#if primaryMyDelivery}
+          <div class="hero-delivery-box">
+            <div class="hero-delivery-top">
+              <div class="hero-cover-wrap">
+                {#if primaryMyDelivery.workCoverId}
+                  <img src="/media/{primaryMyDelivery.workCoverId}" alt={primaryMyDelivery.workTitle} class="hero-cover-img" />
+                {:else}
+                  <div class="hero-cover-fallback"><Briefcase size={14} /></div>
+                {/if}
+              </div>
+              <div class="hero-delivery-meta">
+                <span class="hero-delivery-title" title="{primaryMyDelivery.workTitle} #{primaryMyDelivery.chapterNumber}">
+                  {primaryMyDelivery.workTitle} #{primaryMyDelivery.chapterNumber}
+                </span>
+                <div class="hero-delivery-badges">
+                  <span class="delivery-stage-tag" style="--st-c: {primaryMyDelivery.stageColor}">
+                    {primaryMyDelivery.stageName}
+                  </span>
+                  <span class="countdown-pill {primaryMyDelivery.statusClass}">
+                    {getRemainingText(primaryMyDelivery)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Prazo e Estado da Prorrogação -->
+            <div class="hero-deadline-strip">
+              <span class="hero-due-label">Prazo:</span>
+              <strong class="hero-due-val">{formatDueDisplay(primaryMyDelivery.dueAt)}</strong>
+            </div>
+
+            <!-- Ação de Prorrogação Contextual -->
+            {#if primaryMyDelivery.kind === 'EDITORIAL_STAGE'}
+              {#if primaryMyDelivery.canExtend}
+                <button
+                  type="button"
+                  class="btn-prominent-extend"
+                  onclick={() => openExtensionModal(primaryMyDelivery)}
+                  title="Prorrogar prazo em +2 dias sem necessidade de aprovação"
+                >
+                  <Zap size={14} />
+                  <span>Prorrogar +2 dias</span>
+                </button>
+              {:else if primaryMyDelivery.remainingHours > 24 && primaryMyDelivery.extensionCount === 0}
+                <div class="extension-hero-info">
+                  <Info size={12} class="text-cyan-400" />
+                  <span>Prorrogação de +2 dias disponível nas últimas 24h do prazo.</span>
+                </div>
+              {:else if primaryMyDelivery.extensionCount > 0}
+                <div class="extension-hero-extended">
+                  <Check size={12} class="text-emerald-400" />
+                  <span>Prazo prorrogado (+2d aplicados)</span>
+                </div>
+              {/if}
+            {/if}
+
+            <button
+              type="button"
+              class="btn-hero-focus-day"
+              onclick={() => handleSelectDay(primaryMyDelivery.dueYMD)}
+            >
+              <span>Ver detalhes na data</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
+
+          <!-- Outras entregas pessoais compactas -->
+          {#if otherMyDeliveries.length > 0}
+            <div class="other-personal-block">
+              <span class="other-personal-heading">Outras entregas ({otherMyDeliveries.length})</span>
+              <div class="other-personal-stack">
+                {#each otherMyDeliveries as item}
+                  <div
+                    class="other-personal-row"
+                    onclick={() => handleSelectDay(item.dueYMD)}
+                    role="button"
+                    tabindex="0"
+                    onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD); }}
+                  >
+                    <div class="other-row-info">
+                      <span class="other-row-title">{item.workTitle} #{item.chapterNumber}</span>
+                      <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
+                    </div>
+                    <div class="other-row-due">
+                      <span class="other-due-text">{item.dueYMD.split('-')[2]}/{item.dueYMD.split('-')[1]}</span>
+                      {#if item.canExtend}
+                        <button
+                          type="button"
+                          class="btn-widget-extend"
+                          onclick={(e) => { e.stopPropagation(); openExtensionModal(item); }}
+                          title="Prorrogar +2 dias"
+                        >
+                          <Zap size={11} />
+                        </button>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        {:else}
           <div class="widget-empty-box">
             <CheckCircle2 size={20} class="text-emerald-400" />
             <p>Você não possui entregas pendentes.</p>
           </div>
-        {:else}
-          <div class="widget-items-stack">
-            {#each myUpcomingDeliveries as item}
-              <div
-                class="widget-delivery-item"
-                class:is-overdue={item.isOverdue}
-                onclick={() => handleSelectDay(item.dueYMD)}
-                role="button"
-                tabindex="0"
-                onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD); }}
-              >
-                <div class="delivery-item-left">
-                  <div class="delivery-header-line">
-                    <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
-                    <span class="delivery-status-pill {item.statusClass}">{item.statusLabel}</span>
-                  </div>
-                  <div class="delivery-tags-row">
-                    <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
-                    <span class="delivery-due-tag">
-                      Prazo: {item.dueYMD.split('-')[2]}/{item.dueYMD.split('-')[1]}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="delivery-item-right">
-                  {#if item.canExtend}
-                    <button
-                      type="button"
-                      class="btn-widget-extend"
-                      onclick={(e) => {
-                        e.stopPropagation();
-                        openExtensionModal(item);
-                      }}
-                      title="Prorrogar +2 dias"
-                    >
-                      <Zap size={11} />
-                      <span>+2d</span>
-                    </button>
-                  {/if}
-                  <span class="widget-arrow"><ArrowRight size={13} /></span>
-                </div>
-              </div>
-            {/each}
-          </div>
         {/if}
       </section>
 
-      <!-- Panel 2: Entregas da Equipe -->
+      <!-- NÍVEL 3 — BLOCO SECUNDÁRIO: Compromissos da Equipe -->
       <section class="side-widget-card">
         <header class="widget-header">
-          <Users size={15} class="text-indigo-400" />
-          <h3 class="widget-title">Entregas da Equipe ({teamUpcomingDeliveries.length})</h3>
+          <div class="widget-header-title-wrap">
+            <Users size={15} class="text-indigo-400" />
+            <h3 class="widget-title">Compromissos da Equipe ({teamUpcomingDeliveries.length})</h3>
+          </div>
+          {#if overdueDeliveries.length > 0}
+            <span class="team-alert-pill" title="Entregas em atraso na scan">
+              ⚠️ {overdueDeliveries.length} em atraso
+            </span>
+          {/if}
         </header>
 
         {#if teamUpcomingDeliveries.length === 0}
@@ -1209,6 +1321,7 @@
             {#each teamUpcomingDeliveries as item}
               <div
                 class="widget-delivery-item"
+                class:is-overdue={item.isOverdue}
                 onclick={() => handleSelectDay(item.dueYMD)}
                 role="button"
                 tabindex="0"
@@ -1240,107 +1353,66 @@
         {/if}
       </section>
 
-      <!-- Panel 3: Atrasos da Scan -->
-      {#if overdueDeliveries.length > 0}
-        <section class="side-widget-card alert-card">
-          <header class="widget-header">
-            <AlertTriangle size={15} class="text-rose-400" />
-            <h3 class="widget-title text-rose-400">Entregas em Atraso ({overdueDeliveries.length})</h3>
-          </header>
-
-          <div class="widget-items-stack">
-            {#each overdueDeliveries as item}
-              <div
-                class="widget-delivery-item overdue"
-                onclick={() => handleSelectDay(item.dueYMD || todayYMD)}
-                role="button"
-                tabindex="0"
-                onkeydown={(e) => { if (e.key === 'Enter') handleSelectDay(item.dueYMD || todayYMD); }}
-              >
-                <div class="delivery-item-left">
-                  <div class="delivery-header-line">
-                    <span class="delivery-work-title">{item.workTitle} #{item.chapterNumber}</span>
-                    <span class="delivery-status-pill overdue">Em atraso</span>
-                  </div>
-                  <div class="delivery-tags-row">
-                    <div class="delivery-assignee-chip">
-                      <UserAvatar user={item.assignee} size={15} />
-                      <span>{item.assignee?.display_name || item.assignee?.username || 'Membro'}</span>
-                    </div>
-                    <span class="delivery-stage-tag" style="--st-c: {item.stageColor}">{item.stageName}</span>
-                  </div>
-                </div>
-                <span class="widget-arrow"><ArrowRight size={13} /></span>
-              </div>
-            {/each}
+      <!-- INFORMAÇÕES ADICIONAIS: Seção Recolhível (Equipe & Publicações) -->
+      <details class="side-collapsible-card">
+        <summary class="side-collapsible-summary">
+          <div class="summary-left">
+            <Layers size={14} class="text-purple-400" />
+            <span>Equipe & Publicações</span>
           </div>
-        </section>
-      {/if}
+          <ChevronDown size={14} class="collapsible-chevron-icon" />
+        </summary>
 
-      <!-- Panel 4: Disponibilidade dos Membros -->
-      <section class="side-widget-card">
-        <header class="widget-header">
-          <User size={15} class="text-purple-400" />
-          <h3 class="widget-title">Disponibilidade da Equipe</h3>
-        </header>
-
-        <div class="team-avail-grid">
-          {#each team.slice(0, 8) as member}
-            <div class="team-avail-row">
-              <div class="member-lockup">
-                <UserAvatar user={member} size={18} />
-                <span class="member-name">{member.display_name || member.username}</span>
-              </div>
-              <span class="avail-badge {member.availability_status?.toLowerCase() || 'active'}">
-                {member.availability_status === 'BUSY' ? 'Ocupado' :
-                 member.availability_status === 'AWAY' ? 'Ausente' :
-                 member.availability_status === 'HIATUS' ? 'Hiato' : 'Disponível'}
-              </span>
+        <div class="side-collapsible-content">
+          <!-- Sub-bloco 1: Disponibilidade dos Membros -->
+          <div class="collapsible-sub-section">
+            <span class="sub-section-title">Disponibilidade ({team.length})</span>
+            <div class="team-avail-grid">
+              {#each team.slice(0, 6) as member}
+                <div class="team-avail-row">
+                  <div class="member-lockup">
+                    <UserAvatar user={member} size={16} />
+                    <span class="member-name">{member.display_name || member.username}</span>
+                  </div>
+                  <span class="avail-badge {member.availability_status?.toLowerCase() || 'active'}">
+                    {member.availability_status === 'BUSY' ? 'Ocupado' :
+                     member.availability_status === 'AWAY' ? 'Ausente' :
+                     member.availability_status === 'HIATUS' ? 'Hiato' : 'Disponível'}
+                  </span>
+                </div>
+              {/each}
             </div>
-          {/each}
-        </div>
-      </section>
-
-      <!-- Panel 5: Últimas Publicações -->
-      <section class="side-widget-card">
-        <header class="widget-header">
-          <Sparkles size={15} class="text-emerald-400" />
-          <h3 class="widget-title">Últimas Publicações ({recentPublications.length})</h3>
-        </header>
-
-        {#if recentPublications.length === 0}
-          <div class="widget-empty-box">
-            <BookOpen size={20} class="text-slate-500" />
-            <p>Nenhuma publicação recente registrada.</p>
           </div>
-        {:else}
-          <div class="widget-items-stack">
-            {#each recentPublications as pub}
-              <div class="widget-delivery-item publication">
-                <div class="delivery-item-left">
-                  <span class="delivery-work-title">{pub.works?.title || 'Obra'}</span>
-                  <div class="delivery-tags-row">
-                    <span class="delivery-pub-badge">Cap. #{pub.number}</span>
-                    <span class="delivery-due-tag">
-                      {pub.published_at ? `${getSaoPauloDate(pub.published_at).getDate()}/${getSaoPauloDate(pub.published_at).getMonth() + 1}` : 'Publicado'}
-                    </span>
+
+          <!-- Sub-bloco 2: Últimas Publicações -->
+          <div class="collapsible-sub-section">
+            <span class="sub-section-title">Últimas Publicações ({recentPublications.length})</span>
+            {#if recentPublications.length === 0}
+              <p class="sub-empty-text">Nenhuma publicação recente.</p>
+            {:else}
+              <div class="collapsible-pubs-stack">
+                {#each recentPublications.slice(0, 3) as pub}
+                  <div class="pub-mini-row">
+                    <div class="pub-mini-left">
+                      <span class="pub-mini-title">{pub.works?.title || 'Obra'} #{pub.number}</span>
+                    </div>
+                    <a
+                      href="/ler/{pub.id}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="btn-pub-mini-read"
+                      title="Ler capítulo publicado"
+                    >
+                      <span>Ler</span>
+                      <ArrowRight size={10} />
+                    </a>
                   </div>
-                </div>
-                <a
-                  href="/ler/{pub.id}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="btn-widget-read"
-                  title="Ler capítulo publicado"
-                >
-                  <span>Ler</span>
-                  <ArrowRight size={11} />
-                </a>
+                {/each}
               </div>
-            {/each}
+            {/if}
           </div>
-        {/if}
-      </section>
+        </div>
+      </details>
     </aside>
   </div>
 </div>
@@ -1377,17 +1449,17 @@
 
       <!-- Drawer Content -->
       <div class="drawer-scroll-body">
-        <!-- Commitments Section -->
+        <!-- Commitments Section (Fixed semantic title to 'Compromissos do dia') -->
         <section class="drawer-section">
           <div class="section-title-strip">
             <Clock size={15} class="text-cyan-400" />
-            <h4 class="section-heading">Entregas Previstas ({selectedDayCommitments.length})</h4>
+            <h4 class="section-heading">Compromissos do dia ({selectedDayCommitments.length})</h4>
           </div>
 
           {#if selectedDayCommitments.length === 0}
             <div class="drawer-empty-placeholder">
               <CheckCircle2 size={30} class="text-emerald-400" />
-              <p>Nenhuma entrega agendada para esta data.</p>
+              <p>Nenhum compromisso agendado para esta data.</p>
             </div>
           {:else}
             <div class="drawer-cards-stack">
@@ -1438,7 +1510,7 @@
                     </div>
                   </div>
 
-                  <!-- Assignee + Due Date Details -->
+                  <!-- Assignee + Due Date Details (Correct semantic dates) -->
                   <div class="card-details-grid">
                     <div class="detail-cell">
                       <span class="detail-label">Responsável:</span>
@@ -1451,10 +1523,17 @@
                     </div>
 
                     <div class="detail-cell">
-                      <span class="detail-label">Prazo vigente:</span>
-                      <strong class="detail-due-val text-cyan-400">
-                        {item.dueYMD ? `${item.dueYMD.split('-')[2]}/${item.dueYMD.split('-')[1]}/${item.dueYMD.split('-')[0]}` : '--'} às 23:59
-                      </strong>
+                      {#if item.status === 'DONE'}
+                        <span class="detail-label">Data de conclusão:</span>
+                        <strong class="detail-due-val text-emerald-400">
+                          {item.completedAt ? formatCompletedDisplay(item.completedAt) : 'Concluído'}
+                        </strong>
+                      {:else}
+                        <span class="detail-label">Prazo vigente:</span>
+                        <strong class="detail-due-val text-cyan-400">
+                          {item.dueYMD ? `${item.dueYMD.split('-')[2]}/${item.dueYMD.split('-')[1]}/${item.dueYMD.split('-')[0]}` : '--'} às 23:59
+                        </strong>
+                      {/if}
                     </div>
 
                     {#if item.originalDueAt && item.extensionCount > 0}
@@ -1546,16 +1625,28 @@
 
                   <!-- Actions: Extend +2 days / Open in Production -->
                   <div class="card-actions-bar">
-                    {#if item.canExtend}
-                      <button
-                        type="button"
-                        class="btn-extend-action"
-                        onclick={() => openExtensionModal(item)}
-                        title="Prorrogar prazo +2 dias sem aprovação"
-                      >
-                        <Zap size={13} />
-                        <span>Prorrogar prazo +2 dias</span>
-                      </button>
+                    {#if item.kind === 'EDITORIAL_STAGE'}
+                      {#if item.canExtend}
+                        <button
+                          type="button"
+                          class="btn-extend-action"
+                          onclick={() => openExtensionModal(item)}
+                          title="Prorrogar prazo +2 dias sem aprovação"
+                        >
+                          <Zap size={13} />
+                          <span>Prorrogar prazo +2 dias</span>
+                        </button>
+                      {:else if item.remainingHours > 24 && item.extensionCount === 0 && item.status === 'IN_PROGRESS'}
+                        <div class="drawer-ext-note info">
+                          <Info size={12} class="text-cyan-400" />
+                          <span>Prorrogação de +2 dias disponível nas últimas 24h do prazo.</span>
+                        </div>
+                      {:else if item.extensionCount > 0}
+                        <div class="drawer-ext-note extended">
+                          <Check size={12} class="text-emerald-400" />
+                          <span>Prazo prorrogado (+2 dias concedidos)</span>
+                        </div>
+                      {/if}
                     {/if}
 
                     {#if item.productionChapter && onOpenChapter}
@@ -2747,17 +2838,24 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   }
 
-  .side-widget-card.alert-card {
-    border-color: rgba(239, 68, 68, 0.35);
-    background: rgba(239, 68, 68, 0.04);
+  .hero-my-delivery-card {
+    border-color: rgba(6, 182, 212, 0.35);
+    background: linear-gradient(180deg, rgba(6, 182, 212, 0.05) 0%, rgba(9, 13, 22, 1) 100%);
   }
 
   .widget-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.45rem;
     padding-bottom: 0.45rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .widget-header-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
   }
 
   .widget-title {
@@ -2765,6 +2863,382 @@
     font-weight: 700;
     color: #f1f5f9;
     margin: 0;
+  }
+
+  .team-alert-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.3rem;
+  }
+
+  /* Hero Delivery Box */
+  .hero-delivery-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.65rem;
+    padding: 0.75rem;
+  }
+
+  .hero-delivery-top {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .hero-cover-wrap {
+    width: 38px;
+    height: 52px;
+    border-radius: 0.4rem;
+    overflow: hidden;
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+  }
+
+  .hero-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .hero-cover-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+  }
+
+  .hero-delivery-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .hero-delivery-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hero-delivery-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .countdown-pill {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.3rem;
+    background: rgba(6, 182, 212, 0.18);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+  }
+
+  .countdown-pill.due-soon {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+
+  .countdown-pill.overdue {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  .countdown-pill.extended {
+    background: rgba(6, 182, 212, 0.22);
+    color: #38bdf8;
+    border-color: rgba(6, 182, 212, 0.45);
+  }
+
+  .hero-deadline-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .hero-due-label {
+    color: #94a3b8;
+  }
+
+  .hero-due-val {
+    color: #38bdf8;
+    font-weight: 700;
+  }
+
+  .btn-prominent-extend {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+    border: 1px solid rgba(6, 182, 212, 0.5);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.45rem 0.85rem;
+    border-radius: 0.45rem;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
+    transition: all 0.15s ease;
+  }
+
+  .btn-prominent-extend:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(6, 182, 212, 0.5);
+  }
+
+  .extension-hero-info {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .extension-hero-extended {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.35rem;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    font-weight: 600;
+  }
+
+  .btn-hero-focus-day {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-hero-focus-day:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+
+  /* Other Personal Commitments */
+  .other-personal-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .other-personal-heading {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .other-personal-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .other-personal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.55rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .other-personal-row:hover {
+    background: rgba(15, 23, 42, 0.9);
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+
+  .other-row-info {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+
+  .other-row-title {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+  }
+
+  .other-row-due {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .other-due-text {
+    font-size: 0.68rem;
+    color: #94a3b8;
+  }
+
+  /* Collapsible Widget (Equipe & Publicações) */
+  .side-collapsible-card {
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.85rem;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+  }
+
+  .side-collapsible-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0.95rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    transition: background 0.15s ease;
+  }
+
+  .side-collapsible-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .side-collapsible-summary:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff;
+  }
+
+  .summary-left {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .collapsible-chevron-icon {
+    transition: transform 0.2s ease;
+    color: #64748b;
+  }
+
+  .side-collapsible-card[open] .collapsible-chevron-icon {
+    transform: rotate(180deg);
+  }
+
+  .side-collapsible-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 0.75rem 0.95rem 0.95rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(15, 23, 42, 0.4);
+  }
+
+  .collapsible-sub-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .sub-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .sub-empty-text {
+    font-size: 0.72rem;
+    color: #64748b;
+    margin: 0;
+  }
+
+  .collapsible-pubs-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .pub-mini-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 0.4rem;
+    padding: 0.35rem 0.55rem;
+  }
+
+  .pub-mini-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #f1f5f9;
+  }
+
+  .btn-pub-mini-read {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.3rem;
+    text-decoration: none;
+  }
+
+  .btn-pub-mini-read:hover {
+    background: rgba(16, 185, 129, 0.28);
+    color: #fff;
   }
 
   .widget-empty-box {
@@ -2802,7 +3276,7 @@
     border-color: rgba(139, 92, 246, 0.3);
   }
 
-  .widget-delivery-item.overdue {
+  .widget-delivery-item.is-overdue {
     border-left: 3px solid #ef4444;
   }
 
@@ -2880,36 +3354,6 @@
     white-space: nowrap;
   }
 
-  .delivery-pub-badge {
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: #34d399;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    padding: 0.08rem 0.35rem;
-    border-radius: 0.25rem;
-  }
-
-  .btn-widget-read {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    background: rgba(16, 185, 129, 0.15);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #34d399;
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 0.2rem 0.45rem;
-    border-radius: 0.3rem;
-    text-decoration: none;
-    transition: background 0.15s ease;
-  }
-
-  .btn-widget-read:hover {
-    background: rgba(16, 185, 129, 0.28);
-    color: #fff;
-  }
-
   .delivery-stage-tag {
     font-size: 0.65rem;
     font-weight: 600;
@@ -2919,11 +3363,6 @@
   .delivery-due-tag {
     font-size: 0.68rem;
     color: #94a3b8;
-  }
-
-  .delivery-overdue-assignee {
-    font-size: 0.68rem;
-    color: #fca5a5;
   }
 
   .delivery-item-right {

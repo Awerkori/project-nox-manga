@@ -254,8 +254,58 @@
   let isClaimingStageId = $state<string | null>(null);
   let isCompletingStageId = $state<string | null>(null);
   let isReleasingStageId = $state<string | null>(null);
+  let isExtendingStageId = $state<string | null>(null);
   let claimFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
   let completeFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
+  let extendFeedback = $state<{ stageId: string; type: 'error' | 'success'; text: string } | null>(null);
+
+  // Helper to determine stage deadline status and extension eligibility
+  function getStageDeadlineInfo(cs: any) {
+    if (!cs || !cs.due_at) return null;
+    const nowMs = Date.now();
+    const dueMs = new Date(cs.due_at).getTime();
+    const diffMs = dueMs - nowMs;
+    const remainingHours = diffMs / (1000 * 60 * 60);
+
+    const spToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const dueSp = new Date(new Date(cs.due_at).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const isSameDay = spToday.getFullYear() === dueSp.getFullYear() &&
+                      spToday.getMonth() === dueSp.getMonth() &&
+                      spToday.getDate() === dueSp.getDate();
+
+    const isOverdue = diffMs < 0;
+    const extensionCount = Number(cs.extension_count || 0);
+    const canExtend = (cs.assigned_to === currentUserId || isOwnerOrAdmin) &&
+                      cs.status === 'IN_PROGRESS' &&
+                      extensionCount === 0 &&
+                      (remainingHours <= 24 || isSameDay) &&
+                      diffMs > -(4 * 60 * 60 * 1000);
+
+    const dayStr = String(dueSp.getDate()).padStart(2, '0');
+    const monthStr = String(dueSp.getMonth() + 1).padStart(2, '0');
+    const dueFormatted = `${dayStr}/${monthStr}`;
+
+    let countdownText = '';
+    if (isOverdue) {
+      const overdueDays = Math.max(1, Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24)));
+      countdownText = `Atrasado há ${overdueDays}d`;
+    } else if (remainingHours < 24) {
+      const hrs = Math.max(1, Math.round(remainingHours));
+      countdownText = `Vence em ${hrs}h`;
+    } else {
+      const days = Math.round(remainingHours / 24);
+      countdownText = `Vence em ${days}d`;
+    }
+
+    return {
+      dueFormatted,
+      countdownText,
+      isOverdue,
+      canExtend,
+      remainingHours,
+      extensionCount
+    };
+  }
 
   // Claim Stage with Deadline Modal
   let claimModalOpen = $state(false);
@@ -970,6 +1020,7 @@
         {@const itemOpenIssues = isRevisorQc ? getOpenQcIssues(item.ch.id) : []}
         {@const canApproveQc = isRevisorQc && upstream.hasTypeset && !upstream.hasIncompleteTypeset && itemOpenIssues.length === 0}
         {@const accordion = mobileAccordionState[item.cs.id] || { inputs: true, delivery: true }}
+        {@const dlInfo = getStageDeadlineInfo(item.cs)}
 
         <article class="editorial-card my-work-card" class:is-expanded={isExpanded} class:is-rework={isRework}>
           <!-- Rework Notice Banner if returned by QC -->
@@ -1056,6 +1107,75 @@
                   <span class="chapter-label-text" title={item.ch.chapter_label}>{item.ch.chapter_label}</span>
                 {/if}
               </div>
+
+              <!-- Deadline & Extension Info Block -->
+              {#if dlInfo}
+                <div class="card-deadline-row" class:is-overdue={dlInfo.isOverdue}>
+                  <div class="deadline-pill-group">
+                    <span class="deadline-tag" class:is-overdue={dlInfo.isOverdue} title="Prazo de entrega: {dlInfo.dueFormatted} às 23:59">
+                      <Clock size={11} />
+                      <span>Prazo: {dlInfo.dueFormatted}</span>
+                      <span class="deadline-countdown-sub">({dlInfo.countdownText})</span>
+                    </span>
+
+                    {#if dlInfo.extensionCount > 0}
+                      <span class="meta-pill-extended" title="Prazo prorrogado em +2 dias">
+                        Prorrogado (+2d)
+                      </span>
+                    {/if}
+                  </div>
+
+                  {#if dlInfo.canExtend}
+                    <form
+                      method="POST"
+                      action="?/extendStageDeadline"
+                      use:enhance={() => {
+                        isExtendingStageId = item.cs.id;
+                        extendFeedback = null;
+                        return async ({ result, update }) => {
+                          isExtendingStageId = null;
+                          if (result.type === 'failure') {
+                            extendFeedback = {
+                              stageId: item.cs.id,
+                              type: 'error',
+                              text: (result.data as any)?.message || 'Não foi possível prorrogar o prazo.'
+                            };
+                          } else {
+                            extendFeedback = {
+                              stageId: item.cs.id,
+                              type: 'success',
+                              text: 'Prazo prorrogado com sucesso em +2 dias!'
+                            };
+                            await update();
+                          }
+                        };
+                      }}
+                      class="stage-extend-inline-form"
+                    >
+                      <input type="hidden" name="chapter_stage_id" value={item.cs.id} />
+                      <button
+                        type="submit"
+                        class="btn-action-extend-stage"
+                        disabled={isExtendingStageId === item.cs.id}
+                        title="Prorrogar prazo de entrega em +2 dias (uma única vez)"
+                      >
+                        <Zap size={11} />
+                        <span>{isExtendingStageId === item.cs.id ? 'Prorrogando...' : '+2 dias'}</span>
+                      </button>
+                    </form>
+                  {:else if dlInfo.remainingHours > 24 && dlInfo.extensionCount === 0}
+                    <span class="deadline-discreet-notice" title="A prorrogação automática de 2 dias ficará liberada nas últimas 24 horas antes do vencimento.">
+                      Prorrogação (+2d) em &lt;24h
+                    </span>
+                  {/if}
+                </div>
+
+                {#if extendFeedback && extendFeedback.stageId === item.cs.id}
+                  <div class="stage-extend-feedback-alert {extendFeedback.type}">
+                    <span>{extendFeedback.text}</span>
+                  </div>
+                {/if}
+              {/if}
 
               <!-- REFINED ACTION HIERARCHY (NO BUTTON COMPETITION) -->
               <div class="my-card-actions-row">
@@ -3309,6 +3429,120 @@
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: var(--accent-color, #c084fc);
+  }
+
+  /* Card Deadline Row & Extension Action */
+  .card-deadline-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    margin-top: 6px;
+    margin-bottom: 4px;
+  }
+
+  .card-deadline-row.is-overdue {
+    background: rgba(239, 68, 68, 0.06);
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  .deadline-pill-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .deadline-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: #cbd5e1;
+    font-weight: 500;
+  }
+
+  .deadline-tag.is-overdue {
+    color: #f87171;
+    font-weight: 600;
+  }
+
+  .deadline-countdown-sub {
+    font-size: 0.7rem;
+    color: #94a3b8;
+  }
+
+  .deadline-tag.is-overdue .deadline-countdown-sub {
+    color: #fca5a5;
+  }
+
+  .meta-pill-extended {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.14);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+  }
+
+  .stage-extend-inline-form {
+    display: inline-flex;
+  }
+
+  .btn-action-extend-stage {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+    transition: all 0.12s ease;
+  }
+
+  .btn-action-extend-stage:hover:not(:disabled) {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.38);
+  }
+
+  .deadline-discreet-notice {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px dashed rgba(148, 163, 184, 0.22);
+    border-radius: 5px;
+    padding: 2px 7px;
+  }
+
+  .stage-extend-feedback-alert {
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    margin-top: 4px;
+  }
+
+  .stage-extend-feedback-alert.success {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #34d399;
+  }
+
+  .stage-extend-feedback-alert.error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
   }
 
   /* Card Action Row & Buttons */

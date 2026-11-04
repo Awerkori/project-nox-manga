@@ -916,6 +916,11 @@
                         <span>+2 dias</span>
                       </button>
                     </form>
+                  {:else if item.type === 'stage' && item.chapterStage?.assigned_to === currentUserId && item.chapterStage?.due_at && item.chapterStage?.status === 'IN_PROGRESS' && (item.chapterStage?.extension_count || 0) === 0}
+                    <div class="tasks-extension-discreet-note" title="Prorrogação de +2 dias ficará liberada nas últimas 24h antes do prazo.">
+                      <Clock size={11} />
+                      <span>Prorrogação (+2d) em &lt;24h</span>
+                    </div>
                   {/if}
 
                   <button
@@ -2291,6 +2296,22 @@
     filter: brightness(1.12);
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(245, 158, 11, 0.38);
+  }
+
+  .tasks-extension-discreet-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px dashed rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    padding: 6px 10px;
+    text-align: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .category-context-notice {

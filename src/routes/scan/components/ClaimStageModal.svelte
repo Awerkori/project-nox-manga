@@ -320,7 +320,7 @@
         </div>
       </section>
 
-      <!-- Form Body with Compact Calendar Picker -->
+      <!-- Form Body with Compact Scrollable Area & Pinned Footer -->
       <form
         method="POST"
         action="?/claimStage"
@@ -343,112 +343,114 @@
         <input type="hidden" name="chapter_stage_id" value={stageItem.id} />
         <input type="hidden" name="due_date" value={selectedYMD} />
 
-        {#if errorMessage}
-          <div class="alert-banner error" role="alert">
-            <AlertCircle size={15} />
-            <span>{errorMessage}</span>
-          </div>
-        {/if}
+        <div class="claim-form-scrollable">
+          {#if errorMessage}
+            <div class="alert-banner error" role="alert">
+              <AlertCircle size={14} />
+              <span>{errorMessage}</span>
+            </div>
+          {/if}
 
-        <!-- Compact Calendar Component -->
-        <div class="compact-calendar-wrapper">
-          <div class="calendar-nav-header">
-            <span class="calendar-month-heading">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-            <div class="calendar-arrows">
-              <button
-                type="button"
-                class="btn-cal-arrow"
-                onclick={prevMonth}
-                aria-label="Mês anterior"
-                disabled={isSubmitting || !canPrevMonth}
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <button
-                type="button"
-                class="btn-cal-arrow"
-                onclick={nextMonth}
-                aria-label="Próximo mês"
-                disabled={isSubmitting || !canNextMonth}
-              >
-                <ChevronRight size={15} />
-              </button>
+          <!-- Compact Calendar Component -->
+          <div class="compact-calendar-wrapper">
+            <div class="calendar-nav-header">
+              <span class="calendar-month-heading">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+              <div class="calendar-arrows">
+                <button
+                  type="button"
+                  class="btn-cal-arrow"
+                  onclick={prevMonth}
+                  aria-label="Mês anterior"
+                  disabled={isSubmitting || !canPrevMonth}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="btn-cal-arrow"
+                  onclick={nextMonth}
+                  aria-label="Próximo mês"
+                  disabled={isSubmitting || !canNextMonth}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+
+            <!-- Weekday Headers -->
+            <div class="cal-weekdays-row">
+              {#each WEEK_DAYS as wd}
+                <span class="cal-weekday-lbl">{wd}</span>
+              {/each}
+            </div>
+
+            <!-- Compact Days Grid -->
+            <div class="cal-days-grid">
+              {#each monthCells as cell}
+                <button
+                  type="button"
+                  class="cal-day-cell"
+                  class:is-other-month={!cell.isCurrentMonth}
+                  class:is-today={cell.isToday}
+                  class:is-selected={cell.isSelected}
+                  class:is-allowed={cell.isAllowed}
+                  class:is-blocked={!cell.isAllowed}
+                  disabled={!cell.isAllowed || isSubmitting}
+                  onclick={() => selectDate(cell.ymd, cell.isAllowed)}
+                  title={cell.isAllowed ? `Definir entrega para ${cell.ymd}` : 'Fora do limite de 3 dias corridos'}
+                >
+                  <span class="cell-day-text">{cell.day}</span>
+                  {#if cell.isToday && !cell.isSelected}
+                    <span class="cell-today-pip"></span>
+                  {/if}
+                  {#if cell.isSelected}
+                    <span class="cell-selected-check">
+                      <Check size={9} />
+                    </span>
+                  {/if}
+                </button>
+              {/each}
             </div>
           </div>
 
-          <!-- Weekday Headers -->
-          <div class="cal-weekdays-row">
-            {#each WEEK_DAYS as wd}
-              <span class="cal-weekday-lbl">{wd}</span>
-            {/each}
-          </div>
-
-          <!-- Compact Days Grid -->
-          <div class="cal-days-grid">
-            {#each monthCells as cell}
-              <button
-                type="button"
-                class="cal-day-cell"
-                class:is-other-month={!cell.isCurrentMonth}
-                class:is-today={cell.isToday}
-                class:is-selected={cell.isSelected}
-                class:is-allowed={cell.isAllowed}
-                class:is-blocked={!cell.isAllowed}
-                disabled={!cell.isAllowed || isSubmitting}
-                onclick={() => selectDate(cell.ymd, cell.isAllowed)}
-                title={cell.isAllowed ? `Definir entrega para ${cell.ymd}` : 'Fora do limite de 3 dias corridos'}
-              >
-                <span class="cell-day-text">{cell.day}</span>
-                {#if cell.isToday && !cell.isSelected}
-                  <span class="cell-today-pip"></span>
-                {/if}
-                {#if cell.isSelected}
-                  <span class="cell-selected-check">
-                    <Check size={9} />
-                  </span>
-                {/if}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        <!-- Selected Deadline Summary Box (Refined & Compact) -->
-        <div class="chosen-date-card">
-          <div class="chosen-date-row">
-            <div class="chosen-date-icon">
-              <Clock size={15} />
+          <!-- Selected Deadline Summary Box (Refined & Compact) -->
+          <div class="chosen-date-card">
+            <div class="chosen-date-row">
+              <div class="chosen-date-icon">
+                <Clock size={14} />
+              </div>
+              <div class="chosen-date-info">
+                <span class="chosen-date-prefix">Entrega prevista para</span>
+                <strong class="chosen-date-highlight">{formattedSelected}</strong>
+                <span class="chosen-date-time">Até 23h59 • Horário de Brasília</span>
+              </div>
             </div>
-            <div class="chosen-date-info">
-              <span class="chosen-date-prefix">Sua entrega está prevista para</span>
-              <strong class="chosen-date-highlight">{formattedSelected}</strong>
-              <span class="chosen-date-time">Até 23h59 — horário de Brasília</span>
+            <div class="extension-micro-hint">
+              <Info size={11} class="hint-icon" />
+              <span>Prorrogação de +2 dias disponível nas últimas 24h caso precise de mais tempo.</span>
             </div>
           </div>
-          <div class="extension-micro-hint">
-            <Info size={12} class="hint-icon" />
-            <span>Se precisar de mais tempo, você poderá prorrogar o prazo uma vez por mais 2 dias, próximo ao vencimento.</span>
+
+          <!-- Optional Planning Notes (Compact) -->
+          <div class="notes-field-group">
+            <div class="notes-header-row">
+              <label for="claim-notes-input" class="notes-label">Observações (opcional)</label>
+              <span class="notes-char-count">{notes.length}/500</span>
+            </div>
+            <textarea
+              id="claim-notes-input"
+              name="notes"
+              bind:value={notes}
+              maxlength="500"
+              rows="2"
+              placeholder="Ex.: Tradução em andamento; revisarei diálogos no sábado."
+              class="notes-textarea"
+              disabled={isSubmitting}
+            ></textarea>
           </div>
         </div>
 
-        <!-- Optional Planning Notes (Compact) -->
-        <div class="notes-field-group">
-          <div class="notes-header-row">
-            <label for="claim-notes-input" class="notes-label">Observações de planejamento (opcional)</label>
-            <span class="notes-char-count">{notes.length}/500</span>
-          </div>
-          <textarea
-            id="claim-notes-input"
-            name="notes"
-            bind:value={notes}
-            maxlength="500"
-            rows="2"
-            placeholder="Ex.: Pretendo finalizar a tradução até sexta-feira."
-            class="notes-textarea"
-            disabled={isSubmitting}
-          ></textarea>
-        </div>
-
-        <!-- Modal Actions Footer -->
+        <!-- Pinned Actions Footer: Both buttons always visible and accessible -->
         <footer class="modal-actions-footer">
           <button
             type="button"
@@ -465,9 +467,9 @@
           >
             {#if isSubmitting}
               <span class="submit-spinner"></span>
-              <span>Confirmando atribuição...</span>
+              <span>Confirmando...</span>
             {:else}
-              <Check size={16} />
+              <Check size={15} />
               <span>Confirmar e assumir etapa</span>
             {/if}
           </button>
@@ -500,6 +502,7 @@
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 35px rgba(139, 92, 246, 0.12);
     width: 100%;
     max-width: 460px;
+    max-height: min(92vh, 660px);
     margin: auto 0;
     display: flex;
     flex-direction: column;
@@ -522,9 +525,10 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    padding: 1.1rem 1.15rem 0.9rem;
+    padding: 0.85rem 1.15rem 0.75rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     gap: 0.75rem;
+    flex-shrink: 0;
   }
 
   .header-title-row {
@@ -699,12 +703,23 @@
     font-size: 0.75rem;
   }
 
-  /* Form Body */
   .claim-form-body {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
-    padding: 1rem 1.15rem 1.15rem;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .claim-form-scrollable {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.75rem 1.15rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
   }
 
   .alert-banner.error {
@@ -724,10 +739,10 @@
     background: rgba(15, 23, 42, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 0.75rem;
-    padding: 0.75rem;
+    padding: 0.65rem 0.75rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
 
   .calendar-nav-header {
@@ -863,10 +878,10 @@
     background: rgba(139, 92, 246, 0.08);
     border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 0.65rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.6rem 0.8rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.4rem;
   }
 
   .chosen-date-row {
@@ -876,8 +891,8 @@
   }
 
   .chosen-date-icon {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 0.5rem;
     background: rgba(139, 92, 246, 0.2);
     color: #c084fc;
@@ -890,12 +905,12 @@
   .chosen-date-info {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.12rem;
     min-width: 0;
   }
 
   .chosen-date-prefix {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -903,14 +918,14 @@
   }
 
   .chosen-date-highlight {
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     font-weight: 700;
     color: #f1f5f9;
     letter-spacing: -0.01em;
   }
 
   .chosen-date-time {
-    font-size: 0.73rem;
+    font-size: 0.71rem;
     color: #38bdf8;
     font-weight: 500;
   }
@@ -919,11 +934,11 @@
     display: flex;
     align-items: flex-start;
     gap: 0.35rem;
-    font-size: 0.71rem;
+    font-size: 0.69rem;
     color: #94a3b8;
-    line-height: 1.35;
+    line-height: 1.3;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding-top: 0.45rem;
+    padding-top: 0.35rem;
   }
 
   .hint-icon {
@@ -936,7 +951,7 @@
   .notes-field-group {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
 
   .notes-header-row {
@@ -946,13 +961,13 @@
   }
 
   .notes-label {
-    font-size: 0.74rem;
+    font-size: 0.72rem;
     font-weight: 600;
     color: #94a3b8;
   }
 
   .notes-char-count {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: #64748b;
   }
 
@@ -960,10 +975,10 @@
     width: 100%;
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 0.55rem;
-    padding: 0.5rem 0.65rem;
+    border-radius: 0.5rem;
+    padding: 0.4rem 0.6rem;
     color: #f1f5f9;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     line-height: 1.35;
     resize: none;
     outline: none;
@@ -978,26 +993,29 @@
 
   .notes-textarea::placeholder {
     color: #64748b;
-    font-size: 0.78rem;
+    font-size: 0.76rem;
   }
 
-  /* Actions Footer */
+  /* Actions Footer - Pinned and Always In View */
   .modal-actions-footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 0.6rem;
-    margin-top: 0.35rem;
+    padding: 0.7rem 1.15rem;
+    background: #090d16;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
   }
 
   .btn-cancel {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.09);
     color: #cbd5e1;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    padding: 0.55rem 0.95rem;
-    border-radius: 0.55rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 0.5rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
@@ -1011,10 +1029,10 @@
     background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
     border: 1px solid rgba(139, 92, 246, 0.4);
     color: #fff;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    padding: 0.55rem 1.15rem;
-    border-radius: 0.55rem;
+    padding: 0.5rem 1.1rem;
+    border-radius: 0.5rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -1036,8 +1054,8 @@
   }
 
   .submit-spinner {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-top-color: #fff;
     border-radius: 50%;
@@ -1052,41 +1070,47 @@
 
   @media (max-width: 480px) {
     .modal-card {
-      max-height: 94vh;
-      overflow-y: auto;
-    }
-
-    .cal-day-cell {
-      height: 34px;
-      font-size: 0.78rem;
+      max-height: calc(100dvh - 1.5rem);
+      margin: auto 0;
     }
 
     .modal-header {
-      padding: 0.9rem 1rem 0.8rem;
-    }
-
-    .claim-form-body {
-      padding: 0.85rem 1rem 1rem;
-      gap: 0.75rem;
+      padding: 0.75rem 0.9rem 0.65rem;
     }
 
     .assignment-summary-card {
-      padding: 0.65rem 1rem;
+      padding: 0.55rem 0.9rem;
     }
 
-    .btn-confirm-claim {
-      width: 100%;
-      justify-content: center;
+    .claim-form-scrollable {
+      padding: 0.65rem 0.9rem 0.4rem;
+      gap: 0.55rem;
     }
 
+    .cal-day-cell {
+      height: 32px;
+      font-size: 0.76rem;
+    }
+
+    /* Footer on mobile: side-by-side so both buttons are immediately accessible without scrolling */
     .modal-actions-footer {
-      flex-direction: column-reverse;
+      flex-direction: row;
+      justify-content: space-between;
       gap: 0.5rem;
+      padding: 0.6rem 0.9rem max(0.6rem, env(safe-area-inset-bottom, 0.6rem));
     }
 
     .btn-cancel {
-      width: 100%;
+      flex: 0 0 auto;
+      min-width: 85px;
+      padding: 0.55rem 0.8rem;
       text-align: center;
+    }
+
+    .btn-confirm-claim {
+      flex: 1 1 auto;
+      justify-content: center;
+      padding: 0.55rem 0.9rem;
     }
   }
 </style>
