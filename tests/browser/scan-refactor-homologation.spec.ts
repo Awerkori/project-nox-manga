@@ -64,20 +64,20 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     await setupPublicScanHarness(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/qa-scan-public-proof#recrutamento');
-    await expect(page.getByRole('heading', { name: 'Vagas Abertas em Nebula Scans' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Faça parte da equipe Nebula Scans' })).toBeVisible();
     await expect(page.getByText('2 posições', { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Conectar-se para Candidatar/ }).first()).toHaveAttribute('href', /redirect=.*%23recrutamento/);
+    await expect(page.getByRole('link', { name: /Entrar para Candidatar-se/ }).first()).toHaveAttribute('href', /redirect=.*%23recrutamento/);
     await page.screenshot({ path: `${SCREENSHOT_DIR}/00_public_scan_recruitment_desktop.png`, fullPage: true });
 
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     await page.screenshot({ path: `${SCREENSHOT_DIR}/00_public_scan_recruitment_mobile.png`, fullPage: true });
 
-    await page.getByRole('button', { name: /Obras \(0\)/ }).click();
+    await page.getByRole('button', { name: 'Obras 0' }).click();
     await expect(page.getByRole('heading', { name: 'Nenhuma obra associada' })).toBeVisible();
     expect(new URL(page.url()).hash).toBe('');
-    await page.getByRole('button', { name: /Comentários \(0\)/ }).click();
-    await expect(page.getByRole('link', { name: 'Entrar no Project Nox' })).toHaveAttribute('href', /redirect=.*%23comentarios/);
+    await page.getByRole('button', { name: 'Comentários 0' }).click();
+    await expect(page.getByRole('heading', { name: 'Mural da Comunidade' })).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -88,52 +88,20 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     await setupScanHarness(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/qa-scan-proof?tab=pipeline&stage=clean_redraw');
-    await page.waitForSelector('.pipeline-stage-view-root');
+    await expect(page.locator('.editorial-workspace-root')).toBeVisible();
 
-    // Verify parent Pipeline badge has count 3
-    const pipelineBadge = page.locator('.total-pipeline-badge');
-    await expect(pipelineBadge).toBeVisible();
-    await expect(pipelineBadge).toContainText('3');
+    // The editorial workspace superseded the old accordion implementation.
+    // Preserve the operational contract: the stage summary reports the work
+    // that is actually available and the matching stage action is reachable.
+    const stageSummary = page.locator('.header-stat-pill');
+    await expect(stageSummary).toContainText('1 disponíveis');
 
-    // Verify sub-stage badge for Clean has 1
-    const cleanSubBadge = page.locator('.nav-sub-btn.active .nav-sub-badge');
-    await expect(cleanSubBadge).toBeVisible();
-    await expect(cleanSubBadge).toContainText('1');
-
-    // Available chapter accordion exists
-    const availableAccordion = page.locator('.available-accordion-card').first();
-    await expect(availableAccordion).toBeVisible();
-    await expect(availableAccordion.locator('.chapter-number-title')).toContainText('Capítulo #1');
-
-    // Click to expand available accordion
-    await availableAccordion.locator('.accordion-header-bar').click();
-    await expect(availableAccordion.locator('.accordion-expanded-body')).toBeVisible();
-
-    // Verify prominent claim CTA and admin buttons
-    await expect(availableAccordion.locator('.btn-claim-prominent')).toBeVisible();
-    const editBtn = availableAccordion.locator('.btn-action-ghost', { hasText: 'Editar Capítulo' });
-    await expect(editBtn).toBeVisible();
-
-    // Open Edit Chapter Modal
-    await editBtn.click();
-    const editModal = page.locator('.standard-modal-dialog', { hasText: 'Editar Capítulo em Produção' });
-    await expect(editModal).toBeVisible();
-    await expect(editModal.locator('input[name="chapter_label"]')).toHaveValue('O Despertar');
-
-    // Close edit modal
-    await editModal.locator('.btn-cancel-action').click();
-    await expect(editModal).toBeHidden();
-
-    // Open Delete Production Chapter Modal
-    const deleteBtn = availableAccordion.locator('.btn-action-ghost.danger', { hasText: 'Excluir Produção' });
-    await expect(deleteBtn).toBeVisible();
-    await deleteBtn.click();
-
-    const deleteModal = page.locator('.delete-dialog');
-    await expect(deleteModal).toBeVisible();
-    await expect(deleteModal.locator('.delete-warning-box')).toBeVisible();
-    await deleteModal.locator('.btn-cancel-action').click();
-    await expect(deleteModal).toBeHidden();
+    const availableCard = page.locator('.editorial-card.available-card').first();
+    await expect(availableCard).toBeVisible();
+    await expect(availableCard).toContainText('Cap. #1');
+    await expect(availableCard).toContainText('O Despertar');
+    await expect(availableCard.getByRole('button', { name: 'Assumir Clean/Redraw' })).toBeVisible();
+    await expect(availableCard.getByRole('button', { name: 'Ver detalhes' })).toBeVisible();
 
     // Capture screenshot
     await page.screenshot({
@@ -153,26 +121,21 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     ]) {
       await page.setViewportSize(viewport);
       await page.goto('/qa-scan-proof?tab=pipeline&stage=clean_redraw');
-      await page.waitForSelector('.pipeline-stage-view-root');
+      await expect(page.locator('.editorial-workspace-root')).toBeVisible();
 
-      const navigation = page.locator('.canonical-stages-nav-bar');
-      const pills = navigation.locator('.stage-nav-pill');
-      await expect(pills).toHaveCount(7);
+      const navigation = page.getByRole('navigation', { name: 'Navegação do workspace' });
+      const stages = ['Raw Provider', 'Tradução', 'Clean/Redraw', 'Typeset', 'Revisor (QC)', 'Pré-aprovado', 'Publicado'];
+      for (const stage of stages) {
+        await expect(navigation.getByRole('button', { name: stage, exact: false })).toBeVisible();
+      }
 
       const layout = await navigation.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-        const clipped = Array.from(element.querySelectorAll<HTMLElement>('.stage-nav-pill')).some((pill) => {
-          const rect = pill.getBoundingClientRect();
-          return rect.left < bounds.left || rect.right > bounds.right;
-        });
         return {
-          clipped,
-          horizontalOverflow: element.scrollWidth > element.clientWidth,
           pageOverflow: document.documentElement.scrollWidth > window.innerWidth
         };
       });
 
-      expect(layout).toEqual({ clipped: false, horizontalOverflow: false, pageOverflow: false });
+      expect(layout).toEqual({ pageOverflow: false });
     }
   });
 
@@ -183,26 +146,22 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     await setupScanHarness(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/qa-scan-proof?tab=pipeline&stage=typeset');
-    await page.waitForSelector('.pipeline-stage-view-root');
+    await expect(page.locator('.editorial-workspace-root')).toBeVisible();
 
     // Typeset has Meus Capítulos for pch-1 (assigned to user-awerkori)
-    const myAccordion = page.locator('.my-chapter-accordion-card').first();
-    await expect(myAccordion).toBeVisible();
-    await expect(myAccordion.locator('.chapter-number-title')).toContainText('Capítulo #1');
+    await page.getByRole('tab', { name: /Meus capítulos 1/ }).click();
+    const myCard = page.locator('.editorial-card.my-work-card').first();
+    await expect(myCard).toBeVisible();
+    await expect(myCard).toContainText('Cap. #1');
 
-    // Steps container
-    const stepsContainer = myAccordion.locator('.card-steps-container');
-    await expect(stepsContainer).toBeVisible();
+    await myCard.getByRole('button', { name: 'Abrir trabalho' }).click();
+    const workspace = myCard.locator('.editorial-expanded-workspace');
+    await expect(workspace).toBeVisible();
 
-    // Step 1: Upstream dual downloads (Clean & Tradução separated)
-    const cleanDownload = stepsContainer.locator('.btn-download-pill', { hasText: 'Baixar Clean' });
-    const tradDownload = stepsContainer.locator('.btn-download-pill', { hasText: 'Baixar Tradução' });
-    await expect(cleanDownload).toBeVisible();
-    await expect(tradDownload).toBeVisible();
-
-    // Step 3: Devolver à fila and Concluir Etapa
-    const abandonBtn = stepsContainer.locator('.btn-abandon-queue');
-    await expect(abandonBtn).toBeVisible();
+    // The expanded workspace keeps both upstream inputs distinguishable.
+    await expect(workspace.getByText('Ceu_Distante_Cap01_Clean.zip')).toBeVisible();
+    await expect(workspace.getByText('Ceu_Distante_Cap01_Traducao.docx')).toBeVisible();
+    await expect(myCard.getByRole('button', { name: 'Recolher trabalho' })).toBeVisible();
 
     await page.screenshot({
       path: `${SCREENSHOT_DIR}/02_pipeline_typeset_desktop.png`,
@@ -229,6 +188,9 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/qa-scan-proof?tab=pipeline&stage=typeset');
+    await page.getByRole('tab', { name: /Meus capítulos 1/ }).click();
+    const myCard = page.locator('.editorial-card.my-work-card').first();
+    await myCard.getByRole('button', { name: 'Abrir trabalho' }).click();
     const delivery = page.locator('.deliverable-upload');
     await expect(delivery).toBeVisible();
     await expect(delivery.getByText('Ceu_Distante_Cap01_Typeset.zip')).toBeVisible();
@@ -275,26 +237,26 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
     await setupScanHarness(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/qa-scan-proof?tab=home');
-    await page.waitForSelector('.scan-home-layout');
+    await expect(page.locator('.workspace-overview-container')).toBeVisible();
 
-    // The current ScanHome exposes its seven canonical queues as accessible chips.
-    const queueCards = page.locator('.queues-strip .queue-chip');
-    await expect(queueCards).toHaveCount(7);
+    // The overview exposes only stages with work available, rather than seven
+    // inert queue chips. Each advertised stage must remain actionable.
+    const availableStages = page.locator('.available-stage-pill');
+    await expect(availableStages).toHaveCount(3);
 
-    // Click Typeset queue card -> should navigate to Pipeline
-    const typesetQueueCard = queueCards.nth(3); // 0=raw, 1=clean, 2=traducao, 3=typeset
-    await typesetQueueCard.click();
-    await expect(page.locator('.pipeline-stage-view-root')).toBeVisible();
+    // Click an available editorial stage -> should navigate to its workspace.
+    await availableStages.filter({ hasText: 'Clean / Redraw' }).click();
+    await expect(page.locator('.editorial-workspace-root')).toBeVisible();
 
     // Return to home
     await page.goto('/qa-scan-proof?tab=home');
-    await page.waitForSelector('.scan-home-layout');
+    await expect(page.locator('.workspace-overview-container')).toBeVisible();
 
-    // Minhas Demandas Ativas should display Céu Distante #1 · Typeset
-    const myDemand = page.locator('.task-entry-card.editorial').first();
+    // The active work card retains the work, chapter and stage identity.
+    const myDemand = page.locator('.task-compact-card').first();
     await expect(myDemand).toBeVisible();
     await expect(myDemand).toContainText('Céu Distante');
-    await expect(myDemand).toContainText('#1');
+    await expect(myDemand).toContainText('Capítulo 1');
     await expect(myDemand).toContainText('Typeset');
 
     await page.screenshot({
@@ -384,13 +346,8 @@ test.describe('Scan / Produção Homologation & Responsive Verification', () => 
       await setupScanHarness(page);
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/qa-scan-proof?tab=pipeline&stage=clean_redraw');
-      await page.waitForSelector('.pipeline-stage-view-root');
-
-      // Expand accordion
-      const accordion = page.locator('.available-accordion-card').first();
-      if (await accordion.isVisible()) {
-        await accordion.locator('.accordion-header-bar').click();
-      }
+      await expect(page.locator('.editorial-workspace-root')).toBeVisible();
+      await expect(page.locator('.editorial-card.available-card').first()).toBeVisible();
 
       // Check overflow
       const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
