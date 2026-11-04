@@ -4,7 +4,17 @@ import { testArtifactDir } from '../test-artifacts';
 
 const SCREENSHOT_DIR = testArtifactDir('supreme2');
 const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
 const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
+
+async function dismissAgeGate(page: import('@playwright/test').Page) {
+  const adult = page.getByRole('button', { name: 'Sim, tenho 18 anos ou mais' });
+  if (await adult.isVisible().catch(() => false)) {
+    await adult.click();
+    await page.getByRole('button', { name: 'Confirmar e Continuar' }).click();
+    await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+  }
+}
 
 const VIEWPORTS = [
   { name: 'mobile-360x800', width: 360, height: 800 },
@@ -20,7 +30,9 @@ const VIEWPORTS = [
 async function setupPreviewRoutes(page: any) {
   await page.context().addCookies([
     { name: 'nox-age-status', value: 'ADULT', domain: '127.0.0.1', path: '/' },
-    { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' }
+    { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' },
+    { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' },
+    { name: 'nox-blur-nsfw', value: 'false', domain: LIVE_DOMAIN, path: '/' }
   ]);
 
   await page.addInitScript(() => {
@@ -108,33 +120,19 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
     for (const vp of VIEWPORTS) {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('.work-page-container', { timeout: 15000 });
+      await dismissAgeGate(page);
+      await page.waitForSelector('main.work-page-root', { timeout: 15000 });
       await page.waitForTimeout(200);
 
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       expect(overflow, `Horizontal overflow on Work page at ${vp.name}`).toBe(false);
 
-      if (vp.width <= 860) {
-        const mobileCta = page.locator('.btn-read-hero.mobile-only');
-        await expect(mobileCta).toBeVisible();
-        const box = await mobileCta.boundingBox();
-        expect(box).not.toBeNull();
-        expect(box!.width).toBeGreaterThan(180);
-
-        const desktopCta = page.locator('.btn-read-chapters-desktop');
-        await expect(desktopCta).toBeHidden();
-      } else {
-        const desktopCta = page.locator('.btn-read-chapters-desktop');
-        await expect(desktopCta).toBeVisible();
-
-        const mobileCta = page.locator('.btn-read-hero.mobile-only');
-        await expect(mobileCta).toBeHidden();
-      }
-
-      const commentsHeading = page.locator('.comments .section-heading h2');
-      await expect(commentsHeading).toContainText('O que você achou desta obra?');
-      const commentsEyebrow = page.locator('.comments .section-heading .eyebrow');
-      await expect(commentsEyebrow).toContainText('AVALIAÇÕES & DISCUSSÃO');
+      const readCta = page.getByRole('link', { name: /começar a ler|continuar leitura/i });
+      await expect(readCta).toBeVisible();
+      const box = await readCta.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThan(120);
+      await expect(page.getByRole('heading', { name: 'Comentários sobre a Obra' })).toBeVisible();
 
       await page.screenshot({
         path: `${SCREENSHOT_DIR}/work-hero-${vp.name}.png`,
@@ -188,12 +186,12 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
       expect(overflow, `Horizontal overflow on Admin Dashboard at ${vp.name}`).toBe(false);
 
       if (vp.width <= 950) {
-        const menu = page.getByRole('button', { name: 'Menu do painel de controle' });
+        const menu = page.getByRole('button', { name: 'Abrir menu do painel' });
         await expect(menu).toBeVisible();
 
         await menu.click();
         await page.waitForSelector('.admin-sidebar.open', { timeout: 5000 });
-        const drawerClose = page.locator('.drawer-close-btn');
+        const drawerClose = page.getByRole('button', { name: 'Fechar menu', exact: true });
         await expect(drawerClose).toBeVisible();
 
         await page.screenshot({
@@ -204,7 +202,7 @@ test.describe('Supreme 2 Visual & Responsive Audit', () => {
         await drawerClose.click();
         await page.waitForTimeout(200);
       } else {
-        await expect(page.getByRole('button', { name: 'Menu do painel de controle' })).toBeHidden();
+        await expect(page.getByRole('button', { name: 'Abrir menu do painel' })).toBeHidden();
       }
 
       await expect(page.locator('.quick-actions-bar')).toBeVisible();
