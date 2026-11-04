@@ -71,12 +71,12 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
 
   const loadError = catalogRes.isDegraded === true && works.length === 0;
   if (!locals.user) {
-    setHeaders({ 'cache-control': loadError
+    setHeaders({ 'cache-control': catalogRes.isDegraded
       ? 'private, no-store'
       : 'public, max-age=60, s-maxage=120, stale-while-revalidate=300' });
   }
 
-  if (isUnfiltered && works.length > 0) {
+  if (isUnfiltered && works.length > 0 && !catalogRes.isDegraded) {
     cachedUnfilteredPage1 = {
       timestamp: Date.now(),
       works,

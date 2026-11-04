@@ -37,4 +37,18 @@ describe('catalog failure handling', () => {
       expect(setHeaders).toHaveBeenCalledWith({ 'cache-control': 'private, no-store' });
     } finally { vi.useRealTimers(); }
   });
+
+  it('does not publish stale unfiltered data to shared cache after a failure', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchCatalog.mockResolvedValueOnce({ works: [{ id: 'work' }], total: 1, hasMore: false });
+      await load(request('').event);
+      vi.advanceTimersByTime(301_000);
+      fetchCatalog.mockResolvedValueOnce({ works: [], total: 0, hasMore: false, isDegraded: true });
+      const { event, setHeaders } = request('');
+      const result = await load(event);
+      expect(result.works).toHaveLength(1);
+      expect(setHeaders).toHaveBeenCalledWith({ 'cache-control': 'private, no-store' });
+    } finally { vi.useRealTimers(); }
+  });
 });
