@@ -313,7 +313,7 @@ function getSharedPool(connStr: string): Pool {
     }
     sharedPool = new Pool({
       connectionString: connStr,
-      max: 6,
+      max: 3,
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: 10000
     });
@@ -630,7 +630,7 @@ export async function fetchHomeBundleFromYugabyte(platformEnv?: any): Promise<Yu
       };
     },
     { homeWorks: [], mostRead: [], recentReleases: [] },
-    20_000
+    60_000
   );
 }
 

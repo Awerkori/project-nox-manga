@@ -165,12 +165,14 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
           ]);
 
           const aux = auxRes?.rows?.[0] || {};
-          const metrics = aux.metrics || null;
+          const rawComments = typeof aux.comments === 'string' ? JSON.parse(aux.comments) : (aux.comments || []);
+          const metrics = typeof aux.metrics === 'string' ? JSON.parse(aux.metrics) : (aux.metrics || null);
+          const rawScans = typeof aux.work_scans === 'string' ? JSON.parse(aux.work_scans) : (aux.work_scans || []);
           const entry = {
-            comments: sanitizeComments(aux.comments || []),
+            comments: sanitizeComments(Array.isArray(rawComments) ? rawComments : []),
             likesCount: work.published === true ? Number(metrics?.likes ?? 0) : Number(likesRes?.rows?.[0]?.count || 0),
             metrics,
-            workScans: aux.work_scans || []
+            workScans: Array.isArray(rawScans) ? rawScans : []
           };
           setObraAuxCache(work.id, entry);
           return { ...entry, timestamp: Date.now() };
