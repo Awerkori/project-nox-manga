@@ -20,8 +20,10 @@ vi.mock('$lib/server/yugabyte', async (importOriginal) => {
       if (sql.includes('FROM comments') && sql.includes('chapter_id IS NULL')) {
         return {
           rows: [
-            { id: 'visible', work_id: 'work', chapter_id: null, removed: false, created_at: '2026-01-01' },
-            { id: 'removed', work_id: 'work', chapter_id: null, removed: true, created_at: '2026-01-02' }
+            { comments: [
+              { id: 'visible', work_id: 'work', chapter_id: null, removed: false, created_at: '2026-01-01' },
+              { id: 'removed', work_id: 'work', chapter_id: null, removed: true, created_at: '2026-01-02' }
+            ], metrics: null, work_scans: [] }
           ]
         };
       }
