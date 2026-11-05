@@ -43,7 +43,7 @@ type HomeCachePayload = {
 
 // Public content cache (updated dynamically from live database queries)
 let homePublicCache: HomeCachePayload | null = null;
-const HOME_CACHE_TTL_MS = 30_000;
+const HOME_CACHE_TTL_MS = 60_000;
 
 export const load = async ({ locals, setHeaders, url, platform, cookies }: any) => {
   const forceFresh = url.searchParams.has('fresh') || url.searchParams.has('nocache');

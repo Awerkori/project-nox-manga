@@ -44,6 +44,7 @@ vi.mock('$lib/server/yugabyte', async (importOriginal) => {
 });
 import { load as workLoad } from '../src/routes/obra/[slug]/+page.server';
 import { load as readerLoad } from '../src/routes/ler/[id]/+page.server';
+import { invalidateObraAuxCache } from '../src/lib/server/obra-cache';
 
 function event() {
   return {
@@ -56,11 +57,39 @@ function event() {
 
 describe('moderated comments on public pages', () => {
   it('hides removed work comments even from the owner outside moderation', async () => {
+    invalidateObraAuxCache();
     const data = await workLoad(event());
     expect(data.comments.map((c: any) => c.id)).toEqual(['visible']);
   });
   it('hides removed chapter comments even from the owner outside moderation', async () => {
     const data = await readerLoad(event());
     expect(data.comments.map((c: any) => c.id)).toEqual(['chapter-visible']);
+  });
+  it('parses stringified JSON auxiliary payload safely without crashing or losing scans', async () => {
+    invalidateObraAuxCache();
+    const yugabyteModule = await import('../src/lib/server/yugabyte');
+    vi.mocked(yugabyteModule.executeYugabyteSql).mockImplementationOnce(async (sql: string) => {
+      if (sql.includes('FROM comments') && sql.includes('chapter_id IS NULL')) {
+        return {
+          rows: [
+            {
+              comments: JSON.stringify([
+                { id: 'string-visible', work_id: 'work', chapter_id: null, removed: false, created_at: '2026-01-01' }
+              ]),
+              metrics: JSON.stringify({ likes: 99 }),
+              work_scans: JSON.stringify([
+                { is_primary: true, scans: { id: 'scan-1', name: 'Scan One' } }
+              ])
+            }
+          ]
+        } as any;
+      }
+      return { rows: [] };
+    });
+
+    const data = await workLoad(event());
+    expect(data.comments.map((c: any) => c.id)).toEqual(['string-visible']);
+    expect(data.likesCount).toBe(99);
+    expect(data.scans).toEqual([{ id: 'scan-1', name: 'Scan One' }]);
   });
 });

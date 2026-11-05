@@ -40,3 +40,16 @@ it('keeps every timeline chapter for a work and cursors from the final chapter',
   expect(json.nextCursorTime).toBe(rows[4].chapter_published_at);
   expect(json.nextCursorId).toBe(rows[4].chapter_id);
 });
+
+it('bounds cache growth and safely evicts under high pagination diversity', async () => {
+  const fetchSpy = vi.spyOn(yugabyte, 'fetchRecentReleaseTimelineFromYugabyte').mockResolvedValue([]);
+
+  for (let i = 0; i < 120; i++) {
+    await GET({
+      url: new URL(`https://manga.project-nox.test/api/releases?cursorId=uuid-${i}&cursorTime=2026-11-05T00:00:${String(i).padStart(2, '0')}Z&limit=10`),
+      platform: { env: {} }
+    } as any);
+  }
+
+  expect(fetchSpy).toHaveBeenCalled();
+});

@@ -1,15 +1,26 @@
 import { json } from '@sveltejs/kit';
 import { fetchRecentReleaseTimelineFromYugabyte } from '$lib/server/yugabyte';
 
-const RELEASES_CACHE_TTL_MS = 15_000;
+const RELEASES_CACHE_TTL_MS = 30_000;
+const MAX_RELEASES_CACHE_SIZE = 100;
 const releasesCache = new Map<string, { expiresAt: number; value: unknown }>();
 const releasesInFlight = new Map<string, Promise<unknown>>();
 
 function cachedReleases(key: string, load: () => Promise<unknown>): Promise<unknown> {
+  const now = Date.now();
   const hit = releasesCache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
+  if (hit && hit.expiresAt > now) return Promise.resolve(hit.value);
   const inFlight = releasesInFlight.get(key);
   if (inFlight) return inFlight;
+
+  if (releasesCache.size >= MAX_RELEASES_CACHE_SIZE) {
+    for (const [k, item] of releasesCache) {
+      if (item.expiresAt <= now || releasesCache.size >= MAX_RELEASES_CACHE_SIZE) {
+        releasesCache.delete(k);
+      }
+    }
+  }
+
   const pending = load().then((value) => {
     releasesCache.set(key, { value, expiresAt: Date.now() + RELEASES_CACHE_TTL_MS });
     return value;
@@ -65,7 +76,7 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
 
   if (setHeaders) {
     setHeaders({
-      'cache-control': 'public, max-age=15, s-maxage=15, stale-while-revalidate=60'
+      'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
     });
   }
 
