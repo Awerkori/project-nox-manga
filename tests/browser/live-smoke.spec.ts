@@ -25,6 +25,15 @@ async function gotoLiveReader(page: import('@playwright/test').Page) {
   return response;
 }
 
+async function dismissAgeGate(page: import('@playwright/test').Page) {
+  const adult = page.getByRole('button', { name: 'Sim, tenho 18 anos ou mais' });
+  if (await adult.isVisible().catch(() => false)) {
+    await adult.click();
+    await page.getByRole('button', { name: 'Confirmar e Continuar' }).click();
+    await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+  }
+}
+
 test.describe('Production Live Smoke Tests', () => {
   test('Live Home page renders clean footer, canvas snow, and no explore banner', async ({ page }) => {
     await page.context().addCookies([
@@ -33,6 +42,7 @@ test.describe('Production Live Smoke Tests', () => {
 
     const res = await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
     expect(res?.status()).toBe(200);
+    await dismissAgeGate(page);
 
     // 1. Particle canvas exists
     const snowCanvas = page.locator('canvas.particle-canvas');
@@ -49,7 +59,7 @@ test.describe('Production Live Smoke Tests', () => {
     expect(await footerCommunity.count()).toBe(0);
   });
 
-  test('Live Work page renders desktop/mobile CTAs and contextual comments', async ({ page }) => {
+  test('Live Work page renders a readable CTA and contextual comments', async ({ page }) => {
     await page.context().addCookies([
       { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
     ]);
@@ -58,46 +68,41 @@ test.describe('Production Live Smoke Tests', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const res = await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
     expect(res?.status()).toBe(200);
+    await dismissAgeGate(page);
 
-    // Desktop CTA visible in chapters header
-    const desktopCta = page.locator('.btn-read-chapters-desktop');
-    await expect(desktopCta).toBeVisible();
-    const mobileCta = page.locator('.btn-read-hero.mobile-only');
-    await expect(mobileCta).toBeHidden();
+    const readCta = page.getByRole('link', { name: /começar a ler|continuar leitura/i });
+    await expect(readCta).toBeVisible();
 
     // Contextual comments
-    const commentsEyebrow = page.locator('.comments .section-heading .eyebrow');
-    await expect(commentsEyebrow).toContainText('AVALIAÇÕES & DISCUSSÃO');
+    await expect(page.getByRole('heading', { name: 'Comentários sobre a Obra' })).toBeVisible();
 
     // Test Mobile
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(200);
-    await expect(mobileCta).toBeVisible();
-    await expect(desktopCta).toBeHidden();
+    await expect(readCta).toBeVisible();
   });
 
-  test('Live Reader page renders navigation, scroll controls, and reactions', async ({ page }) => {
+  test('Live Reader page renders navigation, completion and reactions', async ({ page }) => {
     await page.context().addCookies([
       { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
     ]);
 
     const res = await gotoLiveReader(page);
     expect(res?.status()).toBe(200);
+    await dismissAgeGate(page);
 
-    await expect(page.getByRole('button', { name: 'Voltar ao topo' })).toBeAttached();
+    await expect(page.getByRole('link', { name: /voltar para a obra/i })).toBeVisible();
 
     // Scroll to end
     await page.evaluate(() => {
-      document.querySelector('.reader-end')?.scrollIntoView({ behavior: 'instant' });
+      document.querySelector('#chapter-end')?.scrollIntoView({ behavior: 'instant' });
     });
     await page.waitForTimeout(400);
 
     // Verify reactions
-    const reactions = page.locator('.chapter-reactions-cluster');
-    await expect(reactions).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Qual foi a vibe da leitura?' })).toBeVisible();
 
     // Verify Reader comments
-    const readerEyebrow = page.locator('.reader-comments .comments .section-heading .eyebrow');
-    await expect(readerEyebrow).toContainText('DEPOIS DA ÚLTIMA PÁGINA');
+    await expect(page.getByRole('heading', { name: 'Comentários deste Capítulo' })).toBeVisible();
   });
 });

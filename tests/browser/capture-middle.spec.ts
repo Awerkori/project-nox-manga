@@ -3,15 +3,25 @@ import { testArtifactDir } from '../test-artifacts';
 
 const ARTIFACT_DIR = testArtifactDir(process.env.AUDIT_MODE === 'after' ? 'after' : 'before');
 const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
 const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
+
+async function dismissAgeGate(page: import('@playwright/test').Page) {
+  const adult = page.getByRole('button', { name: 'Sim, tenho 18 anos ou mais' });
+  if (await adult.isVisible().catch(() => false)) {
+    await adult.click();
+    await page.getByRole('button', { name: 'Confirmar e Continuar' }).click();
+    await page.locator('[role="dialog"]').waitFor({ state: 'hidden' });
+  }
+}
 
 test('capture middle and full details of key pages', async ({ page }) => {
   page.on('pageerror', err => console.error('PAGE_ERROR:', err.message));
   page.on('console', msg => console.log('PAGE_LOG:', msg.text()));
 
   await page.context().addCookies([
-    { name: 'nox-age-status', value: 'ADULT', domain: '127.0.0.1', path: '/' },
-    { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' }
+    { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' },
+    { name: 'nox-blur-nsfw', value: 'false', domain: LIVE_DOMAIN, path: '/' }
   ]);
 
   await page.addInitScript(() => {
@@ -42,7 +52,8 @@ test('capture middle and full details of key pages', async ({ page }) => {
   // 1. Obra mobile middle
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto(`${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.work-page-container', { timeout: 10000 });
+  await dismissAgeGate(page);
+  await page.waitForSelector('main.work-page-root', { timeout: 10000 });
   await page.waitForTimeout(400);
 
   // Scroll to Informações card

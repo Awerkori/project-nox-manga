@@ -18,7 +18,7 @@ vi.mock('pg', () => {
   return { Client: MockClient, Pool: MockPool };
 });
 
-import { searchWorksFromYugabyte } from '../src/lib/server/yugabyte';
+import { fetchCatalogFromYugabyte, searchWorksFromYugabyte } from '../src/lib/server/yugabyte';
 import { GET as getWorks } from '../src/routes/api/v1/[...path]/+server';
 
 describe('Yugabyte alias search', () => {
@@ -36,8 +36,11 @@ describe('Yugabyte alias search', () => {
 
     expect(result.works).toEqual([{ id: 'work-1', title: 'Solo Leveling', aliases: ['나 혼자만 레벨업'] }]);
     expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
     const [sql, params] = query.mock.calls[0];
     expect(sql).toContain('search_text ILIKE $1');
+    expect(sql).toContain('matched AS MATERIALIZED');
+    expect(sql).toContain('JOIN works ON works.id = paged.id');
     expect(sql).toContain('wt.work_id=works.id');
     expect(sql).toContain('ORDER BY title ASC, id ASC');
     expect(params).toEqual(['%나 혼자만 레벨업%', 'MANHWA', 'action', 20, 20]);
@@ -45,8 +48,40 @@ describe('Yugabyte alias search', () => {
 
   it('does not turn wildcard input into an unbounded match', async () => {
     const result = await searchWorksFromYugabyte(' %_\\ ', { limit: 20, offset: 0 }, {});
-    expect(result).toEqual({ works: [], total: 0 });
+    expect(result).toEqual({ works: [], total: 0, hasMore: false });
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('uses a limit-plus-one page for public filtered SSR without a distributed total count', async () => {
+    query.mockResolvedValue({
+      rows: [
+        { id: 'work-1', title: 'First' },
+        { id: 'work-2', title: 'Second' }
+      ],
+      rowCount: 2
+    });
+
+    const result = await fetchCatalogFromYugabyte({ tag: 'action', limit: 1, offset: 0, includeTotal: false }, {
+      HYPERDRIVE: { connectionString: 'postgres://test' }
+    });
+
+    expect(result).toEqual({ works: [{ id: 'work-1', title: 'First' }], total: 1, hasMore: true });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).not.toContain('COUNT(*) OVER()');
+    expect(sql).toContain('WITH matched AS MATERIALIZED');
+    expect(sql).toContain('works.id = ANY(ARRAY(');
+    expect(sql).toContain('JOIN works ON works.id = paged.id');
+    expect(params).toEqual(['action', 2, 0]);
+  });
+
+  it('does not issue a published-work count for an unfiltered page without a total', async () => {
+    query.mockResolvedValue({ rows: [{ id: 'one' }, { id: 'two' }], rowCount: 2 });
+    const result = await fetchCatalogFromYugabyte({ limit: 1, includeTotal: false }, {
+      HYPERDRIVE: { connectionString: 'postgres://test' }
+    });
+    expect(result).toEqual({ works: [{ id: 'one' }], total: 1, hasMore: true });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][1]).toEqual([2, 0]);
   });
 
   it('falls back to persisted title and aliases when the derived search index is stale', async () => {
@@ -61,12 +96,20 @@ describe('Yugabyte alias search', () => {
 
     expect(result).toEqual({
       works: [{ id: 'work-2', slug: 'cheer-love', title: 'Cheer Love!', aliases: ['Viva o Amor!'] }],
-      total: 1
+      total: 1,
+      hasMore: false
     });
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toContain('search_text ILIKE $1');
-    expect(query.mock.calls[1][0]).toContain('title ILIKE $1 OR EXISTS');
+    expect(query.mock.calls[1][0]).toContain('WITH matched AS MATERIALIZED');
+    expect(query.mock.calls[1][0]).toContain('SELECT works.id, works.updated_at');
+    expect(query.mock.calls[1][0]).toContain('JOIN works ON works.id = paged.id');
+    expect(query.mock.calls[1][0]).toContain('title ILIKE $1 OR CASE');
+    expect(query.mock.calls[1][0]).toContain("array_to_string(COALESCE(works.aliases, ARRAY[]::text[]), ' ') ILIKE $1");
     expect(query.mock.calls[1][0]).toContain('unnest(COALESCE(works.aliases');
+    expect(query.mock.calls[1][0]).toContain("concat_ws(' ', works.title, works.author, works.artist");
+    expect(query.mock.calls[1][0]).not.toContain('COALESCE(works.search_text');
+    expect(query.mock.calls[1][0]).toContain('works.search_text IS NULL');
   });
 
   it('serves public API alias searches from the authoritative catalog', async () => {

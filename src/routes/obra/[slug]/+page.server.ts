@@ -115,7 +115,7 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       })
     : getOrFetchObraAux(work.id, async () => {
         try {
-          const [commentsRes, likesRes, metricsRes, scansRes] = await Promise.all([
+          const [commentsRes, metricsRes, scansRes, likesRes] = await Promise.all([
             executeYugabyteSql(
               `SELECT c.id, c.user_id, c.body, c.created_at, c.parent_id, c.removed,
                       json_build_object(
@@ -138,7 +138,6 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
               [work.id],
               platform?.env
             ),
-            executeYugabyteSql(`SELECT COUNT(*)::int AS count FROM likes WHERE work_id = $1;`, [work.id], platform?.env),
             executeYugabyteSql(`SELECT * FROM public.work_metrics($1);`, [work.id], platform?.env),
             executeYugabyteSql(
               `SELECT ws.is_primary,
@@ -158,13 +157,17 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
                WHERE ws.work_id = $1;`,
               [work.id],
               platform?.env
-            )
+            ),
+            work.published === true
+              ? null
+              : executeYugabyteSql(`SELECT COUNT(*)::int AS count FROM likes WHERE work_id = $1;`, [work.id], platform?.env)
           ]);
 
+          const metrics = metricsRes?.rows?.[0] || null;
           const entry = {
             comments: sanitizeComments(commentsRes?.rows || []),
-            likesCount: Number(likesRes?.rows?.[0]?.count || 0),
-            metrics: metricsRes?.rows?.[0] || null,
+            likesCount: work.published === true ? Number(metrics?.likes ?? 0) : Number(likesRes?.rows?.[0]?.count || 0),
+            metrics,
             workScans: scansRes?.rows || []
           };
           setObraAuxCache(work.id, entry);

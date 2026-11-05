@@ -66,16 +66,16 @@ test('reader behaves smoothly under high-latency mobile conditions', async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/qa-reader');
 
-  await page.waitForSelector('.reader-end');
-  const reactionsBox = page.locator('.chapter-reactions-cluster');
+  await page.waitForSelector('#chapter-end');
+  const reactionsBox = page.locator('.reactions-dock-card');
   await expect(reactionsBox).toBeVisible();
 
   // Tap a reaction button: verify immediate optimistic UI reaction
-  const fireBtn = page.locator('.reaction-btn').nth(1);
+  const fireBtn = page.locator('.reaction-capsule').nth(1);
   await fireBtn.click();
 
   // Optimistic update should toggle state without waiting for network
-  await expect(page.locator('.reaction-btn').nth(1)).toBeVisible();
+  await expect(page.locator('.reaction-capsule').nth(1)).toBeVisible();
 
   // Verify no horizontal overflow
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

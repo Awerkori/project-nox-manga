@@ -59,13 +59,18 @@ export const load = async ({ locals, params, platform }: any) => {
     ).catch(() => ({ rows: [] })),
 
     executeYugabyteSql(
-      `SELECT
-        (SELECT COUNT(DISTINCT r.chapter_id) FROM public.reading r WHERE r.user_id = $1) AS chapters_read,
-        (SELECT COUNT(DISTINCT c.work_id) FROM public.reading r JOIN public.chapters c ON c.id = r.chapter_id WHERE r.user_id = $1) AS total_works,
-        (SELECT COUNT(DISTINCT c.work_id) FROM public.reading r JOIN public.chapters c ON c.id = r.chapter_id WHERE r.user_id = $1 AND r.completed_at IS NOT NULL) AS completed_works,
+      `SELECT reading_stats.chapters_read, reading_stats.total_works, reading_stats.completed_works,
         (SELECT COUNT(*) FROM public.library WHERE user_id = $1 AND favorite = true) AS favorites,
         (SELECT COUNT(*) FROM public.achievements) AS achievements_total,
-        (SELECT COUNT(*) FROM public.member_inventory WHERE user_id = $1) AS cosmetics_count;`,
+        (SELECT COUNT(*) FROM public.member_inventory WHERE user_id = $1) AS cosmetics_count
+       FROM (
+         SELECT COUNT(DISTINCT r.chapter_id) AS chapters_read,
+                COUNT(DISTINCT c.work_id) AS total_works,
+                COUNT(DISTINCT c.work_id) FILTER (WHERE r.completed_at IS NOT NULL) AS completed_works
+         FROM public.reading r
+         JOIN public.chapters c ON c.id = r.chapter_id
+         WHERE r.user_id = $1
+       ) AS reading_stats;`,
       [member.id],
       platform?.env
     ).catch(() => ({ rows: [] })),
@@ -85,9 +90,16 @@ export const load = async ({ locals, params, platform }: any) => {
 
     canViewReadingHistory
       ? executeYugabyteSql(
-          `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at
+          `SELECT r.chapter_id, c.work_id, r.page, r.max_page, r.completed_at, r.updated_at,
+                  c.id AS chapter_catalog_id, c.number AS chapter_number, c.display_number AS chapter_display_number,
+                  c.canonical_chapter_key, c.chapter_order_key, c.title AS chapter_title,
+                  c.work_id AS chapter_work_id, c.published_at AS chapter_published_at,
+                  w.id AS work_catalog_id, w.slug AS work_slug, w.title AS work_title, w.cover_id AS work_cover_id,
+                  w.kind AS work_kind, w.status AS work_status, w.published AS work_published,
+                  w.content_rating AS work_content_rating
            FROM public.reading r
            JOIN public.chapters c ON c.id = r.chapter_id
+           JOIN public.works w ON w.id = c.work_id AND (w.published = true OR w.published IS NULL)
            WHERE r.user_id = $1
            ORDER BY r.updated_at DESC
            LIMIT 80;`,
@@ -289,7 +301,9 @@ export const load = async ({ locals, params, platform }: any) => {
           });
         }
       }
-    } catch {}
+    } catch {
+      // Non-critical legacy cosmetic metadata lookup fallback.
+    }
   }
 
   // Check if equipped_title_id was from NOX_TITLES

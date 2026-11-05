@@ -4,6 +4,7 @@ import { testArtifactDir } from '../test-artifacts';
 
 const SCREENSHOT_DIR = testArtifactDir(process.env.AUDIT_MODE === 'after' ? 'after' : 'before');
 const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
 const LOCAL_URL = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '5173'}`;
 
 const VIEWPORTS = [
@@ -18,7 +19,9 @@ async function setupRoutes(page: any) {
   // Set age cookies so AgeGateModal is bypassed
   await page.context().addCookies([
     { name: 'nox-age-status', value: 'ADULT', domain: '127.0.0.1', path: '/' },
-    { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' }
+    { name: 'nox-blur-nsfw', value: 'false', domain: '127.0.0.1', path: '/' },
+    { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' },
+    { name: 'nox-blur-nsfw', value: 'false', domain: LIVE_DOMAIN, path: '/' }
   ]);
 
   await page.addInitScript(() => {
@@ -102,7 +105,7 @@ test('audit visual layout and detect horizontal overflows across viewports', asy
 
   const pagesToAudit = [
     { id: 'home', path: LIVE_URL, selector: 'main' },
-    { id: 'obra', path: `${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, selector: '.work-page-container' },
+    { id: 'obra', path: `${LIVE_URL}/obra/cronicas-do-demonio-de-sangue`, selector: 'main.work-page-root' },
     { id: 'admin-dashboard', path: `${LOCAL_URL}/preview-admin?view=dashboard&role=ADMIN`, selector: '.dashboard-shell' },
     { id: 'admin-obras', path: `${LOCAL_URL}/preview-admin?view=obras&role=ADMIN`, selector: '.works-manager-shell' },
     { id: 'admin-importer', path: `${LOCAL_URL}/preview-admin?view=importer&role=ADMIN`, selector: '.importer-dashboard' },

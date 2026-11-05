@@ -1,6 +1,5 @@
 import { error } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
-import { withTimeout } from '$lib/server/resilience';
 import { withYugabyteReadSession } from '$lib/server/yugabyte';
 
 import { building } from '$app/environment';
@@ -83,7 +82,9 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
               };
               const isSecure = event.url.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(event.url.hostname);
               setAuthCookie(event.cookies, freshSession, isSecure);
-            } catch {}
+            } catch {
+              // Non-fatal sliding renewal error; keep current valid session.
+            }
           }
         } else {
           // Token claims unverified or member row missing in YugabyteDB
@@ -273,10 +274,20 @@ export const handle: Handle = async ({ event, resolve }) => {
   return withYugabyteReadSession(
     event.platform?.env,
     async (sessionEnv) => {
-      if (event.platform && sessionEnv) {
-        (event.platform as any).env = sessionEnv;
+      const platform = event.platform as any;
+      const previousEnv = platform?.env;
+      if (platform && sessionEnv) {
+        platform.env = sessionEnv;
       }
-      return handleRequest(event, resolve, reqStart);
+      try {
+        return await handleRequest(event, resolve, reqStart);
+      } finally {
+        // event.platform can be shared by workerd/test:browser. Do not retain
+        // a request-scoped (and soon closed) read session on it.
+        if (platform && sessionEnv) {
+          platform.env = previousEnv;
+        }
+      }
     },
     2
   );

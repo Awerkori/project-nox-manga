@@ -78,8 +78,8 @@ test('rapid double-click on reaction toggles safely without corrupting count or 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/qa-reader');
 
-  await page.waitForSelector('.reader-end');
-  const heartBtn = page.locator('.reaction-btn').first();
+  await page.waitForSelector('#chapter-end');
+  const heartBtn = page.locator('.reaction-capsule').first();
 
   // Double click in rapid succession
   await heartBtn.click();

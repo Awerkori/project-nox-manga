@@ -30,8 +30,9 @@ export interface EnrichedReadingChapter {
  * was removed when catalog chapters moved to YugabyteDB and previously caused
  * PGRST200 / HTTP 400 on `/historico`).
  *
- * Executes ZERO queries when `readingRows` is empty, and ONE single indexed
- * `ANY($1::uuid[])` query on YugabyteDB (with Supabase fallback) otherwise.
+ * Executes ZERO queries when rows already include catalog metadata from a
+ * Yugabyte join. Legacy rows without it use one indexed `ANY($1::uuid[])`
+ * query as a compatibility fallback.
  */
 export async function enrichReadingRowsWithCatalog<T extends Record<string, any>>(
   readingRows: T[] | null | undefined,
@@ -42,24 +43,83 @@ export async function enrichReadingRowsWithCatalog<T extends Record<string, any>
     return [];
   }
 
+  const toIso = (value: any): string | null => (value ? new Date(value).toISOString() : null);
+  const inlineChapter = (row: T): EnrichedReadingChapter | null => {
+    const nested = row.chapters;
+    if (nested?.works?.id) {
+      const work = nested.works;
+      return {
+        id: nested.id || row.chapter_id,
+        number: nested.number ?? null,
+        display_number: nested.display_number ?? null,
+        canonical_chapter_key: nested.canonical_chapter_key ?? null,
+        chapter_order_key: nested.chapter_order_key ?? null,
+        title: nested.title ?? null,
+        work_id: nested.work_id || work.id,
+        published_at: toIso(nested.published_at),
+        works: {
+          id: work.id,
+          slug: work.slug,
+          title: work.title,
+          cover_id: work.cover_id || null,
+          kind: work.kind || null,
+          status: work.status || null,
+          published: Boolean(work.published),
+          content_rating: work.content_rating || null
+        }
+      };
+    }
+
+    const workId = row.work_catalog_id || row.chapter_work_id || row.work_id;
+    if (!row.chapter_id || !workId || typeof row.work_slug !== 'string' || typeof row.work_title !== 'string') {
+      return null;
+    }
+    return {
+      id: row.chapter_catalog_id || row.chapter_id,
+      number: row.chapter_number ?? null,
+      display_number: row.chapter_display_number ?? null,
+      canonical_chapter_key: row.canonical_chapter_key ?? null,
+      chapter_order_key: row.chapter_order_key ?? null,
+      title: row.chapter_title ?? null,
+      work_id: row.chapter_work_id || workId,
+      published_at: toIso(row.chapter_published_at),
+      works: {
+        id: workId,
+        slug: row.work_slug,
+        title: row.work_title,
+        cover_id: row.work_cover_id || null,
+        kind: row.work_kind || null,
+        status: row.work_status || null,
+        published: Boolean(row.work_published),
+        content_rating: row.work_content_rating || null
+      }
+    };
+  };
+
+  const byChapterId = new Map<string, EnrichedReadingChapter>();
+  const rowsMissingCatalog: T[] = [];
+  for (const row of readingRows) {
+    const chapter = inlineChapter(row);
+    if (chapter) {
+      byChapterId.set(row.chapter_id, chapter);
+    } else {
+      rowsMissingCatalog.push(row);
+    }
+  }
+
   const chapterIds = Array.from(
     new Set(
-      readingRows
+      rowsMissingCatalog
         .map((r) => (typeof r?.chapter_id === 'string' ? r.chapter_id.trim() : ''))
         .filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))
     )
   );
 
-  if (chapterIds.length === 0) {
-    return [];
-  }
-
-  const byChapterId = new Map<string, EnrichedReadingChapter>();
-
-  try {
-    const ysqlRes = await withTimeout(
-      executeYugabyteSql<any>(
-        `SELECT
+  if (chapterIds.length > 0) {
+    try {
+      const ysqlRes = await withTimeout(
+        executeYugabyteSql<any>(
+          `SELECT
            c.id,
            c.number,
            c.display_number,
@@ -79,39 +139,40 @@ export async function enrichReadingRowsWithCatalog<T extends Record<string, any>
          JOIN public.works w ON w.id = c.work_id
          WHERE c.id = ANY($1::uuid[])
            AND (w.published = true OR w.published IS NULL)`,
-        [chapterIds],
-        env
-      ),
-      2000,
-      null,
-      'reading_enrich_yugabyte',
-      'YUGABYTE'
-    );
+          [chapterIds],
+          env
+        ),
+        2000,
+        null,
+        'reading_enrich_yugabyte',
+        'YUGABYTE'
+      );
 
-    for (const row of ysqlRes?.rows || []) {
-      byChapterId.set(row.id, {
-        id: row.id,
-        number: row.number,
-        display_number: row.display_number,
-        canonical_chapter_key: row.canonical_chapter_key,
-        chapter_order_key: row.chapter_order_key,
-        title: row.title,
-        work_id: row.work_id,
-        published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
-        works: {
-          id: row.work_id,
-          slug: row.work_slug,
-          title: row.work_title,
-          cover_id: row.work_cover_id || null,
-          kind: row.work_kind || null,
-          status: row.work_status || null,
-          published: Boolean(row.work_published),
-          content_rating: row.work_content_rating || null
-        }
-      });
+      for (const row of ysqlRes?.rows || []) {
+        byChapterId.set(row.id, {
+          id: row.id,
+          number: row.number,
+          display_number: row.display_number,
+          canonical_chapter_key: row.canonical_chapter_key,
+          chapter_order_key: row.chapter_order_key,
+          title: row.title,
+          work_id: row.work_id,
+          published_at: row.published_at ? new Date(row.published_at).toISOString() : null,
+          works: {
+            id: row.work_id,
+            slug: row.work_slug,
+            title: row.work_title,
+            cover_id: row.work_cover_id || null,
+            kind: row.work_kind || null,
+            status: row.work_status || null,
+            published: Boolean(row.work_published),
+            content_rating: row.work_content_rating || null
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[READING_HISTORY_YUGABYTE_WARN]', err);
     }
-  } catch (err) {
-    console.warn('[READING_HISTORY_YUGABYTE_WARN]', err);
   }
 
   const enriched: Array<T & { chapters: EnrichedReadingChapter }> = [];
