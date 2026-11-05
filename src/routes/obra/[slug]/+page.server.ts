@@ -115,9 +115,11 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
       })
     : getOrFetchObraAux(work.id, async () => {
         try {
-          const [commentsRes, metricsRes, scansRes, likesRes] = await Promise.all([
+          const [auxRes, likesRes] = await Promise.all([
             executeYugabyteSql(
-              `SELECT c.id, c.user_id, c.body, c.created_at, c.parent_id, c.removed,
+              `SELECT
+                COALESCE((SELECT json_agg(comment_row ORDER BY created_at DESC) FROM (
+                  SELECT c.id, c.user_id, c.body, c.created_at, c.parent_id, c.removed,
                       json_build_object(
                         'username', m.username,
                         'display_name', m.display_name,
@@ -130,17 +132,15 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
                         'equipped_title_id', m.equipped_title_id
                       ) AS members,
                       COALESCE((SELECT json_agg(json_build_object('user_id', cl.user_id)) FROM comment_likes cl WHERE cl.comment_id = c.id), '[]'::json) AS comment_likes
-               FROM comments c
-               LEFT JOIN members m ON m.id = c.user_id
-               WHERE c.work_id = $1 AND c.chapter_id IS NULL
-               ORDER BY c.created_at DESC
-               LIMIT 150;`,
-              [work.id],
-              platform?.env
-            ),
-            executeYugabyteSql(`SELECT * FROM public.work_metrics($1);`, [work.id], platform?.env),
-            executeYugabyteSql(
-              `SELECT ws.is_primary,
+                  FROM comments c
+                  LEFT JOIN members m ON m.id = c.user_id
+                  WHERE c.work_id = $1 AND c.chapter_id IS NULL
+                  ORDER BY c.created_at DESC
+                  LIMIT 150
+                ) comment_row), '[]'::json) AS comments,
+                (SELECT row_to_json(metric_row) FROM public.work_metrics($1) metric_row LIMIT 1) AS metrics,
+                COALESCE((SELECT json_agg(scan_row) FROM (
+                  SELECT ws.is_primary,
                       json_build_object(
                         'id', s.id,
                         'name', s.name,
@@ -152,9 +152,10 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
                         'fluxer', s.fluxer,
                         'website', s.website
                       ) AS scans
-               FROM work_scans ws
-               JOIN scans s ON s.id = ws.scan_id
-               WHERE ws.work_id = $1;`,
+                  FROM work_scans ws
+                  JOIN scans s ON s.id = ws.scan_id
+                  WHERE ws.work_id = $1
+                ) scan_row), '[]'::json) AS work_scans;`,
               [work.id],
               platform?.env
             ),
@@ -163,12 +164,13 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
               : executeYugabyteSql(`SELECT COUNT(*)::int AS count FROM likes WHERE work_id = $1;`, [work.id], platform?.env)
           ]);
 
-          const metrics = metricsRes?.rows?.[0] || null;
+          const aux = auxRes?.rows?.[0] || {};
+          const metrics = aux.metrics || null;
           const entry = {
-            comments: sanitizeComments(commentsRes?.rows || []),
+            comments: sanitizeComments(aux.comments || []),
             likesCount: work.published === true ? Number(metrics?.likes ?? 0) : Number(likesRes?.rows?.[0]?.count || 0),
             metrics,
-            workScans: scansRes?.rows || []
+            workScans: aux.work_scans || []
           };
           setObraAuxCache(work.id, entry);
           return { ...entry, timestamp: Date.now() };
