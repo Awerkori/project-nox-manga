@@ -1,4 +1,5 @@
 import { Client, Pool } from 'pg';
+import { enforceSieveSqlParams } from './data-sieve';
 
 export interface SqlResponse<T = any> {
   rows: T[];
@@ -337,6 +338,12 @@ export async function executeYugabyteSql<T = any>(
   params: any[] = [],
   platformEnv?: any
 ): Promise<SqlResponse<T>> {
+  // Enforce permanent architectural storage sieve on write queries
+  const sieveCheck = enforceSieveSqlParams(query, params);
+  if (!sieveCheck.ok) {
+    throw new Error(sieveCheck.error);
+  }
+
   const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
   if (activeSession) {
     if (activeSession.isClosed()) {

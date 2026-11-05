@@ -242,3 +242,61 @@ export function enforceSieveSqlWrite(
 
   return { ok: true };
 }
+
+/**
+ * Pre-execution enforcement guard inspecting raw SQL query and parameterized values.
+ * Intercepts write queries (INSERT/UPDATE) containing data URIs, raw binary buffers,
+ * or illegal media providers before they reach YugabyteDB.
+ */
+export function enforceSieveSqlParams(
+  query: string,
+  params: unknown[] = []
+): { ok: boolean; error?: string } {
+  if (!params || params.length === 0) return { ok: true };
+  const upper = query.trimStart().toUpperCase();
+  const isWrite = upper.startsWith('INSERT') || upper.startsWith('UPDATE');
+  if (!isWrite) return { ok: true };
+
+  const isMediaTable = /\b(?:public\.)?media\b/i.test(query);
+
+  for (let i = 0; i < params.length; i++) {
+    const val = params[i];
+    if (typeof val === 'string') {
+      if (val.startsWith('data:image/')) {
+        return {
+          ok: false,
+          error: `[DATA_SIEVE_VIOLATION] Parameter at index ${i} contains base64 data URI (${val.length} chars). Binary media must be offloaded to Telegram Storage (Category B).`,
+        };
+      }
+      if (
+        val.length > MAX_INLINE_SQL_BLOB_BYTES &&
+        !query.includes('synopsis') &&
+        !query.includes('description') &&
+        !query.includes('content') &&
+        !query.includes('checkpoint')
+      ) {
+        return {
+          ok: false,
+          error: `[DATA_SIEVE_VIOLATION] Parameter at index ${i} exceeds inline threshold (${val.length} chars). Heavy payloads must be offloaded to Telegram Storage (Category B).`,
+        };
+      }
+      if (isMediaTable && (val === 'inline' || val === 'base64' || val === 'data_uri')) {
+        return {
+          ok: false,
+          error: `[DATA_SIEVE_VIOLATION] Media table cannot use inline provider '${val}'. Provider must be 'telegram' or valid external storage.`,
+        };
+      }
+    } else if (val instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(val))) {
+      const len = (val as Uint8Array).byteLength || (val as Buffer).length;
+      if (len > 4096) {
+        return {
+          ok: false,
+          error: `[DATA_SIEVE_VIOLATION] Parameter at index ${i} contains raw binary buffer (${len} bytes). Binary media must be offloaded to Telegram Storage (Category B).`,
+        };
+      }
+    }
+  }
+
+  return { ok: true };
+}
+

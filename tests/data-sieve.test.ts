@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyData,
   enforceSieveSqlWrite,
+  enforceSieveSqlParams,
   TABLE_CLASSIFICATIONS,
   MAX_INLINE_SQL_BLOB_BYTES,
   type SieveEntity,
@@ -142,6 +143,46 @@ describe('Project Nox — Data Classification Sieve (Etapa 2)', () => {
     expect(check.ok).toBe(true);
   });
 
+  it('enforceSieveSqlParams intercepts and rejects dangerous writes in SQL execution layer', () => {
+    // 1. Rejects base64 data URIs
+    const base64Res = enforceSieveSqlParams(
+      'UPDATE works SET cover_url = $1 WHERE id = $2;',
+      ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAE...', '123']
+    );
+    expect(base64Res.ok).toBe(false);
+    expect(base64Res.error).toContain('DATA_SIEVE_VIOLATION');
+
+    // 2. Rejects raw large buffers (>4KB)
+    const bufferRes = enforceSieveSqlParams(
+      'INSERT INTO media (id, raw) VALUES ($1, $2);',
+      ['id-1', new Uint8Array(8192)]
+    );
+    expect(bufferRes.ok).toBe(false);
+    expect(bufferRes.error).toContain('DATA_SIEVE_VIOLATION');
+
+    // 3. Rejects illegal inline provider on media table
+    const providerRes = enforceSieveSqlParams(
+      'INSERT INTO public.media (id, provider) VALUES ($1, $2);',
+      ['id-1', 'inline']
+    );
+    expect(providerRes.ok).toBe(false);
+    expect(providerRes.error).toContain('DATA_SIEVE_VIOLATION');
+
+    // 4. Passes normal queries
+    const validRes = enforceSieveSqlParams(
+      'INSERT INTO public.media (id, provider, access_class) VALUES ($1, $2, $3);',
+      ['id-1', 'telegram', 'PUBLIC']
+    );
+    expect(validRes.ok).toBe(true);
+
+    // 5. Ignores SELECT queries
+    const selectRes = enforceSieveSqlParams(
+      'SELECT * FROM media WHERE provider = $1;',
+      ['inline']
+    );
+    expect(selectRes.ok).toBe(true);
+  });
+
   it('validates canonical table classifications dictionary', () => {
     expect(TABLE_CLASSIFICATIONS['works']).toBe('CATEGORY_A_SQL');
     expect(TABLE_CLASSIFICATIONS['chapters']).toBe('CATEGORY_A_SQL');
@@ -152,3 +193,4 @@ describe('Project Nox — Data Classification Sieve (Etapa 2)', () => {
     expect(TABLE_CLASSIFICATIONS['importer_queue']).toBe('CATEGORY_D_DISPOSABLE');
   });
 });
+
