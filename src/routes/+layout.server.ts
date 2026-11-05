@@ -11,13 +11,13 @@ let cachedSettings: { timestamp: number; config: Record<string, string> } = {
   timestamp: Date.now(),
   config: DEFAULT_CONFIG
 };
-const SETTINGS_CACHE_TTL_MS = 120_000;
+const SETTINGS_CACHE_TTL_MS = 300_000;
 
 // Uploaded (image/GIF) avatar frames need their asset + framing metadata on every
 // page where an equipped frame can appear (comments, profiles, header...).
 type CustomFrame = { id: string; asset_url: string; style_data: Record<string, any> };
 let cachedCustomFrames: { timestamp: number; frames: CustomFrame[] } = { timestamp: 0, frames: [] };
-const CUSTOM_FRAMES_TTL_MS = 120_000;
+const CUSTOM_FRAMES_TTL_MS = 300_000;
 const MAX_LAYOUT_FLIGHT_AGE_MS = 3_000;
 let customFramesFlight: { promise: Promise<void>; startedAt: number } | null = null;
 let settingsFlight: { promise: Promise<void>; startedAt: number } | null = null;

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { fetchRecentReleaseTimelineFromYugabyte } from '$lib/server/yugabyte';
 
-const RELEASES_CACHE_TTL_MS = 15_000;
+const RELEASES_CACHE_TTL_MS = 30_000;
 const releasesCache = new Map<string, { expiresAt: number; value: unknown }>();
 const releasesInFlight = new Map<string, Promise<unknown>>();
 
@@ -65,7 +65,7 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
 
   if (setHeaders) {
     setHeaders({
-      'cache-control': 'public, max-age=15, s-maxage=15, stale-while-revalidate=60'
+      'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
     });
   }
 
