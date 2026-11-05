@@ -127,6 +127,9 @@ async function run() {
     const unauthCronRes = await fetch(`${PREVIEW_URL}/api/internal/cron/process-expired-stages`, { method: 'GET' });
     recordTest('Unauthenticated GET /api/internal/cron/process-expired-stages returns 401', unauthCronRes.status === 401, `Status: ${unauthCronRes.status}`);
 
+    const unauthWarnRes = await fetch(`${PREVIEW_URL}/api/internal/cron/send-deadline-warnings`, { method: 'GET' });
+    recordTest('Unauthenticated GET /api/internal/cron/send-deadline-warnings returns 401', unauthWarnRes.status === 401, `Status: ${unauthWarnRes.status}`);
+
     // 2. Request with spoofed x-internal-cron header -> MUST STILL return 401!
     const spoofEmailRes = await fetch(`${PREVIEW_URL}/api/internal/email-processor`, {
       method: 'GET',
@@ -139,6 +142,12 @@ async function run() {
       headers: { 'x-internal-cron': 'true' }
     });
     recordTest('Header-spoofed GET /api/internal/cron/process-expired-stages rejected with 401', spoofCronRes.status === 401, `Status: ${spoofCronRes.status}`);
+
+    const spoofWarnRes = await fetch(`${PREVIEW_URL}/api/internal/cron/send-deadline-warnings`, {
+      method: 'GET',
+      headers: { 'x-internal-cron': 'true' }
+    });
+    recordTest('Header-spoofed GET /api/internal/cron/send-deadline-warnings rejected with 401', spoofWarnRes.status === 401, `Status: ${spoofWarnRes.status}`);
 
     // 3. Authorized request using staff session cookie
     const cookies = await ownerCookies(PREVIEW_URL);
@@ -153,18 +162,25 @@ async function run() {
     recordTest('Email processor detects preview isolation mode', authEmailJson.environment === 'preview_isolated' && authEmailJson.onlyTestChapters === true);
     recordTest('Email processor skips real email outbox in preview', authEmailJson.details?.includes('preview_isolated_mode_skipped_real_email'));
 
-    const authCronRes = await fetch(`${PREVIEW_URL}/api/internal/cron/process-expired-stages`, {
+    const authCronGetRes = await fetch(`${PREVIEW_URL}/api/internal/cron/process-expired-stages`, {
       method: 'GET',
       headers: { cookie: cookieHeader }
     });
-    const authCronJson = await authCronRes.json();
-    recordTest('Staff-authenticated GET /api/internal/cron/process-expired-stages returns 200', authCronRes.status === 200);
-    recordTest('Cron endpoint enforces onlyTestChapters in preview', authCronJson.onlyTestChapters === true);
+    const authCronGetJson = await authCronGetRes.json();
+    recordTest('Admin-authenticated GET /api/internal/cron/process-expired-stages is read-only', authCronGetRes.status === 200 && authCronGetJson.readOnly === true);
+    recordTest('Cron endpoint enforces onlyTestChapters in preview', authCronGetJson.onlyTestChapters === true);
+
+    const authWarningsGetRes = await fetch(`${PREVIEW_URL}/api/internal/cron/send-deadline-warnings`, {
+      method: 'GET',
+      headers: { cookie: cookieHeader }
+    });
+    const authWarningsGetJson = await authWarningsGetRes.json();
+    recordTest('Admin-authenticated GET /api/internal/cron/send-deadline-warnings is read-only', authWarningsGetRes.status === 200 && authWarningsGetJson.readOnly === true);
 
     // -------------------------------------------------------------------------
     // SECTION 3: PREVIEW ISOLATION & DEVOLUTION SAFETY (YugabyteDB)
     // -------------------------------------------------------------------------
-    console.log('\n[SECTION 3] Preview Isolation & Devolution Safety Verification');
+    console.log('\n[SECTION 3] Preview Isolation & Controlled Synthetic Devolution Safety');
 
     const scanRes = await client.query(`SELECT id FROM public.scans LIMIT 1`);
     const scanId = scanRes.rows[0].id;
@@ -174,64 +190,66 @@ async function run() {
     const tradStageId = stageRes.rows[0].id;
     const testActorId = '732fbe87-5040-41fb-9983-0aedb2af44c8';
 
-    // Clean up any existing synthetic #997
-    await client.query(`
-      DELETE FROM public.scan_chapter_timeline
-      WHERE production_chapter_id IN (
-        SELECT id FROM public.scan_production_chapters WHERE chapter_number = '997' AND scan_id = $1
-      )
-    `, [scanId]);
-    await client.query(`
-      DELETE FROM public.scan_chapter_stages
-      WHERE production_chapter_id IN (
-        SELECT id FROM public.scan_production_chapters WHERE chapter_number = '997' AND scan_id = $1
-      )
-    `, [scanId]);
-    await client.query(`
-      DELETE FROM public.scan_production_chapters WHERE chapter_number = '997' AND scan_id = $1
-    `, [scanId]);
+    // Controlled UUIDs for synthetic fixture (no heuristic numbers, no scan-wide deletes)
+    const fixtureChapterId = 'a0000000-0000-4000-8000-000000000001';
+    const fixtureStageId = 'b0000000-0000-4000-8000-000000000001';
 
-    // Insert synthetic test chapter #997
-    const synChapter = await client.query(`
+    // Insert synthetic test chapter with explicit metadata flag
+    await client.query(`
       INSERT INTO public.scan_production_chapters (
-        scan_id, work_id, chapter_number, chapter_title, status, created_at, updated_at
-      ) VALUES ($1, $2, '997', 'Capítulo Sintético Cron Isolation R24.5', 'IN_PROGRESS', now(), now())
-      RETURNING id
-    `, [scanId, workId]);
-    const synChapterId = synChapter.rows[0].id;
+        id, scan_id, work_id, chapter_number, chapter_title, status, checklist_state, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, 9999.1, 'Homologation Synthetic Fixture R24.5', 'IN_PROGRESS',
+        '{"is_synthetic_fixture": true, "audit_round": "24.5"}'::jsonb,
+        now(), now()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = 'IN_PROGRESS',
+        checklist_state = '{"is_synthetic_fixture": true, "audit_round": "24.5"}'::jsonb,
+        updated_at = now()
+    `, [fixtureChapterId, scanId, workId]);
 
-    const synExpiredStage = await client.query(`
+    // Insert synthetic expired stage (due 2 hours ago)
+    await client.query(`
       INSERT INTO public.scan_chapter_stages (
-        scan_id, chapter_id, production_chapter_id, stage_id, status, assigned_to,
+        id, scan_id, chapter_id, production_chapter_id, stage_id, status, assigned_to,
         claimed_at, due_at, extension_count, created_at, updated_at
       ) VALUES (
-        $1, $2, $2, $3, 'IN_PROGRESS', $4, now() - interval '5 hours', now() - interval '2 hours', 0, now(), now()
-      ) RETURNING id
-    `, [scanId, synChapterId, tradStageId, testActorId]);
-    const synStageId = synExpiredStage.rows[0].id;
+        $1, $2, $3, $3, $4, 'IN_PROGRESS', $5,
+        now() - interval '5 hours', now() - interval '2 hours', 0, now(), now()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = 'IN_PROGRESS',
+        assigned_to = $5,
+        claimed_at = now() - interval '5 hours',
+        due_at = now() - interval '2 hours',
+        extension_count = 0,
+        notes = NULL,
+        updated_at = now()
+    `, [fixtureStageId, scanId, fixtureChapterId, tradStageId, testActorId]);
 
-    console.log(`  Created synthetic expired stage ${synStageId} on chapter #997.`);
+    console.log(`  Created explicit synthetic expired fixture stage ${fixtureStageId} on chapter ${fixtureChapterId}.`);
 
-    // Run devolution via staff authenticated cron endpoint
+    // Run devolution via staff authenticated POST cron endpoint
     const runCronRes = await fetch(`${PREVIEW_URL}/api/internal/cron/process-expired-stages`, {
-      method: 'GET',
+      method: 'POST',
       headers: { cookie: cookieHeader }
     });
     const runCronJson = await runCronRes.json();
     console.log('  Devolution run result:', JSON.stringify(runCronJson?.devolution));
     recordTest('Preview devolution ran with p_only_test_chapters = true', runCronJson.onlyTestChapters === true);
-    recordTest('Synthetic chapter #997 was devolved', runCronJson.devolution?.devolved_count >= 1);
+    recordTest('Explicit synthetic fixture was devolved', runCronJson.devolution?.devolved_count >= 1);
 
-    // Verify synthetic stage #997 is now AVAILABLE
+    // Verify synthetic stage is now AVAILABLE
     const stageAfterDev = await client.query(`
       SELECT status, assigned_to, claimed_at, due_at, notes
       FROM public.scan_chapter_stages
       WHERE id = $1
-    `, [synStageId]);
+    `, [fixtureStageId]);
     const rowAfter = stageAfterDev.rows[0];
-    recordTest('Synthetic stage devolved to AVAILABLE', rowAfter?.status === 'AVAILABLE', `Status: ${rowAfter?.status}`);
-    recordTest('Synthetic stage assigned_to cleared to NULL', rowAfter?.assigned_to === null);
-    recordTest('Synthetic stage notes updated with devolution audit mark', rowAfter?.notes?.includes('[Devolução Automática - Prazo Expirado]'));
+    recordTest('Synthetic fixture devolved to AVAILABLE', rowAfter?.status === 'AVAILABLE', `Status: ${rowAfter?.status}`);
+    recordTest('Synthetic fixture assigned_to cleared to NULL', rowAfter?.assigned_to === null);
+    recordTest('Synthetic fixture notes updated with devolution audit mark', rowAfter?.notes?.includes('[Devolução Automática - Prazo Expirado]'));
 
     // Verify real chapter #92 and #93 were NOT devolved
     const ch92Recheck = await client.query(`
@@ -243,11 +261,11 @@ async function run() {
     `);
     recordTest('Real production chapter #92 remained IN_PROGRESS (untouched)', ch92Recheck.rows[0]?.status === 'IN_PROGRESS');
 
-    // Clean up synthetic #997
-    await client.query(`DELETE FROM public.scan_chapter_timeline WHERE production_chapter_id = $1`, [synChapterId]);
-    await client.query(`DELETE FROM public.scan_chapter_stages WHERE id = $1`, [synStageId]);
-    await client.query(`DELETE FROM public.scan_production_chapters WHERE id = $1`, [synChapterId]);
-    console.log('  ✓ Cleaned up synthetic devolution test chapter #997.');
+    // Clean up ONLY explicit fixture UUIDs (zero deletion by chapter number or scan-wide queries)
+    await client.query(`DELETE FROM public.scan_chapter_timeline WHERE production_chapter_id = $1`, [fixtureChapterId]);
+    await client.query(`DELETE FROM public.scan_chapter_stages WHERE id = $1`, [fixtureStageId]);
+    await client.query(`DELETE FROM public.scan_production_chapters WHERE id = $1`, [fixtureChapterId]);
+    console.log('  ✓ Cleaned up explicit fixture UUIDs.');
 
     // -------------------------------------------------------------------------
     // BROWSER INITIALIZATION
@@ -304,7 +322,7 @@ async function run() {
     const ctxPanel = dPage.locator('.calendar-contextual-panel');
     const ctxText = await ctxPanel.innerText();
     console.log('  Contextual Panel for Day 7:\n', ctxText.slice(0, 300));
-    recordTest('Contextual panel reflects 3 calendar days remaining ("Faltam 3 dias")', ctxText.includes('Faltam 3 dias'));
+    recordTest('Contextual panel reflects exact remaining time ("Faltam 2 dias e 20h")', ctxText.includes('Faltam 2 dias e 20h'));
 
     // Screenshot 3: Contextual Panel with accurate count
     const shot3Path = path.join(ARTIFACT_DIR, '03_desktop_contextual_panel_accurate_countdowns.png');
@@ -362,15 +380,15 @@ async function run() {
     await copyToAgyArtifacts(shot5Path, '05_android_360px_month_avatars.png');
     recordTest('Captured Screenshot 05: Android 360px month avatars', fs.existsSync(shot5Path));
 
-    // Click day 5 to open bottom sheet
-    const mDay5Cell = mPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: mPage.locator('.cell-day-num', { hasText: '5' }) }).first();
+    // Click day 5 with exact regex to open bottom sheet
+    const mDay5Cell = mPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: mPage.locator('.cell-day-num', { hasText: /^5$/ }) }).first();
     await mDay5Cell.click({ force: true });
     await mPage.waitForTimeout(600);
 
     // Click mini delivery card in preview strip to trigger bottom sheet drawer
     const previewMiniCard = mPage.locator('.preview-mini-card').first();
     if (await previewMiniCard.count() > 0) {
-      await previewMiniCard.click({ force: true });
+      await previewMiniCard.dispatchEvent('click');
       await mPage.waitForTimeout(1000);
     }
 
@@ -474,40 +492,41 @@ async function run() {
     // -------------------------------------------------------------------------
     console.log('\n[SECTION 8] State Machine Full Lifecycle (States A, B, C, D)');
 
-    await client.query(`
-      DELETE FROM public.scan_chapter_timeline
-      WHERE production_chapter_id IN (
-        SELECT id FROM public.scan_production_chapters WHERE chapter_number = '998' AND scan_id = $1
-      )
-    `, [scanId]);
-    await client.query(`
-      DELETE FROM public.scan_chapter_stages
-      WHERE production_chapter_id IN (
-        SELECT id FROM public.scan_production_chapters WHERE chapter_number = '998' AND scan_id = $1
-      )
-    `, [scanId]);
-    await client.query(`
-      DELETE FROM public.scan_production_chapters WHERE chapter_number = '998' AND scan_id = $1
-    `, [scanId]);
+    const synChapter998Id = 'a0000000-0000-4000-8000-000000000002';
+    const synStage998Id = 'b0000000-0000-4000-8000-000000000002';
 
-    const synChapter998 = await client.query(`
+    await client.query(`
       INSERT INTO public.scan_production_chapters (
-        scan_id, work_id, chapter_number, chapter_title, status, created_at, updated_at
-      ) VALUES ($1, $2, '998', 'Capítulo Sintético State Machine R24.5', 'IN_PROGRESS', now(), now())
-      RETURNING id
-    `, [scanId, workId]);
-    const synChapter998Id = synChapter998.rows[0].id;
+        id, scan_id, work_id, chapter_number, chapter_title, status, checklist_state, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, 9999.2, 'Homologation State Machine Fixture R24.5', 'IN_PROGRESS',
+        '{"is_synthetic_fixture": true, "audit_round": "24.5"}'::jsonb,
+        now(), now()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = 'IN_PROGRESS',
+        checklist_state = '{"is_synthetic_fixture": true, "audit_round": "24.5"}'::jsonb,
+        updated_at = now()
+    `, [synChapter998Id, scanId, workId]);
 
     // State A: due in 3 days (> 24 hours away)
-    const synStage998 = await client.query(`
+    await client.query(`
       INSERT INTO public.scan_chapter_stages (
-        scan_id, chapter_id, production_chapter_id, stage_id, status, assigned_to,
+        id, scan_id, chapter_id, production_chapter_id, stage_id, status, assigned_to,
         claimed_at, due_at, extension_count, created_at, updated_at
       ) VALUES (
-        $1, $2, $2, $3, 'IN_PROGRESS', $4, now(), now() + interval '3 days', 0, now(), now()
-      ) RETURNING id
-    `, [scanId, synChapter998Id, tradStageId, testActorId]);
-    const synStage998Id = synStage998.rows[0].id;
+        $1, $2, $3, $3, $4, 'IN_PROGRESS', $5,
+        now(), now() + interval '3 days', 0, now(), now()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        status = 'IN_PROGRESS',
+        assigned_to = $5,
+        claimed_at = now(),
+        due_at = now() + interval '3 days',
+        extension_count = 0,
+        notes = NULL,
+        updated_at = now()
+    `, [synStage998Id, scanId, synChapter998Id, tradStageId, testActorId]);
 
     // Check State A in UI: Prorrogação bloqueada
     await dPage.goto(`${PREVIEW_URL}/scan?tab=calendario`, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -528,7 +547,7 @@ async function run() {
     if (await cellToday.count() > 0) {
       await cellToday.click({ force: true });
       await dPage.waitForTimeout(600);
-      const acc998 = dPage.locator('.context-accordion-bar').filter({ hasText: '998' }).first();
+      const acc998 = dPage.locator('.context-accordion-bar').filter({ hasText: /9999|State Machine/ }).first();
       if (await acc998.count() > 0) {
         await acc998.click({ force: true });
         await dPage.waitForTimeout(500);
@@ -574,7 +593,7 @@ async function run() {
       if (await cellExt.count() > 0) {
         await cellExt.click({ force: true });
         await dPage.waitForTimeout(600);
-        const accExt = dPage.locator('.context-accordion-bar').filter({ hasText: '998' }).first();
+        const accExt = dPage.locator('.context-accordion-bar').filter({ hasText: /9999|State Machine/ }).first();
         if (await accExt.count() > 0) {
           await accExt.click({ force: true });
           await dPage.waitForTimeout(500);

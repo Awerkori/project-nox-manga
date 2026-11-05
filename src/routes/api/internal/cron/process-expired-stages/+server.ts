@@ -22,13 +22,8 @@ function verifyAuthorization(request: Request, locals: App.Locals, platform?: an
     return;
   }
 
-  // 2. Allow authenticated staff / admin users
-  if (locals.user && ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '')) {
-    return;
-  }
-
-  // 3. Allow internal requests authenticated by Bearer NOX_STORAGE_BRIDGE_TOKEN
-  const expectedToken = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN || env.NOX_STORAGE_BRIDGE_TOKEN;
+  // 2. Allow internal requests authenticated by Bearer token (NOX_STORAGE_BRIDGE_TOKEN or INTERNAL_CRON_SECRET)
+  const expectedToken = platform?.env?.NOX_STORAGE_BRIDGE_TOKEN || env.NOX_STORAGE_BRIDGE_TOKEN || platform?.env?.INTERNAL_CRON_SECRET;
   const authHeader = request.headers.get('authorization') || '';
   if (expectedToken && authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim();
@@ -37,32 +32,58 @@ function verifyAuthorization(request: Request, locals: App.Locals, platform?: an
     }
   }
 
-  // Reject unauthorized third-party requests
+  // 3. For manual triggers: ONLY global ADMIN allowed (least privilege — common staff cannot mutate global queues)
+  if (locals.user && locals.role === 'ADMIN') {
+    return;
+  }
+
+  // Reject unauthorized third-party or common staff requests
   error(401, 'Unauthorized');
 }
 
-async function handleDevolution(request: Request, locals: App.Locals, platform?: App.Platform) {
-  verifyAuthorization(request, locals, platform);
+function resolveIsolationMode(platform?: App.Platform): boolean {
+  // Fail-safe default: Any environment that is not explicitly confirmed as production runs in isolated test mode
+  const noxEnv = platform?.env?.NOX_ENVIRONMENT || env.NOX_ENVIRONMENT;
+  const previewIsolated = platform?.env?.PREVIEW_ISOLATED || env.PREVIEW_ISOLATED;
 
-  const isPreview = (
-    platform?.env?.PREVIEW_ISOLATED === 'true' ||
-    platform?.env?.NOX_ENVIRONMENT === 'preview' ||
-    env.PREVIEW_ISOLATED === 'true' ||
-    env.NOX_ENVIRONMENT === 'preview'
-  );
+  if (noxEnv === 'production' && previewIsolated !== 'true') {
+    return false; // Real production execution
+  }
+  return true; // Preview, test, or unverified environment defaults to isolated mode
+}
+
+export const GET: RequestHandler = async ({ request, locals, platform }) => {
+  verifyAuthorization(request, locals, platform);
+  const onlyTestChapters = resolveIsolationMode(platform);
+
+  // GET is strictly read-only audit / health inspection
+  return json({
+    ok: true,
+    method: 'GET',
+    readOnly: true,
+    timestamp: new Date().toISOString(),
+    environment: onlyTestChapters ? 'preview_isolated' : 'production',
+    onlyTestChapters,
+    message: 'Cron endpoint healthy. Mutative devolution requires POST.'
+  });
+};
+
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
+  verifyAuthorization(request, locals, platform);
+  const onlyTestChapters = resolveIsolationMode(platform);
 
   try {
     const queryRes = await executeYugabyteSql<{ process_expired_scan_stages_ysql: any }>(
       'SELECT public.process_expired_scan_stages_ysql(NULL, $1)',
-      [isPreview],
+      [onlyTestChapters],
       platform?.env
     );
     const devolution = queryRes.rows?.[0]?.process_expired_scan_stages_ysql || { success: true, devolved_count: 0 };
     return json({
       ok: true,
       timestamp: new Date().toISOString(),
-      environment: isPreview ? 'preview_isolated' : 'production',
-      onlyTestChapters: isPreview,
+      environment: onlyTestChapters ? 'preview_isolated' : 'production',
+      onlyTestChapters,
       devolution
     });
   } catch (err: any) {
@@ -73,12 +94,4 @@ async function handleDevolution(request: Request, locals: App.Locals, platform?:
       error: String(err?.message || err)
     }, { status: 500 });
   }
-}
-
-export const GET: RequestHandler = async ({ request, locals, platform }) => {
-  return handleDevolution(request, locals, platform);
-};
-
-export const POST: RequestHandler = async ({ request, locals, platform }) => {
-  return handleDevolution(request, locals, platform);
 };

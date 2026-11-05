@@ -25,7 +25,9 @@ export interface DeadlineStatusResult {
   isDueToday: boolean;
   isDueTomorrow: boolean;
   isDueSoon: boolean; // Dentro das últimas 24h operacionais ou vencendo hoje
-  calendarDiffDays: number; // targetYMD - todayYMD em dias inteiros
+  calendarDiffDays: number; // targetYMD - todayYMD em dias civis inteiros
+  exactDiffDays: number; // Math.floor(remainingHours / 24) em períodos exatos de 24h
+  civilDayText: string; // "Hoje", "Amanhã", "Depois de amanhã", ou dia da semana
   remainingHours: number;
   remainingMinutes: number;
   statusClass: 'overdue' | 'due-today' | 'due-soon' | 'extended' | 'in-progress' | 'done';
@@ -207,7 +209,23 @@ export function calculateEditorialDeadlineStatus(
     inlineStatusLabel = 'Vence em breve';
   }
 
-  // 2. Remaining Text em linguagem natural precisa
+  // 2. Dias civis de calendário e tempo exato de 24h
+  const weekdays = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const weekdayName = weekdays[dueParts.dayOfWeek] || 'dia';
+
+  let civilDayText = weekdayName;
+  if (isDueToday) {
+    civilDayText = 'Hoje';
+  } else if (isDueTomorrow) {
+    civilDayText = 'Amanhã';
+  } else if (calendarDiffDays === 2) {
+    civilDayText = 'Depois de amanhã';
+  }
+
+  const exactDiffDays = Math.max(0, Math.floor(totalHours / 24));
+  const remHours = totalHours % 24;
+
+  // 3. Remaining Text em linguagem natural precisa (sem distorção de dias civis vs horas exatas)
   let remainingText = '';
   if (status === 'DONE') {
     remainingText = 'Concluído';
@@ -220,15 +238,14 @@ export function calculateEditorialDeadlineStatus(
   } else if (isDueTomorrow) {
     remainingText = `Vence amanhã, às ${timeStr}`;
   } else {
-    // Dias corridos naturais de calendário
-    const remHours = totalHours % 24;
-    if (calendarDiffDays === 2) {
+    // Para prazos além de amanhã, expressar o tempo exato com base em exactDiffDays
+    if (exactDiffDays === 1) {
+      remainingText = remHours > 0 ? `Falta 1 dia e ${remHours}h` : 'Falta 1 dia';
+    } else if (exactDiffDays === 2) {
       remainingText = remHours > 0 ? `Faltam 2 dias e ${remHours}h` : 'Faltam 2 dias';
-    } else if (calendarDiffDays === 3) {
+    } else if (exactDiffDays === 3) {
       remainingText = remHours > 0 ? `Faltam 3 dias e ${remHours}h` : 'Faltam 3 dias';
     } else {
-      const weekdays = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
-      const weekdayName = weekdays[dueParts.dayOfWeek] || 'dia';
       remainingText = `Vence ${weekdayName}, às ${timeStr}`;
     }
   }
@@ -240,6 +257,8 @@ export function calculateEditorialDeadlineStatus(
     isDueTomorrow,
     isDueSoon,
     calendarDiffDays,
+    exactDiffDays,
+    civilDayText,
     remainingHours: totalHours,
     remainingMinutes: totalMinutes,
     statusClass,

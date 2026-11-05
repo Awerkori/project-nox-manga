@@ -3,7 +3,7 @@
   "name": "manga",
   "main": "src/worker-wrapper.js",
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["0 * * * *"]
   },
   "routes": [
     { "pattern": "projectnox.org", "custom_domain": true },

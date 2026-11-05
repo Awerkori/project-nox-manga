@@ -130,21 +130,76 @@ function isApplicationRoute(pathname, filename) {
 var worker_default = {
   async scheduled(event, env2, ctx) {
     ctx.waitUntil((async () => {
+      const startTime = Date.now();
+      const isPreview = env2?.NOX_ENVIRONMENT === 'preview' || env2?.PREVIEW_ISOLATED === 'true';
+      const targetBase = origin || (isPreview ? 'https://home-preview-manga.project-nox-awerkori.workers.dev' : 'https://projectnox.org');
+      const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || '';
+      const cronHeaders = {
+        authorization: token ? `Bearer ${token}` : '',
+        'x-internal-cron': 'true'
+      };
+      const scheduledPlatform = {
+        env: env2,
+        ctx,
+        context: ctx,
+        caches,
+        cf: {},
+        scheduledInvocation: true
+      };
+
+      console.log(`[CRON_TRIGGER_START] Cron: ${event?.cron || 'scheduled'}, Env: ${env2?.NOX_ENVIRONMENT || 'unknown'}, Target: ${targetBase}`);
+
       try {
         await initialized;
-        const targetUrl = (origin || 'https://projectnox.org') + '/api/internal/email-processor?limit=25';
-        const token = env2?.NOX_STORAGE_BRIDGE_TOKEN || '';
-        const req = new Request(targetUrl, {
-          method: 'GET',
-          headers: { authorization: token ? `Bearer ${token}` : '', 'x-internal-cron': 'true' }
-        });
-        const res = await server.respond(req, {
-          platform: { env: env2, ctx, context: ctx, caches, cf: {} },
-          getClientAddress() { return '127.0.0.1'; }
-        });
-        console.log(`[CRON_EMAIL_PROCESSOR] Status ${res.status}`);
+
+        // 1. Process email outbox
+        try {
+          const emailReq = new Request(`${targetBase}/api/internal/email-processor?limit=25`, {
+            method: 'GET',
+            headers: cronHeaders
+          });
+          const emailRes = await server.respond(emailReq, {
+            platform: scheduledPlatform,
+            getClientAddress() { return '127.0.0.1'; }
+          });
+          console.log(`[CRON_EMAIL_PROCESSOR] Status: ${emailRes.status}`);
+        } catch (emailErr) {
+          console.error('[CRON_EMAIL_PROCESSOR_ERROR]', emailErr);
+        }
+
+        // 2. Process expired scan stages devolution
+        try {
+          const devolutionReq = new Request(`${targetBase}/api/internal/cron/process-expired-stages`, {
+            method: 'POST',
+            headers: cronHeaders
+          });
+          const devolutionRes = await server.respond(devolutionReq, {
+            platform: scheduledPlatform,
+            getClientAddress() { return '127.0.0.1'; }
+          });
+          console.log(`[CRON_PROCESS_EXPIRED_STAGES] Status: ${devolutionRes.status}`);
+        } catch (devolutionErr) {
+          console.error('[CRON_PROCESS_EXPIRED_STAGES_ERROR]', devolutionErr);
+        }
+
+        // 3. Process deadline warnings
+        try {
+          const warningsReq = new Request(`${targetBase}/api/internal/cron/send-deadline-warnings`, {
+            method: 'POST',
+            headers: cronHeaders
+          });
+          const warningsRes = await server.respond(warningsReq, {
+            platform: scheduledPlatform,
+            getClientAddress() { return '127.0.0.1'; }
+          });
+          console.log(`[CRON_DEADLINE_WARNINGS] Status: ${warningsRes.status}`);
+        } catch (warningsErr) {
+          console.error('[CRON_DEADLINE_WARNINGS_ERROR]', warningsErr);
+        }
+
+        console.log(`[CRON_TRIGGER_COMPLETE] Duration: ${Date.now() - startTime}ms`);
       } catch (err) {
-        console.error('[CRON_EMAIL_PROCESSOR_ERROR]', err);
+        console.error('[CRON_TRIGGER_FATAL_ERROR]', err);
       }
     })());
   },
