@@ -3,6 +3,7 @@ import { executeYugabyteSql } from '$lib/server/yugabyte';
 import { telegramStorage, TelegramStorageError, type TelegramUploadReceipt } from '$lib/server/telegram';
 import { inspectImage } from '$lib/media-validation';
 import { RateLimitError } from '$lib/server/media';
+import { classifyData } from '$lib/server/data-sieve';
 
 export type StoragePoolKey =
   | 'MANGA_STORAGE'
@@ -313,6 +314,17 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
   // 2. Compute SHA-256 hash
   const hashBuffer = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
   const hash = Array.from(new Uint8Array(hashBuffer), (b) => b.toString(16).padStart(2, '0')).join('');
+
+  // 2.1 Enforce permanent data sieve (Category B routing for binary media)
+  const sieveDecision = classifyData({
+    type: 'image_binary',
+    sizeBytes: bytes.byteLength,
+    mimeType: info.mime,
+    sha256: hash,
+  });
+  if (!sieveDecision.allowTelegramStorage) {
+    throw new Error(`Media rejected by storage sieve: ${sieveDecision.reason}`);
+  }
 
   // 3. Resolve canonical pool
   const poolKey = resolveStoragePoolForPurpose(purpose);
