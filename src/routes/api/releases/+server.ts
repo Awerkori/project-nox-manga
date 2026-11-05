@@ -1,6 +1,23 @@
 import { json } from '@sveltejs/kit';
 import { fetchRecentReleaseTimelineFromYugabyte } from '$lib/server/yugabyte';
 
+const RELEASES_CACHE_TTL_MS = 15_000;
+const releasesCache = new Map<string, { expiresAt: number; value: unknown }>();
+const releasesInFlight = new Map<string, Promise<unknown>>();
+
+function cachedReleases(key: string, load: () => Promise<unknown>): Promise<unknown> {
+  const hit = releasesCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
+  const inFlight = releasesInFlight.get(key);
+  if (inFlight) return inFlight;
+  const pending = load().then((value) => {
+    releasesCache.set(key, { value, expiresAt: Date.now() + RELEASES_CACHE_TTL_MS });
+    return value;
+  }).finally(() => releasesInFlight.delete(key));
+  releasesInFlight.set(key, pending);
+  return pending;
+}
+
 export const GET = async ({ url, platform, setHeaders }: any) => {
   const cursorTime = url.searchParams.get('cursorTime') || null;
   const cursorId = url.searchParams.get('cursorId') || null;
@@ -8,13 +25,10 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
   const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
   const limit = Math.min(48, Math.max(1, parseInt(url.searchParams.get('limit') || '15', 10)));
 
-  const chaptersData = await fetchRecentReleaseTimelineFromYugabyte(
-    limit,
-    cursorTime,
-    cursorId,
-    platform?.env,
-    kind
-  );
+  const cacheKey = JSON.stringify([limit, cursorTime, cursorId, kind]);
+  const chaptersData = await cachedReleases(cacheKey, () => fetchRecentReleaseTimelineFromYugabyte(
+    limit, cursorTime, cursorId, platform?.env, kind
+  )) as any[];
 
   const releasesMap = new Map();
   for (const row of chaptersData) {
@@ -51,7 +65,7 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
 
   if (setHeaders) {
     setHeaders({
-      'cache-control': 'public, max-age=15, stale-while-revalidate=60'
+      'cache-control': 'public, max-age=15, s-maxage=15, stale-while-revalidate=60'
     });
   }
 
