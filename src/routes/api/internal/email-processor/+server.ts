@@ -3,7 +3,6 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { processPendingEmailOutbox, reconcileUncertainEmailOutbox } from '$lib/server/notifications';
 import { dispatchStaleTaskReminders } from '$lib/server/pipeline-reminders';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -69,21 +68,10 @@ async function handleProcessing(request: Request, url: URL, locals: App.Locals, 
     ? Promise.resolve({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] })
     : dispatchStaleTaskReminders({ platform }).catch(() => ({ scanned: 0, reminded: 0, unassignedDueToRemoval: 0, dedupedOrSkipped: 0, details: [] }));
 
-  const expiredStagesPromise = executeYugabyteSql<{ process_expired_scan_stages_ysql: any }>(
-    'SELECT public.process_expired_scan_stages_ysql(NULL, $1)',
-    [isPreview],
-    platform?.env
-  ).then(r => r.rows?.[0]?.process_expired_scan_stages_ysql || { success: true, devolved_count: 0 })
-   .catch(err => {
-      console.error('[CRON_EXPIRED_STAGES_ERR]', err);
-      return { success: false, error: String(err?.message || err) };
-   });
-
-  const [outboxResult, reconResult, staleReminders, expiredStagesResult] = await Promise.all([
+  const [outboxResult, reconResult, staleReminders] = await Promise.all([
     outboxPromise,
     reconPromise,
-    remindersPromise,
-    expiredStagesPromise
+    remindersPromise
   ]);
 
   return json({
@@ -93,8 +81,7 @@ async function handleProcessing(request: Request, url: URL, locals: App.Locals, 
     onlyTestChapters: isPreview,
     ...outboxResult,
     reconciliation: reconResult,
-    staleReminders,
-    expiredStages: expiredStagesResult
+    staleReminders
   });
 }
 

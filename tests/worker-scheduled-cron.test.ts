@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as processExpiredStages from '../src/routes/api/internal/cron/process-expired-stages/+server';
 import * as sendDeadlineWarnings from '../src/routes/api/internal/cron/send-deadline-warnings/+server';
+import * as emailProcessor from '../src/routes/api/internal/email-processor/+server';
 
 describe('Cron Autonomous Invocation & Security Suite', () => {
   it('rejects unauthenticated requests with 401', async () => {
@@ -161,5 +162,63 @@ describe('Cron Autonomous Invocation & Security Suite', () => {
     expect(json.ok).toBe(true);
     expect(json.environment).toBe('preview_isolated');
     expect(json.onlyTestChapters).toBe(true);
+  });
+
+  it('email-processor rejects unauthenticated requests with 401', async () => {
+    const unauthReq = new Request('https://projectnox.org/api/internal/email-processor', {
+      method: 'GET'
+    });
+
+    try {
+      await emailProcessor.GET({
+        request: unauthReq,
+        locals: {} as any,
+        platform: {} as any,
+        params: {} as any,
+        url: new URL(unauthReq.url),
+        route: { id: '/api/internal/email-processor' },
+        cookies: {} as any,
+        fetch: vi.fn(),
+        setHeaders: vi.fn(),
+        getClientAddress: () => '127.0.0.1',
+        isDataRequest: false
+      });
+      expect.fail('Should have thrown 401');
+    } catch (err: any) {
+      expect(err?.status).toBe(401);
+    }
+  });
+
+  it('email-processor enforces single responsibility (no devolution) and preview isolation', async () => {
+    const scheduledReq = new Request('https://home-preview-manga.project-nox-awerkori.workers.dev/api/internal/email-processor', {
+      method: 'GET'
+    });
+
+    const res = await emailProcessor.GET({
+      request: scheduledReq,
+      locals: {} as any,
+      platform: {
+        scheduledInvocation: true,
+        env: { NOX_ENVIRONMENT: 'preview', PREVIEW_ISOLATED: 'true' }
+      } as any,
+      params: {} as any,
+      url: new URL(scheduledReq.url),
+      route: { id: '/api/internal/email-processor' },
+      cookies: {} as any,
+      fetch: vi.fn(),
+      setHeaders: vi.fn(),
+      getClientAddress: () => '127.0.0.1',
+      isDataRequest: false
+    });
+
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.environment).toBe('preview_isolated');
+    expect(json.onlyTestChapters).toBe(true);
+    // Explicit verification of single responsibility: no expiredStages key
+    expect(json.expiredStages).toBeUndefined();
+    // In preview isolated mode, real email sending is skipped
+    expect(json.details).toContain('preview_isolated_mode_skipped_real_email');
   });
 });

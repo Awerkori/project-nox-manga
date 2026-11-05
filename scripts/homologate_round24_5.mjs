@@ -295,34 +295,49 @@ async function run() {
     await copyToAgyArtifacts(shot1Path, '01_desktop_month_view_date_consistency.png');
     recordTest('Captured Screenshot 01: Desktop Month View Date Consistency', fs.existsSync(shot1Path));
 
-    // Verify Céu Distante #92 on Nov 5: MUST show "Vence amanhã", NEVER "Vence hoje"
-    const day5Cell = dPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: dPage.locator('.cell-day-num', { hasText: '5' }) }).first();
+    // Verify Céu Distante #92 deadline status dynamically based on current Sao Paulo date
+    const day5Cell = dPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: dPage.locator('.cell-day-num', { hasText: /^5$/ }) }).first();
     const day5Text = await day5Cell.innerText();
     console.log('  Day 5 Cell Content:\n', day5Text);
 
-    const hasVenceAmanha = day5Text.includes('Vence amanhã');
-    const hasVenceHoje = day5Text.includes('Vence hoje');
-    recordTest('Céu Distante #92 on Nov 5 displays "Vence amanhã"', hasVenceAmanha, `Text found: ${hasVenceAmanha}`);
-    recordTest('Céu Distante #92 on Nov 5 does NOT display "Vence hoje"', !hasVenceHoje, `Incorrect label absent: ${!hasVenceHoje}`);
+    const nowSP = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const isTodayNov5 = nowSP.getDate() === 5 && nowSP.getMonth() === 10; // Month 10 is Nov (0-indexed)
 
-    const dueTomorrowPill = day5Cell.locator('.event-inline-status.due-tomorrow');
-    recordTest('Event card has .due-tomorrow cyan badge class', (await dueTomorrowPill.count()) > 0);
+    if (isTodayNov5) {
+      recordTest('Céu Distante #92 on Nov 5 displays "Vence hoje" on Nov 5', day5Text.includes('Vence hoje'));
+      const dueTodayPill = day5Cell.locator('.event-inline-status.due-today');
+      recordTest('Event card has .due-today badge class on Nov 5', (await dueTodayPill.count()) > 0);
+    } else {
+      recordTest('Céu Distante #92 on Nov 5 displays "Vence amanhã" before Nov 5', day5Text.includes('Vence amanhã'));
+      const dueTomorrowPill = day5Cell.locator('.event-inline-status.due-tomorrow');
+      recordTest('Event card has .due-tomorrow badge class before Nov 5', (await dueTomorrowPill.count()) > 0);
+    }
 
     // Screenshot 2: Zoomed view of Nov 5 Céu Distante #92 card
     const shot2Path = path.join(ARTIFACT_DIR, '02_ceu_distante_92_tomorrow_pill.png');
     await day5Cell.screenshot({ path: shot2Path });
     await copyToAgyArtifacts(shot2Path, '02_ceu_distante_92_tomorrow_pill.png');
-    recordTest('Captured Screenshot 02: Céu Distante #92 "Vence amanhã" pill', fs.existsSync(shot2Path));
+    recordTest('Captured Screenshot 02: Céu Distante #92 deadline badge pill', fs.existsSync(shot2Path));
 
     // Click Day 7 cell to inspect Céu Distante #92 Tradução in Contextual Panel
-    const day7Cell = dPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: dPage.locator('.cell-day-num', { hasText: '7' }) }).first();
+    const day7Cell = dPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: dPage.locator('.cell-day-num', { hasText: /^7$/ }) }).first();
     await day7Cell.click({ force: true });
     await dPage.waitForTimeout(1000);
 
     const ctxPanel = dPage.locator('.calendar-contextual-panel');
     const ctxText = await ctxPanel.innerText();
     console.log('  Contextual Panel for Day 7:\n', ctxText.slice(0, 300));
-    recordTest('Contextual panel reflects exact remaining time ("Faltam 2 dias e 20h")', ctxText.includes('Faltam 2 dias e 20h'));
+
+    // Calculate exact remaining time string for Nov 7 18:00
+    const targetDue = new Date('2026-11-07T18:00:00-03:00').getTime();
+    const nowTime = Date.now();
+    const diffHours = Math.floor(Math.max(0, targetDue - nowTime) / (1000 * 60 * 60));
+    const expectedDays = Math.floor(diffHours / 24);
+    const expectedRemainingHours = diffHours % 24;
+    const expectedCountdownStr = `Faltam ${expectedDays} dias e ${expectedRemainingHours}h`;
+    console.log(`  Expected exact countdown: "${expectedCountdownStr}"`);
+
+    recordTest('Contextual panel reflects exact remaining time mathematically', ctxText.includes(expectedCountdownStr), `Panel text has: ${expectedCountdownStr}`);
 
     // Screenshot 3: Contextual Panel with accurate count
     const shot3Path = path.join(ARTIFACT_DIR, '03_desktop_contextual_panel_accurate_countdowns.png');
@@ -342,7 +357,8 @@ async function run() {
     const agendaWrapper = dPage.locator('.agenda-view-wrapper');
     const agendaText = await agendaWrapper.innerText();
     recordTest('Agenda view rendered successfully', (await agendaWrapper.count()) > 0);
-    recordTest('Agenda view displays "Vence amanhã" for Céu Distante #92', agendaText.includes('Vence amanhã'));
+    const expectedAgendaStatus = isTodayNov5 ? 'Vence hoje' : 'Vence amanhã';
+    recordTest(`Agenda view displays "${expectedAgendaStatus}" for Céu Distante #92`, agendaText.includes(expectedAgendaStatus));
 
     // Screenshot 4: Agenda View
     const shot4Path = path.join(ARTIFACT_DIR, '04_agenda_view_chronological_order.png');
@@ -396,7 +412,8 @@ async function run() {
     recordTest('Android bottom sheet drawer opened', (await bottomSheet.count()) > 0);
 
     const sheetText = await bottomSheet.innerText();
-    recordTest('Bottom sheet displays "Vence amanhã" status', sheetText.includes('Vence amanhã'));
+    const expectedSheetStatus = isTodayNov5 ? 'Vence hoje' : 'Vence amanhã';
+    recordTest(`Bottom sheet displays "${expectedSheetStatus}" status`, sheetText.includes(expectedSheetStatus));
 
     // Screenshot 6: Android Bottom Sheet
     const shot6Path = path.join(ARTIFACT_DIR, '06_android_bottom_sheet_delivery_detail.png');
@@ -587,7 +604,11 @@ async function run() {
       `, [synStage998Id]);
       recordTest('Database records extension_count = 1', stageAfterExt.rows[0]?.extension_count === 1);
 
-      // Verify State C in UI: click newly extended day cell
+      // Reload page to reflect updated server state in UI
+      await dPage.reload({ waitUntil: 'domcontentloaded' });
+      await dPage.waitForTimeout(2500);
+
+      // Verify State C in UI: check hero card confirmation and click newly extended day cell
       const extDayNum = new Date(stageAfterExt.rows[0].due_at).toLocaleDateString('pt-BR', { day: 'numeric', timeZone: 'America/Sao_Paulo' });
       const cellExt = dPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: dPage.locator('.cell-day-num', { hasText: extDayNum }) }).first();
       if (await cellExt.count() > 0) {
