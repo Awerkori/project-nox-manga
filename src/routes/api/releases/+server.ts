@@ -6,6 +6,19 @@ const MAX_RELEASES_CACHE_SIZE = 100;
 const releasesCache = new Map<string, { expiresAt: number; value: unknown }>();
 const releasesInFlight = new Map<string, Promise<unknown>>();
 
+function pruneReleasesCache(now: number) {
+  for (const [k, item] of releasesCache) {
+    if (item.expiresAt <= now) {
+      releasesCache.delete(k);
+    }
+  }
+  while (releasesCache.size >= MAX_RELEASES_CACHE_SIZE) {
+    const oldestKey = releasesCache.keys().next().value;
+    if (!oldestKey) break;
+    releasesCache.delete(oldestKey);
+  }
+}
+
 function cachedReleases(key: string, load: () => Promise<unknown>): Promise<unknown> {
   const now = Date.now();
   const hit = releasesCache.get(key);
@@ -14,11 +27,7 @@ function cachedReleases(key: string, load: () => Promise<unknown>): Promise<unkn
   if (inFlight) return inFlight;
 
   if (releasesCache.size >= MAX_RELEASES_CACHE_SIZE) {
-    for (const [k, item] of releasesCache) {
-      if (item.expiresAt <= now || releasesCache.size >= MAX_RELEASES_CACHE_SIZE) {
-        releasesCache.delete(k);
-      }
-    }
+    pruneReleasesCache(now);
   }
 
   const pending = load().then((value) => {

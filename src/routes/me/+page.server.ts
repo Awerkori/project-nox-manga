@@ -133,10 +133,31 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
     unlocked_at: unlockedMap.get(ach.id) || null
   }));
 
-  const inventory = (inventoryData || []).map((inv: any) => ({
-    acquired_at: inv.acquired_at,
-    ...inv.shop_items
-  }));
+  const inventory = (inventoryData || []).map((inv: any) => {
+    let shopItem = inv.shop_items;
+    if (typeof shopItem === 'string') {
+      try {
+        shopItem = JSON.parse(shopItem);
+      } catch {
+        shopItem = {};
+      }
+    }
+    return {
+      acquired_at: inv.acquired_at,
+      ...(shopItem || {})
+    };
+  });
+
+  const library = (libraryData || []).map((item: any) => {
+    if (typeof item.works === 'string') {
+      try {
+        return { ...item, works: JSON.parse(item.works) };
+      } catch {
+        return item;
+      }
+    }
+    return item;
+  });
 
   const enrichedHistory =
     Array.isArray(historyData) && historyData.length > 0
@@ -145,7 +166,7 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 
   return {
     member,
-    library: libraryData,
+    library,
     history: enrichedHistory,
     notifications: notificationsData,
     achievements,

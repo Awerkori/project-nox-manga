@@ -7,6 +7,16 @@ import { sanitizeComments } from '$lib/comments';
 
 const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
+function safeJsonParse<T>(val: unknown, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val !== 'string') return val as T;
+  try {
+    return JSON.parse(val) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export const load = async ({ locals, params, url, cookies, platform, setHeaders }: any) => {
   const isTargetUuid = isUuid(params.slug);
 
@@ -165,9 +175,9 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
           ]);
 
           const aux = auxRes?.rows?.[0] || {};
-          const rawComments = typeof aux.comments === 'string' ? JSON.parse(aux.comments) : (aux.comments || []);
-          const metrics = typeof aux.metrics === 'string' ? JSON.parse(aux.metrics) : (aux.metrics || null);
-          const rawScans = typeof aux.work_scans === 'string' ? JSON.parse(aux.work_scans) : (aux.work_scans || []);
+          const rawComments = safeJsonParse(aux.comments, []);
+          const metrics = safeJsonParse(aux.metrics, null);
+          const rawScans = safeJsonParse(aux.work_scans, []);
           const entry = {
             comments: sanitizeComments(Array.isArray(rawComments) ? rawComments : []),
             likesCount: work.published === true ? Number(metrics?.likes ?? 0) : Number(likesRes?.rows?.[0]?.count || 0),
@@ -210,8 +220,10 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
               platform?.env
             )
           ]);
+          const rawLibrary = preferenceRes.rows[0]?.library;
+          const library = safeJsonParse(rawLibrary, null);
           return {
-            library: preferenceRes.rows[0]?.library || null,
+            library,
             hasLiked: Boolean(preferenceRes.rows[0]?.has_liked),
             progress: readRes.rows || []
           };

@@ -46,7 +46,17 @@ export const load = async ({ locals, url, cookies, platform }: any) => {
                   timestamp: Date.now(),
                   frames: ybRes.rows
                     .filter((f: any) => f.asset_url)
-                    .map((f: any) => ({ id: f.id, asset_url: f.asset_url, style_data: f.style_data || {} }))
+                    .map((f: any) => {
+                      let styleData = f.style_data || {};
+                      if (typeof styleData === 'string') {
+                        try {
+                          styleData = JSON.parse(styleData);
+                        } catch {
+                          styleData = {};
+                        }
+                      }
+                      return { id: f.id, asset_url: f.asset_url, style_data: styleData };
+                    })
                 };
               }
             } catch (err: any) {

@@ -41,15 +41,30 @@ it('keeps every timeline chapter for a work and cursors from the final chapter',
   expect(json.nextCursorId).toBe(rows[4].chapter_id);
 });
 
-it('bounds cache growth and safely evicts under high pagination diversity', async () => {
+it('bounds cache growth, preserves cache hits within capacity, and evicts oldest entries', async () => {
   const fetchSpy = vi.spyOn(yugabyte, 'fetchRecentReleaseTimelineFromYugabyte').mockResolvedValue([]);
 
+  // Populate 120 unique keys (capacity is 100)
   for (let i = 0; i < 120; i++) {
     await GET({
-      url: new URL(`https://manga.project-nox.test/api/releases?cursorId=uuid-${i}&cursorTime=2026-11-05T00:00:${String(i).padStart(2, '0')}Z&limit=10`),
+      url: new URL(`https://manga.project-nox.test/api/releases?cursorId=uuid-${i}&cursorTime=2026-11-05T00:00:${String(i % 60).padStart(2, '0')}Z&limit=10`),
       platform: { env: {} }
     } as any);
   }
 
-  expect(fetchSpy).toHaveBeenCalled();
+  expect(fetchSpy).toHaveBeenCalledTimes(120);
+
+  // Calling a recent key (e.g. uuid-115) should be a CACHE HIT (no extra fetch)
+  await GET({
+    url: new URL(`https://manga.project-nox.test/api/releases?cursorId=uuid-115&cursorTime=2026-11-05T00:00:${String(115 % 60).padStart(2, '0')}Z&limit=10`),
+    platform: { env: {} }
+  } as any);
+  expect(fetchSpy).toHaveBeenCalledTimes(120);
+
+  // Calling an early key (uuid-0, evicted because capacity is 100) triggers a re-fetch
+  await GET({
+    url: new URL(`https://manga.project-nox.test/api/releases?cursorId=uuid-0&cursorTime=2026-11-05T00:00:00Z&limit=10`),
+    platform: { env: {} }
+  } as any);
+  expect(fetchSpy).toHaveBeenCalledTimes(121);
 });

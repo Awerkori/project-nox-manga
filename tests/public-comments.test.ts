@@ -92,4 +92,29 @@ describe('moderated comments on public pages', () => {
     expect(data.likesCount).toBe(99);
     expect(data.scans).toEqual([{ id: 'scan-1', name: 'Scan One' }]);
   });
+  it('recovers gracefully when comments payload is malformed JSON without discarding metrics or scans', async () => {
+    invalidateObraAuxCache();
+    const yugabyteModule = await import('../src/lib/server/yugabyte');
+    vi.mocked(yugabyteModule.executeYugabyteSql).mockImplementationOnce(async (sql: string) => {
+      if (sql.includes('FROM comments') && sql.includes('chapter_id IS NULL')) {
+        return {
+          rows: [
+            {
+              comments: '{malformed-json',
+              metrics: JSON.stringify({ likes: 42 }),
+              work_scans: JSON.stringify([
+                { is_primary: true, scans: { id: 'scan-safe', name: 'Scan Safe' } }
+              ])
+            }
+          ]
+        } as any;
+      }
+      return { rows: [] };
+    });
+
+    const data = await workLoad(event());
+    expect(data.comments).toEqual([]);
+    expect(data.likesCount).toBe(42);
+    expect(data.scans).toEqual([{ id: 'scan-safe', name: 'Scan Safe' }]);
+  });
 });
