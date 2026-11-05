@@ -247,7 +247,7 @@
       let unlockDateTimeStr = '';
       let extendedDateTimeStr = '';
       let isMine = cs.assigned_to === currentUserId;
-      let canUserExtend = isMine || ['ADMIN', 'OWNER'].includes(userRole);
+      let canUserExtend = isMine; // STRICT: Only the authenticated assignee can extend (zero role exceptions)
 
       if (cs.due_at) {
         const dl = calculateEditorialDeadlineStatus(cs.due_at, cs.status, {
@@ -258,7 +258,7 @@
         dueYMD = dl.dueYMD;
         const dueMs = new Date(cs.due_at).getTime();
         const diffMs = dueMs - nowMs;
-        const isWithin24Hours = diffMs <= 24 * 60 * 60 * 1000;
+        const isWithin24Hours = diffMs <= 24 * 60 * 60 * 1000 && diffMs > 0;
         remainingHours = dl.remainingHours;
         isOverdue = dl.isOverdue;
         isDueSoon = dl.isDueSoon;
@@ -279,10 +279,11 @@
           const hours = String(dueSpParts.hours).padStart(2, '0');
           const minutes = String(dueSpParts.minutes).padStart(2, '0');
           extendedDateTimeStr = `${day}/${month} às ${hours}:${minutes}`;
-        } else if (diffMs < -(4 * 60 * 60 * 1000)) {
+        } else if (diffMs <= 0 || isOverdue) {
+          // Prazo expirado: prorrogação estritamente proibida (zero tolerância)
           extensionState = 'EXPIRED';
-        } else if (isWithin24Hours || isDueToday) {
-          // Estado B: Nas últimas 24 horas (ou vencendo hoje)
+        } else if (isWithin24Hours || (isDueToday && diffMs > 0)) {
+          // Estado B: Nas últimas 24 horas (e ainda não vencido)
           extensionState = canUserExtend ? 'AVAILABLE' : 'RESTRICTED_AVAILABLE';
         } else {
           // Estado A: Antes das últimas 24 horas
@@ -899,8 +900,14 @@
     noteTextDraft = '';
   }
 
-  // Extension Modal Handlers
+  // Extension Modal Handlers (STRICT: only the assigned member may trigger)
   function openExtensionModal(item: any) {
+    if (!item) return;
+    const itemAssigneeId = item.assigned_to || item.assigneeId || item.assignee?.id;
+    if (itemAssigneeId && itemAssigneeId !== currentUserId) {
+      console.warn('Unauthorized extension attempt: user is not the assignee of this stage');
+      return;
+    }
     extensionTargetItem = item;
     extensionFeedback = null;
     showExtensionModal = true;
@@ -1554,7 +1561,7 @@
                   onclick={() => openExtensionModal(myNextCommitment)}
                 >
                   <Zap size={13} />
-                  <span>⚡ Prorrogar +2 dias</span>
+                  <span>Prorrogar +2 dias</span>
                 </button>
               {:else if myNextCommitment.extensionState === 'EXTENDED'}
                 <div class="next-ext-notice extended">
@@ -1694,66 +1701,59 @@
                             <Check size={13} class="text-emerald-400" />
                             <span>Prazo prorrogado até {item.extendedDateTimeStr || formatDueDisplay(item.dueAt)}.</span>
                           </div>
-                        {:else if item.extensionState === 'AVAILABLE'}
-                          <!-- Estado B: Nas últimas 24 horas (Habilitado para o responsável) -->
-                          <button
-                            type="button"
-                            class="btn-extension-action available"
-                            onclick={() => openExtensionModal(item)}
-                            title="Prorrogar prazo em +2 dias"
-                          >
-                            <Zap size={14} />
-                            <span>⚡ Prorrogar +2 dias</span>
-                          </button>
-                        {:else if item.extensionState === 'RESTRICTED_AVAILABLE'}
-                          <!-- Estado B: Janela ativa, porém restrito ao responsável da etapa -->
-                          <div class="ext-locked-cluster">
+                        {:else if item.isMine}
+                          {#if item.extensionState === 'AVAILABLE'}
+                            <!-- Estado B: Nas últimas 24 horas (Habilitado exclusivamente para o responsável) -->
                             <button
                               type="button"
-                              class="btn-extension-action locked"
-                              disabled
-                              title="Prorrogação disponível apenas para o responsável"
+                              class="btn-extension-action available"
+                              onclick={() => openExtensionModal(item)}
+                              title="Prorrogar prazo em +2 dias"
                             >
-                              <Lock size={13} />
-                              <span>Prorrogar prazo em +2 dias</span>
+                              <Zap size={14} />
+                              <span>Prorrogar +2 dias</span>
                             </button>
+                          {:else if item.extensionState === 'LOCKED'}
+                            <!-- Estado A: Antes das últimas 24 horas (Desabilitado + Info) -->
+                            <div class="ext-locked-cluster">
+                              <button
+                                type="button"
+                                class="btn-extension-action locked"
+                                disabled
+                                title="Disponível a partir de {item.unlockDateTimeStr}"
+                              >
+                                <Lock size={13} />
+                                <span>Prorrogar prazo em +2 dias</span>
+                              </button>
+                              <p class="ext-helper-note">
+                                <Info size={11} class="text-cyan-400" />
+                                <span>Disponível a partir de {item.unlockDateTimeStr}.</span>
+                              </p>
+                            </div>
+                          {:else if item.extensionState === 'EXPIRED'}
+                            <!-- Estado Expirado: Prazo encerrado -->
+                            <div class="ext-locked-cluster">
+                              <button
+                                type="button"
+                                class="btn-extension-action locked"
+                                disabled
+                                title="Prazo encerrado para prorrogação"
+                              >
+                                <Lock size={13} />
+                                <span>Prorrogação indisponível</span>
+                              </button>
+                              <p class="ext-helper-note">
+                                <AlertCircle size={11} class="text-rose-400" />
+                                <span>Prazo expirado para prorrogação (+2d indisponível).</span>
+                              </p>
+                            </div>
+                          {/if}
+                        {:else if item.extensionState === 'AVAILABLE' || item.extensionState === 'RESTRICTED_AVAILABLE'}
+                          <!-- Etapa de terceiro nas últimas 24h: explicação discreta, SEM BOTÃO ACIONÁVEL -->
+                          <div class="ext-restricted-cluster">
                             <p class="ext-helper-note">
                               <Info size={11} class="text-amber-400" />
-                              <span>Disponível para {item.assignee?.display_name || item.assignee?.username || 'o responsável'}.</span>
-                            </p>
-                          </div>
-                        {:else if item.extensionState === 'LOCKED'}
-                          <!-- Estado A: Antes das últimas 24 horas (Desabilitado + Info) -->
-                          <div class="ext-locked-cluster">
-                            <button
-                              type="button"
-                              class="btn-extension-action locked"
-                              disabled
-                              title="Disponível a partir de {item.unlockDateTimeStr}"
-                            >
-                              <Lock size={13} />
-                              <span>Prorrogar prazo em +2 dias</span>
-                            </button>
-                            <p class="ext-helper-note">
-                              <Info size={11} class="text-cyan-400" />
-                              <span>Disponível a partir de {item.unlockDateTimeStr}.</span>
-                            </p>
-                          </div>
-                        {:else if item.extensionState === 'EXPIRED'}
-                          <!-- Estado Expirado: Prazo encerrado -->
-                          <div class="ext-locked-cluster">
-                            <button
-                              type="button"
-                              class="btn-extension-action locked"
-                              disabled
-                              title="Prazo encerrado para prorrogação"
-                            >
-                              <Lock size={13} />
-                              <span>Prorrogação indisponível</span>
-                            </button>
-                            <p class="ext-helper-note">
-                              <AlertCircle size={11} class="text-rose-400" />
-                              <span>Prazo expirado para prorrogação (+2d indisponível).</span>
+                              <span>Prorrogação de +2 dias exclusiva para {item.assignee?.display_name || item.assignee?.username || 'o responsável'}.</span>
                             </p>
                           </div>
                         {/if}
@@ -2024,50 +2024,48 @@
                   <Check size={14} class="text-emerald-400" />
                   <span>Prazo prorrogado até {bottomSheetItem.extendedDateTimeStr || formatDueDisplay(bottomSheetItem.dueAt)}.</span>
                 </div>
-              {:else if bottomSheetItem.extensionState === 'AVAILABLE'}
-                <!-- Estado B: Nas últimas 24 horas (Habilitado para o responsável) -->
-                <button
-                  type="button"
-                  class="btn-sheet-extend available"
-                  onclick={() => openExtensionModal(bottomSheetItem)}
-                >
-                  <Zap size={14} />
-                  <span>⚡ Prorrogar +2 dias</span>
-                </button>
-              {:else if bottomSheetItem.extensionState === 'RESTRICTED_AVAILABLE'}
-                <!-- Estado B: Janela ativa, porém restrito ao responsável da etapa -->
-                <div class="sheet-ext-locked">
-                  <button type="button" class="btn-sheet-extend locked" disabled>
-                    <Lock size={13} />
-                    <span>Prorrogar prazo em +2 dias</span>
+              {:else if bottomSheetItem.isMine}
+                {#if bottomSheetItem.extensionState === 'AVAILABLE'}
+                  <!-- Estado B: Nas últimas 24 horas (Habilitado exclusivamente para o responsável) -->
+                  <button
+                    type="button"
+                    class="btn-sheet-extend available"
+                    onclick={() => openExtensionModal(bottomSheetItem)}
+                  >
+                    <Zap size={14} />
+                    <span>Prorrogar +2 dias</span>
                   </button>
+                {:else if bottomSheetItem.extensionState === 'LOCKED'}
+                  <!-- Estado A: Antes das últimas 24 horas -->
+                  <div class="sheet-ext-locked">
+                    <button type="button" class="btn-sheet-extend locked" disabled>
+                      <Lock size={13} />
+                      <span>Prorrogar prazo em +2 dias</span>
+                    </button>
+                    <p class="sheet-ext-note">
+                      <Info size={11} class="text-cyan-400" />
+                      <span>Disponível a partir de {bottomSheetItem.unlockDateTimeStr}.</span>
+                    </p>
+                  </div>
+                {:else if bottomSheetItem.extensionState === 'EXPIRED'}
+                  <!-- Estado Expirado: Prazo encerrado -->
+                  <div class="sheet-ext-locked">
+                    <button type="button" class="btn-sheet-extend locked" disabled>
+                      <Lock size={13} />
+                      <span>Prorrogação indisponível</span>
+                    </button>
+                    <p class="sheet-ext-note">
+                      <AlertCircle size={11} class="text-rose-400" />
+                      <span>Prazo expirado para prorrogação (+2d indisponível).</span>
+                    </p>
+                  </div>
+                {/if}
+              {:else if bottomSheetItem.extensionState === 'AVAILABLE' || bottomSheetItem.extensionState === 'RESTRICTED_AVAILABLE'}
+                <!-- Etapa de terceiro nas últimas 24h: explicação discreta, SEM BOTÃO ACIONÁVEL -->
+                <div class="sheet-ext-restricted">
                   <p class="sheet-ext-note">
                     <Info size={11} class="text-amber-400" />
-                    <span>Disponível para {bottomSheetItem.assignee?.display_name || bottomSheetItem.assignee?.username || 'o responsável'}.</span>
-                  </p>
-                </div>
-              {:else if bottomSheetItem.extensionState === 'LOCKED'}
-                <!-- Estado A: Antes das últimas 24 horas -->
-                <div class="sheet-ext-locked">
-                  <button type="button" class="btn-sheet-extend locked" disabled>
-                    <Lock size={13} />
-                    <span>Prorrogar prazo em +2 dias</span>
-                  </button>
-                  <p class="sheet-ext-note">
-                    <Info size={11} class="text-cyan-400" />
-                    <span>Disponível a partir de {bottomSheetItem.unlockDateTimeStr}.</span>
-                  </p>
-                </div>
-              {:else if bottomSheetItem.extensionState === 'EXPIRED'}
-                <!-- Estado Expirado: Prazo encerrado -->
-                <div class="sheet-ext-locked">
-                  <button type="button" class="btn-sheet-extend locked" disabled>
-                    <Lock size={13} />
-                    <span>Prorrogação indisponível</span>
-                  </button>
-                  <p class="sheet-ext-note">
-                    <AlertCircle size={11} class="text-rose-400" />
-                    <span>Prazo expirado para prorrogação (+2d indisponível).</span>
+                    <span>Prorrogação de +2 dias exclusiva para {bottomSheetItem.assignee?.display_name || bottomSheetItem.assignee?.username || 'o responsável'}.</span>
                   </p>
                 </div>
               {/if}
@@ -2190,7 +2188,7 @@
 <!-- ========================================================================= -->
 <!-- 5. EXTENSION CONFIRMATION MODAL (+2 DIAS)                                 -->
 <!-- ========================================================================= -->
-{#if showExtensionModal && extensionTargetItem}
+{#if showExtensionModal && extensionTargetItem && (extensionTargetItem.assigned_to === currentUserId || extensionTargetItem.assigneeId === currentUserId || extensionTargetItem.assignee?.id === currentUserId)}
   <div
     class="modal-backdrop"
     onclick={(e) => {

@@ -319,6 +319,37 @@ async function run() {
     await copyToAgyArtifacts(shot2Path, '02_ceu_distante_92_tomorrow_pill.png');
     recordTest('Captured Screenshot 02: Céu Distante #92 deadline badge pill', fs.existsSync(shot2Path));
 
+    // Click Day 5 cell to inspect Thiago's Clean/Redraw stage as Admin (Awerkori)
+    await day5Cell.click({ force: true });
+    await dPage.waitForTimeout(1000);
+
+    const day5Panel = dPage.locator('.calendar-contextual-panel');
+    const day5PanelText = await day5Panel.innerText();
+
+    // Verify Admin (Awerkori) does NOT see actionable extension button on Thiago's stage
+    const day5ExtendBtn = day5Panel.locator('.btn-extension-action.available');
+    recordTest('Admin (Awerkori) does NOT see actionable extension button on Thiago stage', (await day5ExtendBtn.count()) === 0);
+    recordTest('Admin sees discreet note that extension is exclusive to assignee', day5PanelText.includes('exclusiva para Thiagoamapeitos') || day5PanelText.includes('exclusiva para'));
+
+    // Capture screenshot: Admin viewing Thiago's stage (read-only, no extension button)
+    const shotAdminThiago = path.join(ARTIFACT_DIR, '13_admin_viewing_thiago_stage_readonly.png');
+    await day5Panel.screenshot({ path: shotAdminThiago });
+    await copyToAgyArtifacts(shotAdminThiago, '13_admin_viewing_thiago_stage_readonly.png');
+    recordTest('Captured Screenshot 13: Admin viewing Thiago stage read-only', fs.existsSync(shotAdminThiago));
+
+    // Direct Action Security: Admin attempting direct POST to extend Thiago stage is rejected with HTTP 403
+    const thiagoStageId = ch92Res.rows[0].id;
+    const adminDirectExtendRes = await fetch(`${PREVIEW_URL}/scan?/extendStageDeadline`, {
+      method: 'POST',
+      headers: {
+        cookie: cookieHeader,
+        'content-type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({ chapter_stage_id: thiagoStageId }).toString()
+    });
+    const adminDirectText = await adminDirectExtendRes.text();
+    recordTest('Admin direct POST to extend Thiago stage rejected with HTTP 403', adminDirectExtendRes.status === 403 || adminDirectText.includes('Apenas o responsável atual pode prorrogar o prazo desta etapa.'));
+
     // Click Day 7 cell to inspect Céu Distante #92 Tradução in Contextual Panel
     const day7Cell = dPage.locator('.matrix-day-cell:not(.is-other-month)').filter({ has: dPage.locator('.cell-day-num', { hasText: /^7$/ }) }).first();
     await day7Cell.click({ force: true });
@@ -414,6 +445,11 @@ async function run() {
     const sheetText = await bottomSheet.innerText();
     const expectedSheetStatus = isTodayNov5 ? 'Vence hoje' : 'Vence amanhã';
     recordTest(`Bottom sheet displays "${expectedSheetStatus}" status`, sheetText.includes(expectedSheetStatus));
+
+    // Verify Admin does NOT see actionable extension button in mobile bottom sheet
+    const mobileExtendBtn = bottomSheet.locator('.btn-sheet-extend.available');
+    recordTest('Android bottom sheet: Admin does NOT see actionable extension button on Thiago stage', (await mobileExtendBtn.count()) === 0);
+    recordTest('Android bottom sheet: Shows discreet exclusive notice for assignee', sheetText.includes('exclusiva para Thiagoamapeitos') || sheetText.includes('exclusiva para'));
 
     // Screenshot 6: Android Bottom Sheet
     const shot6Path = path.join(ARTIFACT_DIR, '06_android_bottom_sheet_delivery_detail.png');

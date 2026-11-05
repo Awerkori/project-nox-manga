@@ -3833,10 +3833,23 @@ export const actions: Actions = {
     const stageId = String(formData.get('chapter_stage_id') || '');
     if (!stageId) return fail(400, { message: 'ID da etapa ausente.' });
 
+    // Defense-in-depth: Confirm in database that assignment strictly belongs to authenticated user
+    const stageCheck = await executeYugabyteSql<{ assigned_to: string; status: string; due_at: string }>(`
+      SELECT assigned_to, status, due_at
+      FROM public.scan_chapter_stages
+      WHERE id = $1
+    `, [stageId], platform?.env);
+
+    const stage = stageCheck.rows?.[0];
+    if (!stage) return fail(404, { message: 'Etapa não encontrada.' });
+    if (stage.assigned_to !== locals.user.id) {
+      return fail(403, { message: 'Apenas o responsável atual pode prorrogar o prazo desta etapa.' });
+    }
+
     try {
       const result = await executeYugabyteSql<{ result: any }>(`
-        SELECT public.extend_scan_chapter_stage_ysql($1, $2, $3) AS result
-      `, [stageId, locals.user.id, locals.role === 'ADMIN'], platform?.env);
+        SELECT public.extend_scan_chapter_stage_ysql($1, $2, false) AS result
+      `, [stageId, locals.user.id], platform?.env);
       const data = result.rows[0]?.result;
       if (!data?.success) throw new Error('YSQL_EXTEND_STAGE_EMPTY_RESULT');
       return { success: true, extended: data };

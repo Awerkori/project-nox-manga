@@ -273,11 +273,11 @@
     const dueMs = new Date(cs.due_at).getTime();
     const diffMs = dueMs - nowMs;
     const isOverdue = dl.isOverdue;
-    const canExtend = (cs.assigned_to === currentUserId || isOwnerOrAdmin) &&
+    const canExtend = cs.assigned_to === currentUserId &&
                       cs.status === 'IN_PROGRESS' &&
                       extensionCount === 0 &&
                       (dl.isDueSoon || dl.isDueToday) &&
-                      diffMs > -(4 * 60 * 60 * 1000);
+                      diffMs > 0;
 
     const dueSp = getSaoPauloDateParts(cs.due_at);
     const dayStr = String(dueSp.day).padStart(2, '0');

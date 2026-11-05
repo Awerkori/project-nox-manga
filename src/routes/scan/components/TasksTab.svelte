@@ -147,7 +147,7 @@
     });
     const dueMs = new Date(cs.due_at).getTime();
     const diffMs = dueMs - Date.now();
-    return (dl.isDueSoon || dl.isDueToday) && diffMs > -(4 * 60 * 60 * 1000);
+    return (dl.isDueSoon || dl.isDueToday) && diffMs > 0;
   }
 
   // Effective positions for logged-in user
