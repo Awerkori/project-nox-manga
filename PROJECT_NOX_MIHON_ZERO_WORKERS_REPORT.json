@@ -14,6 +14,7 @@
   "coverage": {
     "imagesDiscovered": 368,
     "imagesSelected": 300,
+    "sample300Tested": 300,
     "distinctUrlsRequested": 300,
     "distinctImagesHeadChecked": 300,
     "distinctImagesFullGetAttempted": 300,

@@ -700,6 +700,7 @@ async function main() {
     coverage: {
       imagesDiscovered: mediaList.length,
       imagesSelected: sample300.length,
+      sample300Tested: sample300.length,
       distinctUrlsRequested: distinctUrlsRequestedSet.size,
       distinctImagesHeadChecked: distinctImagesHeadCheckedSet.size,
       distinctImagesFullGetAttempted: distinctImagesFullGetAttemptedSet.size,
@@ -964,7 +965,11 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch(err => {
-  console.error('[FATAL_ERROR]', err);
-  process.exit(1);
-});
+export { validateResponseBody, getActiveDeploymentInfo, getCloudflareMetrics, computePercentiles };
+
+if (process.argv[1] && process.argv[1].endsWith('mihon-zero-waste-benchmark.mjs')) {
+  main().catch(err => {
+    console.error('[FATAL_ERROR]', err);
+    process.exit(1);
+  });
+}

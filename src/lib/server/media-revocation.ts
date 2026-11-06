@@ -75,11 +75,11 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
   if (media.status === 'DELETED') {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'STATUS_DELETED', category: 'DELETED' };
   }
-  if (media.storage_ready === false) {
+  if (media.storage_ready !== true) {
     return { isPublic: false, isExplicitlyPrivate: false, reason: 'STORAGE_NOT_READY', category: 'INVALID' };
   }
-  if (media.status && media.status !== 'ACTIVE') {
-    return { isPublic: false, isExplicitlyPrivate: false, reason: `INACTIVE_STATUS_${media.status}`, category: 'INVALID' };
+  if (!media.status || media.status !== 'ACTIVE') {
+    return { isPublic: false, isExplicitlyPrivate: false, reason: media.status ? `INACTIVE_STATUS_${media.status}` : 'STATUS_MISSING', category: 'INVALID' };
   }
 
   // 2. Explicit access classes
@@ -196,9 +196,7 @@ export async function isMediaRevoked(
       const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
       if (manifest && Array.isArray(manifest.revokedIds)) {
         manifestSuccessfullyLoaded = true;
-        for (const id of manifest.revokedIds) {
-          memoryRevokedSet.add(id);
-        }
+        memoryRevokedSet = new Set(manifest.revokedIds);
         if (memoryRevokedSet.has(mediaId)) return true;
       } else {
         manifestSuccessfullyLoaded = false;
@@ -209,13 +207,21 @@ export async function isMediaRevoked(
     }
   }
 
-  // 2. Direct tombstone check is executed if explicitly requested or manifest is not reliably loaded
-  if (options?.forceFresh || options?.checkTombstone || !manifestSuccessfullyLoaded) {
+  // 2. Direct tombstone check is executed if explicitly requested or if manifest is not reliably loaded
+  const shouldCheckTombstone =
+    Boolean(options?.forceFresh) ||
+    Boolean(options?.checkTombstone) ||
+    !manifestSuccessfullyLoaded;
+
+  if (shouldCheckTombstone) {
     try {
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
         memoryRevokedSet.add(mediaId);
         return true;
+      } else {
+        memoryRevokedSet.delete(mediaId);
+        return false;
       }
     } catch {
       if (options?.failClosed) return true;
@@ -409,9 +415,6 @@ export async function revokeMedia(
           currentManifest = { version: 1, updatedAt: revokedAt, revokedIds: [] };
         }
         const idSet = new Set(currentManifest.revokedIds);
-        for (const id of memoryRevokedSet) {
-          idSet.add(id);
-        }
         idSet.add(mediaId);
         currentManifest.revokedIds = Array.from(idSet);
         currentManifest.updatedAt = revokedAt;

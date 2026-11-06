@@ -14,6 +14,10 @@ import {
   persistCoverThumbnail,
   coverThumbnailKey
 } from '../src/lib/server/cover-thumbnail-cache';
+import {
+  validateResponseBody,
+  getActiveDeploymentInfo
+} from '../scripts/mihon-zero-waste-benchmark.mjs';
 
 const mocks = vi.hoisted(() => ({
   download: vi.fn(),
@@ -1508,33 +1512,41 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
 
     // 25. Resposta GET truncada
     it('25. Resposta GET truncada: detectada e categorizada como BODY_INTEGRITY_FAILURE', async () => {
-      // Import validation logic
       const truncatedBuf = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]); // 4 bytes
       const headers = new Headers({ 'content-length': '1000', 'content-type': 'image/jpeg' });
-      // Inline inspection matching validateResponseBody
-      const isTruncated = truncatedBuf.byteLength < 1000;
-      expect(isTruncated).toBe(true);
+      const validation = validateResponseBody(truncatedBuf.buffer, 200, headers);
+      expect(validation.valid).toBe(false);
+      expect(validation.errorType).toBe('BODY_INTEGRITY_FAILURE');
+      expect(validation.reason).toContain('Truncated body');
     });
 
     // 26. Conteúdo incorreto com HTTP 200
     it('26. Conteúdo incorreto com HTTP 200: página HTML ou JSON disfarçada é rejeitada', async () => {
       const htmlPayload = new TextEncoder().encode('<!DOCTYPE html><html><body>Error</body></html>');
-      const isHtml = htmlPayload[0] === 0x3c;
-      expect(isHtml).toBe(true);
-
       const jsonPayload = new TextEncoder().encode('{"error":"Not Found"}');
-      const isJson = jsonPayload[0] === 0x7b;
-      expect(isJson).toBe(true);
+      const headers = new Headers({ 'content-type': 'image/jpeg' });
+
+      const htmlVal = validateResponseBody(htmlPayload.buffer, 200, headers);
+      expect(htmlVal.valid).toBe(false);
+      expect(htmlVal.errorType).toBe('BODY_INTEGRITY_FAILURE');
+      expect(htmlVal.reason).toContain('HTML/JSON disguised as image');
+
+      const jsonVal = validateResponseBody(jsonPayload.buffer, 200, headers);
+      expect(jsonVal.valid).toBe(false);
+      expect(jsonVal.errorType).toBe('BODY_INTEGRITY_FAILURE');
+      expect(jsonVal.reason).toContain('HTML/JSON disguised as image');
     });
 
     // 27. ETag inválido
     it('27. ETag inválido: divergência entre SHA256 do corpo e ETag é detectada', async () => {
-      const crypto = await import('node:crypto');
       const body = new Uint8Array([1, 2, 3, 4]);
-      const actualSha = crypto.createHash('sha256').update(body).digest('hex');
       const bogusEtag = '"0000000000000000000000000000000000000000000000000000000000000000"';
-      const cleanEtag = bogusEtag.replace(/"/g, '');
-      expect(actualSha).not.toBe(cleanEtag);
+      const headers = new Headers({ etag: bogusEtag, 'content-type': 'image/jpeg' });
+
+      const val = validateResponseBody(body.buffer, 200, headers);
+      expect(val.valid).toBe(false);
+      expect(val.errorType).toBe('BODY_INTEGRITY_FAILURE');
+      expect(val.reason).toContain('Cryptographic SHA256 mismatch');
     });
 
     // 28. Timeout Telegram
@@ -1565,18 +1577,68 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
 
     // 30. Deployment API indisponível
     it('30. Deployment API indisponível: retorna DEPLOYMENT_NOT_VERIFIED sem inventar versão', async () => {
-      // Simulating failure of Cloudflare deployments API
-      const handleDeployFailure = () => ({
-        deploymentId: 'DEPLOYMENT_NOT_VERIFIED',
-        createdOn: null,
-        versionId: 'DEPLOYMENT_NOT_VERIFIED',
-        percentage: 0,
-        verified: false
-      });
-      const result = handleDeployFailure();
-      expect(result.versionId).toBe('DEPLOYMENT_NOT_VERIFIED');
-      expect(result.verified).toBe(false);
-      expect(result.percentage).toBe(0);
+      const originalFetch = globalThis.fetch;
+      try {
+        globalThis.fetch = vi.fn().mockRejectedValue(new Error('Cloudflare API unreachable'));
+        const deployInfo = await getActiveDeploymentInfo();
+        expect(deployInfo.versionId).toBe('DEPLOYMENT_NOT_VERIFIED');
+        expect(deployInfo.verified).toBe(false);
+        expect(deployInfo.percentage).toBe(0);
+        expect(deployInfo.deploymentId).toBe('DEPLOYMENT_NOT_VERIFIED');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    // Matriz Completa de Classificação e Fail-Closed
+    it('Matriz completa de classificação de acesso e proteção fail-closed', () => {
+      // Missing or corrupt metadata
+      expect(classifyMediaAccess(null).isPublic).toBe(false);
+      expect(classifyMediaAccess(undefined).isPublic).toBe(false);
+      expect(classifyMediaAccess('invalid').isPublic).toBe(false);
+
+      // DELETED
+      expect(classifyMediaAccess({ status: 'DELETED' }).category).toBe('DELETED');
+      expect(classifyMediaAccess({ status: 'DELETED' }).isPublic).toBe(false);
+
+      // Storage not ready
+      expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: false }).category).toBe('INVALID');
+      expect(classifyMediaAccess({ status: 'ACTIVE' }).category).toBe('INVALID'); // missing storage_ready
+
+      // Missing or inactive status
+      expect(classifyMediaAccess({ storage_ready: true }).category).toBe('INVALID');
+      expect(classifyMediaAccess({ status: 'DRAFT', storage_ready: true }).category).toBe('INVALID');
+      expect(classifyMediaAccess({ status: 'PENDING', storage_ready: true }).category).toBe('INVALID');
+
+      // Internal purposes fail-closed
+      const internalPurposes = ['staff_manual', 'pipeline', 'scan_pipeline', 'production', 'staging', 'internal_test', 'temp'];
+      for (const p of internalPurposes) {
+        const cls = classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, purpose: p });
+        expect(cls.isPublic, `Purpose ${p} must not be public`).toBe(false);
+        expect(cls.category).toBe('INTERNAL');
+      }
+
+      // Explicit non-public classes
+      expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, access_class: 'PRIVATE' }).category).toBe('PRIVATE');
+      expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, access_class: 'STAFF_ONLY' }).category).toBe('STAFF_ONLY');
+      expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, access_class: 'RESTRICTED' }).category).toBe('RESTRICTED');
+      expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, access_class: 'AUTHENTICATED' }).category).toBe('AUTHENTICATED');
+
+      // Explicit PUBLIC
+      const pubCls = classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, access_class: 'PUBLIC' });
+      expect(pubCls.isPublic).toBe(true);
+      expect(pubCls.category).toBe('PUBLIC');
+
+      // Legacy public allowlist
+      const legacyPublicPurposes = ['editorial', 'staff_chapter', 'scan_chapter', 'chapter_page', 'cover', 'work_cover', 'avatar', 'banner', 'scan_logo', 'scan_banner', 'cosmetic'];
+      for (const lp of legacyPublicPurposes) {
+        const cls = classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, purpose: lp });
+        expect(cls.isPublic, `Legacy purpose ${lp} must be public`).toBe(true);
+        expect(cls.category).toBe('PUBLIC');
+      }
+
+      // Unknown purpose without access_class fails closed
+      expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, purpose: 'unknown_raw' }).isPublic).toBe(false);
     });
   });
 });
