@@ -1,17 +1,64 @@
 import { json } from '@sveltejs/kit';
 import { verifyMihonAuth } from '$lib/server/mihon';
-import { fetchWorkFromYugabyte, fetchWorkChaptersFromYugabyte, fetchWorkTagsFromYugabyte } from '$lib/server/yugabyte';
+import { fetchFullWorkPageFromYugabyte } from '$lib/server/yugabyte';
+
+type MihonWorkBundle = {
+  work: any;
+  chapters: any[];
+  tags: any[];
+  etag: string;
+};
+
+const MIHON_WORK_CACHE_TTL_MS = 120_000;
+const MAX_MIHON_WORK_CACHE = 150;
+const mihonWorkCache = new Map<string, { timestamp: number; data: MihonWorkBundle }>();
+const mihonWorkInFlight = new Map<string, Promise<MihonWorkBundle | null>>();
+
+async function fetchMihonWorkData(slug: string, platformEnv?: any): Promise<MihonWorkBundle | null> {
+  const bundle = await fetchFullWorkPageFromYugabyte(slug, undefined, undefined, false, platformEnv);
+  if (!bundle || !bundle.work || !bundle.work.published) return null;
+
+  const { work, chapters, tags } = bundle;
+  const latestChapterTimestamp = (chapters || []).reduce(
+    (max: number, c: any) => Math.max(max, new Date(c.updated_at || c.published_at || c.created_at || 0).getTime()),
+    0
+  );
+  const etag = `"${work.id}-${work.updated_at || ''}-${chapters?.length || 0}-${latestChapterTimestamp}"`;
+  return { work, chapters: chapters || [], tags: tags || [], etag };
+}
 
 export const GET = async ({ params, request, url, platform }: any) => {
   const { slug } = params;
   const auth = await verifyMihonAuth(request);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
-  const work = await fetchWorkFromYugabyte(slug, platform?.env);
+  let bundle: MihonWorkBundle | null = null;
+  const cached = mihonWorkCache.get(slug);
+  if (cached && Date.now() - cached.timestamp < MIHON_WORK_CACHE_TTL_MS) {
+    bundle = cached.data;
+  } else {
+    let pending = mihonWorkInFlight.get(slug);
+    if (!pending) {
+      pending = fetchMihonWorkData(slug, platform?.env).finally(() => {
+        mihonWorkInFlight.delete(slug);
+      });
+      mihonWorkInFlight.set(slug, pending);
+    }
+    bundle = await pending;
+    if (bundle) {
+      if (mihonWorkCache.size >= MAX_MIHON_WORK_CACHE) {
+        const oldestKey = mihonWorkCache.keys().next().value;
+        if (oldestKey) mihonWorkCache.delete(oldestKey);
+      }
+      mihonWorkCache.set(slug, { timestamp: Date.now(), data: bundle });
+    }
+  }
 
-  if (!work || !work.published) {
+  if (!bundle) {
     return json({ error: 'Obra não encontrada' }, { status: 404 });
   }
+
+  const { work, chapters, tags, etag } = bundle;
 
   if (work.content_rating === 'ADULT_18' && !allowAdult) {
     return json(
@@ -20,16 +67,26 @@ export const GET = async ({ params, request, url, platform }: any) => {
     );
   }
 
-  const [chapters, tags] = await Promise.all([
-    fetchWorkChaptersFromYugabyte(work.id, false, platform?.env),
-    fetchWorkTagsFromYugabyte(work.id, platform?.env)
-  ]);
+  const cacheControl =
+    work.content_rating === 'ADULT_18'
+      ? 'private, no-cache, no-store, must-revalidate'
+      : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
+
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': cacheControl,
+        'ETag': etag
+      }
+    });
+  }
 
   const origin = url.origin;
-  const genres = (tags || []).map((t) => t.name).filter(Boolean);
+  const genres = (tags || []).map((t: any) => t.name).filter(Boolean);
 
   // Mihon expects chapters ascending by reading order
-  const sortedChapters = [...(chapters || [])].sort((a, b) => {
+  const sortedChapters = [...(chapters || [])].sort((a: any, b: any) => {
     const orderA = a.chapter_order_key || '';
     const orderB = b.chapter_order_key || '';
     if (orderA !== orderB) return orderA.localeCompare(orderB);
@@ -51,7 +108,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
     cover_url: work.cover_id ? `${origin}/media/${work.cover_id}` : null,
     updated_at: work.updated_at,
     genres,
-    chapters: sortedChapters.map((ch) => ({
+    chapters: sortedChapters.map((ch: any) => ({
       id: ch.id,
       number: ch.number,
       display_number: ch.display_number || String(ch.number ?? 'Especial'),
@@ -65,10 +122,8 @@ export const GET = async ({ params, request, url, platform }: any) => {
     }))
   }, {
     headers: {
-      'Cache-Control':
-        work.content_rating === 'ADULT_18'
-          ? 'private, no-cache, no-store, must-revalidate'
-          : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
+      'Cache-Control': cacheControl,
+      'ETag': etag
     }
   });
 };

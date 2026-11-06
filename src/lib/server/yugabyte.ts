@@ -1134,7 +1134,7 @@ export async function fetchFullWorkPageFromYugabyte(
       };
     },
     null,
-    30_000
+    180_000
   );
 
   if (!base || !base.work) return null;

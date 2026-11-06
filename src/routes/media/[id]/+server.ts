@@ -27,6 +27,7 @@ function safeTokenCompare(provided: string, expected: string): boolean {
 }
 
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
+const storageShardBotCache = new Map<string, string>();
 
 async function downloadCoverWithTransientRetry(
   client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> },
@@ -277,11 +278,21 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
     'ETag': `"${media.sha256}"`,
     'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Access-Control-Allow-Origin': '*',
+    'Accept-Ranges': 'bytes',
     'X-Media-Cache': 'MISS'
   };
 
+  if (media.bytes && Number(media.bytes) > 0) {
+    headers['Content-Length'] = String(media.bytes);
+  }
+
   if (request.headers.get('if-none-match') === headers.ETag) {
     return new Response(null, { status: 304, headers });
+  }
+
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
   }
 
   let body: BodyInit;
@@ -301,13 +312,18 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
     // 1. If storage_shard_id is present and botRef is missing or default 'primary', lookup shard definition
     if (shardId && (!botRef || botRef === 'primary')) {
-      const shardRes = await executeYugabyteSql(
-        'SELECT bot_reference FROM storage_shards WHERE id = $1 LIMIT 1;',
-        [shardId],
-        platform?.env
-      ).catch(() => ({ rows: [] as any[] }));
-      if (shardRes.rows[0]?.bot_reference) {
-        botRef = shardRes.rows[0].bot_reference;
+      if (storageShardBotCache.has(shardId)) {
+        botRef = storageShardBotCache.get(shardId)!;
+      } else {
+        const shardRes = await executeYugabyteSql(
+          'SELECT bot_reference FROM storage_shards WHERE id = $1 LIMIT 1;',
+          [shardId],
+          platform?.env
+        ).catch(() => ({ rows: [] as any[] }));
+        if (shardRes.rows[0]?.bot_reference) {
+          botRef = shardRes.rows[0].bot_reference;
+          storageShardBotCache.set(shardId, botRef);
+        }
       }
     }
 
@@ -442,6 +458,48 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       headers['Content-Length'] = String(body.byteLength);
     } else if (body instanceof Blob) {
       headers['Content-Length'] = String(body.size);
+    }
+  }
+
+  const rangeHeader = request.headers.get('range');
+  if (rangeHeader) {
+    const bytes = body instanceof Uint8Array ? body : await toUint8Array(body);
+    const total = bytes.byteLength;
+    const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+    if (match) {
+      let start: number;
+      let end: number;
+      if (match[1] === '' && match[2] !== '') {
+        // RFC 9110 suffix range: bytes=-N
+        const suffixLen = parseInt(match[2], 10);
+        if (suffixLen === 0 || total === 0) {
+          return new Response(null, {
+            status: 416,
+            headers: { ...headers, 'Content-Range': `bytes */${total}` }
+          });
+        }
+        start = Math.max(0, total - suffixLen);
+        end = total - 1;
+      } else {
+        start = match[1] ? parseInt(match[1], 10) : 0;
+        end = match[2] ? parseInt(match[2], 10) : total - 1;
+      }
+
+      if (start >= total || start > end || total === 0) {
+        return new Response(null, {
+          status: 416,
+          headers: { ...headers, 'Content-Range': `bytes */${total}` }
+        });
+      }
+
+      const actualEnd = Math.min(end, total - 1);
+      const sliced = bytes.subarray(start, actualEnd + 1);
+      const rangeHeaders = {
+        ...headers,
+        'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
+        'Content-Length': String(sliced.byteLength)
+      };
+      return new Response(sliced, { status: 206, headers: rangeHeaders });
     }
   }
 

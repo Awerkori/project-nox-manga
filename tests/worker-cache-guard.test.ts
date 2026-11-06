@@ -47,5 +47,48 @@ describe('shared Worker cache guard', () => {
     expect(wrangler).toContain('"pattern": "www.projectnox.org"');
     expect(wrangler).toContain('"custom_domain": true');
   });
+
+  it('exempts /robots.txt and /favicon.ico from bot blocking and guards against scanner methods', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+
+    expect(wrapper).toContain("url.pathname !== '/robots.txt'");
+    expect(wrapper).toContain("url.pathname !== '/favicon.ico'");
+    expect(wrapper).toContain("['PUT', 'DELETE', 'PATCH', 'TRACE'].includes(req.method)");
+    expect(wrapper).toContain('Method Not Allowed');
+  });
+
+  it('isolates out-of-bounds catalog and lancamentos pagination to prevent cache pollution of page 50', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+
+    expect(wrapper).toContain("rawNum > 50");
+    expect(wrapper).toContain("normalizedParams.set('pagina', '51')");
+    expect(wrapper).toContain("normalizedParams.set('page', '51')");
+  });
+
+  it('implements RFC 9110 compliant range handling for media edge fast-path', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+
+    expect(wrapper).toContain("status: 416");
+    expect(wrapper).toContain("bytes */");
+    expect(wrapper).toContain("status: 206");
+  });
+
+  it('strictly isolates MINOR age status from GUEST and ADULT in cache key segmentation', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+
+    expect(wrapper).toContain("nox-age-status=MINOR");
+    expect(wrapper).toContain("nox-age-status=ADULT");
+    expect(wrapper).toContain("ageSeg = isAdult ? 'ADULT' : (isMinor ? 'MINOR' : 'GUEST')");
+  });
+
+  it('strictly forbids caching responses with Set-Cookie, private Cache-Control, or invalid Vary', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+
+    expect(wrapper).toContain('if (res.headers.has("set-cookie")) return false;');
+    expect(wrapper).toContain('cc.includes("private")');
+    expect(wrapper).toContain('vary.toLowerCase() !== "accept-encoding"');
+    expect(wrapper).toContain('return cc.includes("public");');
+  });
 });
+
 

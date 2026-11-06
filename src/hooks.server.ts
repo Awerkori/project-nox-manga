@@ -222,7 +222,9 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
       event.url.pathname.startsWith('/biblioteca') ||
       event.url.pathname.startsWith('/favoritos') ||
       event.url.pathname.startsWith('/historico') ||
-      event.url.pathname.startsWith('/notificacoes');
+      event.url.pathname.startsWith('/notificacoes') ||
+      event.url.pathname.startsWith('/settings') ||
+      event.url.pathname.startsWith('/configuracoes');
 
     const existingCacheControl = response.headers.get('Cache-Control') || '';
     const isExplicitlyPublic = existingCacheControl.includes('public');

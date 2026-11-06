@@ -21,9 +21,12 @@ function patchGeneratedWorker() {
 }`;
   const sanitizedWorktopR = `function r(res) {
   if (!n.has(res.status) || res.status >= 400) return false;
+  if (res.headers.has("set-cookie")) return false;
   let cc = res.headers.get("Cache-Control") || "";
-  if (cc.includes("no-store") || cc.includes("no-cache")) return false;
-  return cc.includes("public") || (cc.includes("private") && (cc.includes("max-age=") || cc.includes("s-maxage=")));
+  if (cc.includes("no-store") || cc.includes("no-cache") || cc.includes("private")) return false;
+  let vary = res.headers.get("vary") || "";
+  if (vary && vary.toLowerCase() !== "accept-encoding") return false;
+  return cc.includes("public");
 }`;
   if (content.includes(rawWorktopR)) {
     content = content.replace(rawWorktopR, sanitizedWorktopR);
@@ -37,9 +40,9 @@ function patchGeneratedWorker() {
   if (!r(res)) return res;
 
   const cacheHeaders = new Headers(res.headers);
-  cacheHeaders.delete('set-cookie');
-  cacheHeaders.delete('vary');
-  cacheHeaders.set('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
+  if (!cacheHeaders.has('Vary')) {
+    cacheHeaders.set('Vary', 'Accept-Encoding');
+  }
 
   let bodyForCache = null;
   let clientRes = res;
@@ -57,7 +60,7 @@ function patchGeneratedWorker() {
 
   ctx.waitUntil(cache.put(req, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
   return clientRes;
-}`;
+};`;
   if (content.includes(rawWorktopT)) {
     content = content.replace(rawWorktopT, sanitizedWorktopT);
   }
@@ -86,11 +89,49 @@ function getSharedCacheKey(req) {
     }
 
     const cookie = req.headers.get('cookie') || '';
-    const isAdult = /(?:^|;\s*)nox-age-status=ADULT/i.test(cookie);
-    const isBlur = !/(?:^|;\s*)nox-blur-nsfw=false/i.test(cookie);
-    const seg = isAdult ? (isBlur ? 'ADULT_BLUR' : 'ADULT_NOBLUR') : (isBlur ? 'SAFE_BLUR' : 'SAFE_NOBLUR');
+    const isAdult = /(?:^|;\\s*)nox-age-status=ADULT/i.test(cookie);
+    const isMinor = /(?:^|;\\s*)nox-age-status=MINOR/i.test(cookie);
+    const ageSeg = isAdult ? 'ADULT' : (isMinor ? 'MINOR' : 'GUEST');
+    const isBlur = isMinor || !/(?:^|;\\s*)nox-blur-nsfw=false/i.test(cookie);
+    const seg = ageSeg + '_' + (isBlur ? 'BLUR' : 'NOBLUR');
 
     const cacheUrl = new URL(req.url);
+    if (p === '/catalogo') {
+      const allowedParams = ['pagina', 'ordem', 'tipo', 'status', 'tag', 'q'];
+      const normalizedParams = new URLSearchParams();
+      for (const param of allowedParams) {
+        const val = url.searchParams.get(param);
+        if (val) {
+          if (param === 'pagina') {
+            const rawNum = Number(val);
+            if (rawNum > 50) {
+              normalizedParams.set('pagina', '51');
+            } else if (rawNum > 1) {
+              normalizedParams.set('pagina', String(Math.floor(rawNum)));
+            }
+          } else if (param === 'ordem') {
+            if (val !== 'recentes') normalizedParams.set('ordem', val);
+          } else {
+            normalizedParams.set(param, val);
+          }
+        }
+      }
+      cacheUrl.search = normalizedParams.toString();
+    } else if (p.startsWith('/obra/')) {
+      cacheUrl.search = '';
+    } else if (p === '/lancamentos') {
+      const rawNum = Number(url.searchParams.get('page'));
+      const kind = url.searchParams.get('kind');
+      const normalizedParams = new URLSearchParams();
+      if (rawNum > 50) {
+        normalizedParams.set('page', '51');
+      } else if (rawNum > 1) {
+        normalizedParams.set('page', String(Math.floor(rawNum)));
+      }
+      if (kind && kind.toUpperCase() !== 'ALL') normalizedParams.set('kind', kind.toUpperCase());
+      cacheUrl.search = normalizedParams.toString();
+    }
+
     cacheUrl.searchParams.set('__nox_cache_seg', seg);
     return new Request(cacheUrl.toString(), {
       method: 'GET',
@@ -145,15 +186,57 @@ function getSharedCacheKey(req) {
           try {
             const cached = await cache.match(cacheKey);
             if (cached && cached.status === 200) {
+              const headers = new Headers(cached.headers);
+              headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
+              headers.set('Access-Control-Allow-Origin', '*');
+              headers.set('Accept-Ranges', 'bytes');
+
               const etag = cached.headers.get('ETag');
               if (etag && req.headers.get('if-none-match') === etag) {
-                const notModified = new Response(null, { status: 304, headers: cached.headers });
-                notModified.headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
-                return notModified;
+                return new Response(null, { status: 304, headers });
               }
-              const fastRes = new Response(cached.body, cached);
-              fastRes.headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
-              return fastRes;
+
+              const rangeHeader = req.headers.get('range');
+              if (rangeHeader) {
+                const ab = await cached.arrayBuffer();
+                const total = ab.byteLength;
+                const match = rangeHeader.match(/bytes=(\\d*)-(\\d*)/);
+                if (match) {
+                  let start;
+                  let end;
+                  if (match[1] === '' && match[2] !== '') {
+                    const suffixLen = parseInt(match[2], 10);
+                    if (suffixLen === 0 || total === 0) {
+                      headers.set('Content-Range', \`bytes */\${total}\`);
+                      return new Response(null, { status: 416, headers });
+                    }
+                    start = Math.max(0, total - suffixLen);
+                    end = total - 1;
+                  } else {
+                    start = match[1] ? parseInt(match[1], 10) : 0;
+                    end = match[2] ? parseInt(match[2], 10) : total - 1;
+                  }
+
+                  if (start >= total || start > end || total === 0) {
+                    headers.set('Content-Range', \`bytes */\${total}\`);
+                    return new Response(null, { status: 416, headers });
+                  }
+
+                  const actualEnd = Math.min(end, total - 1);
+                  const sliced = ab.slice(start, actualEnd + 1);
+                  headers.set('Content-Range', \`bytes \${start}-\${actualEnd}/\${total}\`);
+                  if (req.method === 'HEAD') {
+                    return new Response(null, { status: 206, headers });
+                  }
+                  return new Response(sliced, { status: 206, headers });
+                }
+              }
+
+              if (req.method === 'HEAD') {
+                return new Response(null, { status: 200, headers });
+              }
+
+              return new Response(cached.body, { status: 200, headers });
             }
           } catch {
             // Fall through to standard SvelteKit SSR pipeline
@@ -166,10 +249,38 @@ function getSharedCacheKey(req) {
       return env2.ASSETS.fetch(req);
     }`;
 
-  if (!content.includes('pathname.startsWith(\'/_app/immutable/\')')) {
-    const fetchStartMarker = 'async fetch(req, env2, ctx) {\n    if (!origin) {';
-    const immutableFastPath = `async fetch(req, env2, ctx) {
-    const url = new URL(req.url);
+  const fetchBodyReplacement = `// 0. Bot & scanner protection: block non-essential aggressive scrapers and scanner methods
+    const ua = (req.headers.get('user-agent') || '').toLowerCase();
+    const isAbusiveBot =
+      ua.includes('ahrefsbot') ||
+      ua.includes('claudebot') ||
+      ua.includes('bytespider') ||
+      ua.includes('petalbot') ||
+      ua.includes('semrushbot') ||
+      ua.includes('mj12bot') ||
+      ua.includes('dotbot');
+
+    if (isAbusiveBot && url.pathname !== '/robots.txt' && url.pathname !== '/favicon.ico') {
+      return new Response('Access forbidden for non-essential automated crawlers.', {
+        status: 403,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+          'X-Robots-Tag': 'noindex, nofollow'
+        }
+      });
+    }
+
+    if (['PUT', 'DELETE', 'PATCH', 'TRACE'].includes(req.method) && (!ua || url.pathname === '/' || url.pathname.startsWith('/catalogo') || url.pathname.startsWith('/lancamentos') || url.pathname.startsWith('/obra/'))) {
+      return new Response('Method Not Allowed', {
+        status: 405,
+        headers: {
+          'Allow': 'GET, HEAD',
+          'Cache-Control': 'public, max-age=86400',
+          'Content-Type': 'text/plain; charset=utf-8'
+        }
+      });
+    }
 
     // 1. Canonical domain enforcement: www.projectnox.org -> projectnox.org
     if (url.hostname === 'www.projectnox.org') {
@@ -201,6 +312,13 @@ function getSharedCacheKey(req) {
 
 ${mediaFastPathSnippet}
     if (!origin) {`;
+
+  const fetchBodyRegex = /\/\/ 0\. Bot & scanner protection[\s\S]*?if \(!origin\) \{/m;
+  if (fetchBodyRegex.test(content)) {
+    content = content.replace(fetchBodyRegex, fetchBodyReplacement);
+  } else if (!content.includes('pathname.startsWith(\'/_app/immutable/\')')) {
+    const fetchStartMarker = 'async fetch(req, env2, ctx) {\n    if (!origin) {';
+    const immutableFastPath = `async fetch(req, env2, ctx) {\n    const url = new URL(req.url);\n\n    ${fetchBodyReplacement}`;
     content = content.replace(fetchStartMarker, immutableFastPath);
   } else if (!content.includes('Media Edge Cache Fast-Path')) {
     content = content.replace(
