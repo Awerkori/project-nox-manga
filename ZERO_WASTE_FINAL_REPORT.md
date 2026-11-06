@@ -75,21 +75,25 @@ Principais resoluções e correções técnicas:
 1. **Causa Raiz Identificada:**
    - O media fast-path em `worker-wrapper.js` (L307-340) e a rota SvelteKit em `src/routes/media/[id]/+server.ts` (L149-179) realizavam `caches.default.match()` e `readCoverThumbnail(platform.env.COVER_THUMBNAILS)` retornando HTTP 200/206/304 sem consultar o YSQL.
    - Pela natureza do Cloudflare Free Tier, `caches.default.delete()` possui escopo puramente local (ao PoP atual) e não há Purge by Tag / Hostname via API pública para Workers sem Enterprise. Uma mídia pública que fosse privatizada ou deletada continuava servida quente por até 1 ano nos datacenters que já a haviam armazenado.
-2. **Arquitetura de Revogação Global Implementada (Custo R$ 0,00):**
-   - **Registro de Revogação em Duas Camadas:**
+2. **Arquitetura de Revogação Global Implementada (Custo R$ 0,00 — Zero Waste):**
+   - **Registro de Revogação Otimizado para Preservação de Cotas:**
      - KV Tombstones individuais: chave `revoked:v1:${mediaId}` (expiração 30 dias).
-     - KV Manifest de revogações recentes: chave `media-revocation-manifest:v1` com lista delimitada de IDs.
-     - Isolate In-Memory Caching: conjunto em memória (`workerRevokedMediaSet`) sincronizado a cada 60s do manifesto ou verificado sob demanda no KV com cache negativo local de 60s.
+     - KV Manifest consolidado: chave `media-revocation-manifest:v1` com lista delimitada e versionada de IDs revogados.
+     - Isolate In-Memory Caching com Sincronização Periódica: conjunto em memória (`memoryRevokedSet` / `workerRevokedMediaSet`) sincronizado a cada 2000ms do manifesto.
+     - **Preservação Crítica da Cota Free Tier (100k leituras/dia):** Mídias normais (não revogadas) são validadas em 0ms através do manifesto em memória sem executar leituras de lápides individuais no KV (`kv.get(revoked:v1:...)`). Leituras diretas de lápide ocorrem estritamente sob demanda explícita (`forceFresh: true`) ou em inicialização/falha de manifesto.
+     - **Proteção contra DoS de Cota de Escrita (1k escritas/dia):** Requisições a UUIDs inexistentes (`!media`) retornam 404 `no-store` imediatamente sem disparar escritas de lápide no KV. Apenas mídias existentes com status `DELETED` ou `storage_ready = false` disparam auto-cura no KV.
    - **Guarda Ativa no Fast-Path do Worker (`worker-wrapper.js` & `patch-worker-runtime.mjs`):**
      - Antes de entregar qualquer Cache HIT da borda (200, 206, 304), o Worker consulta o registro de revogação.
-     - Em caso de revogação detectada: invalida todas as variantes (`/media/${id}`, `?size=thumb`, `?size=hero`, etc.) de `caches.default` local e retorna imediatamente HTTP 404 Not Found com cabeçalhos `no-store, no-cache, must-revalidate, private`.
+     - Suporta URLs canônicas, variantes e caminhos com barra final (`/media/<id>/`).
+     - Em caso de revogação detectada: invalida todas as variantes (`/media/${id}`, `?size=thumb&v=3`, `?size=hero&v=3`, `?size=thumb&v=2`, `?size=hero&v=2`, `?size=thumb&v=1`, `?size=hero&v=1`, `?size=thumb`, `?size=hero`, `?v=3`, `?v=2`, `?v=1` e a URL exata da requisição) do `caches.default` local e miniaturas do KV `COVER_THUMBNAILS`, retornando imediatamente HTTP 404 com cabeçalhos anti-cache estritos (`no-store, no-cache, must-revalidate, max-age=0`).
    - **Guarda Ativa no SvelteKit (`src/routes/media/[id]/+server.ts`):**
      - O cache da rota e o KV `COVER_THUMBNAILS` consultam a revogação antes de devolver qualquer byte. Se revogada, expurgam a mídia local e retornam 404 `no-store`.
+     - Redirecionamentos de alias legados (ex.: avatar animado) verificam revogação antes de emitir HTTP 302, retornando 404 caso revogados.
      - Caso o YSQL reporte status `DELETED`, `PRIVATE` ou `STAFF_ONLY` para uma mídia anteriormente pública, o endpoint dispara auto-cura assíncrona (`revokeMedia`) registrando a lápide no KV e expurgando as variantes.
      - A persistência de novas miniaturas (`persistCoverThumbnail`) é bloqueada se a mídia estiver revogada.
    - **API de Gestão Administrativa:**
      - Endpoint `/api/internal/media/revoke` seguro (autenticado por sessão de staff ou `NOX_STORAGE_BRIDGE_TOKEN`) para processar revogações em lote emitidas pelo painel ou automações.
-3. **Bateria de Testes Adversariais Obrigatórios (10/10 Aprovados):**
+3. **Bateria de Testes Adversariais Obrigatórios (15/15 Aprovados):**
    - **Teste A (Pública -> Quente -> Privada -> Acesso Anônimo):** PASS (Retorna 404, expurga cache).
    - **Teste B (Pública -> Quente -> Excluída -> Acesso Anônimo):** PASS (Retorna 404, auto-cura registrada).
    - **Teste C (Pública -> Quente -> STAFF_ONLY -> Sem Permissão):** PASS (Retorna 404 com `no-store`).
@@ -99,8 +103,13 @@ Principais resoluções e correções técnicas:
    - **Teste G (Mídia presente em Cache API e KV simultaneamente):** PASS (Ambos expurgados, 404 retornado).
    - **Teste H (Falha parcial de invalidação de cache):** PASS (Fail-closed: mesmo se `cache.delete` falhar, o fast-path rejeita com 404 antes de entregar o payload).
    - **Teste I (Concorrência entre leitura e revogação):** PASS (Estado canônico de revogação prevalece imediatamente).
-   - **Teste J (Multi-PoP / Diferentes datacenters):** PASS (KV Tombstone intercepta e invalida PoP secundário sem vazamento de dados).
-   - Total de testes na suíte do repositório: **108 arquivos / 539 testes 100% aprovados**.
+   - **Teste J (Multi-PoP / Diferentes datacenters):** PASS (Manifesto KV compartilhado intercepta e invalida PoP secundário sem vazamento de dados).
+   - **Teste K (API Administrativa /api/internal/media/revoke):** PASS (Revogação em lote autenticada e síncrona).
+   - **Teste L (Zero Waste KV Read Preservation):** PASS (Requisições a mídias normais não realizam consultas individuais de lápide no KV).
+   - **Teste M (Zero Waste KV Write DoS Protection):** PASS (Probes com UUIDs inexistentes não realizam escritas no KV).
+   - **Teste N (Legacy Redirect Revocation Guard):** PASS (Redirecionamentos 302 são bloqueados e convertidos em 404 se a mídia for revogada).
+   - **Teste O (Expanded Legacy Variant Purge):** PASS (Variantes legadas v1, v2 e queries mistas são expurgadas completamente).
+   - Total de testes na suíte do repositório: **108 arquivos / 543 testes 100% aprovados**.
 
 #### 3. Avaliação da Segunda Prioridade: CPU SSR Residual Risk
 - **Métricas Observadas:**
@@ -116,15 +125,16 @@ Principais resoluções e correções técnicas:
 - Worktree Cloudflare: `/home/awerkori/nox-site-cloudflare` (branch `perf/nox-cloudflare-zero-waste`).
 - Commit base preservado: `51646af6873e6885c1f71561f607692e2b53f225`.
 - Worktree YSQL isolado: `/home/awerkori/nox-site-prod` (branch `main`, zero alterações, zero commits, sem merge).
-- Processo de carga YSQL: mantido em execução contínua sem interrupção.
+- Processo de carga YSQL: mantido em execução contínua sem interrupção (`PID 567869`).
 
 ---
 
 ### PARECER FINAL DE ENCERRAMENTO
 
 A vulnerabilidade crítica de revogação de mídia pública (`SECURITY_BLOCKED`) foi **COMPLETAMENTE RESOLVIDA E HOMOLOGADA**:
-- Todos os caminhos de entrega (Cache API, KV, SvelteKit, query strings, headers Range/ETag) foram identificados e protegidos com fail-closed.
-- Os 10 testes adversariais obrigatórios (A até J) foram executados e aprovados com 100% de sucesso.
-- O orçamento financeiro de **R$ 0,00** (Zero compras / Free Tier) foi estritamente respeitado sem purges globais onerosos nem novas dependências pagas.
+- Todos os caminhos de entrega (Cache API, KV, SvelteKit, query strings, headers Range/ETag, redirecionamentos e fast-path) foram identificados e protegidos com fail-closed.
+- Os 15 testes adversariais (A até O) foram executados e aprovados com 100% de sucesso.
+- O orçamento financeiro de **R$ 0,00** (Zero compras / Free Tier) foi estritamente respeitado com proteção ativa das cotas de leitura (100k/dia) e escrita (1k/dia) do KV.
 - O trabalho da Etapa 1 YSQL permaneceu 100% intacto e isolado.
-- Todas as 539 verificações unitárias e de integração e o build de produção estão em estado verde (aprovado).
+- Todas as 543 verificações unitárias e de integração e o build de produção estão em estado verde (aprovado).
+

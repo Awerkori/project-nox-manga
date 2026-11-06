@@ -654,4 +654,130 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
     expect(await isMediaRevoked(mediaId1, mockKv)).toBe(true);
     expect(await isMediaRevoked(mediaId2, mockKv)).toBe(true);
   });
+
+  // TEST L: Unrevoked media requests MUST NOT query KV tombstones (Cloudflare Free Tier 100k daily read quota)
+  it('Teste L: requisições a mídias normais não executam leituras de lápides no KV (Preservação de Cota Zero Waste)', async () => {
+    const mediaId = 'dddddddd-4444-4ddd-8ddd-dddddddddddd';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+    const origin = 'https://projectnox.org';
+
+    // Populate manifest with other revoked IDs, but NOT this mediaId
+    await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+      version: 1,
+      updatedAt: Date.now(),
+      revokedIds: ['some-other-revoked-id-1', 'some-other-revoked-id-2']
+    }));
+
+    // Seed cache with warm response
+    await mockCache.put(
+      new Request(`${origin}/media/${mediaId}`),
+      new Response('valid_image_data', {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg', 'ETag': '"sha_valid"' }
+      })
+    );
+
+    mockKv.get.mockClear();
+
+    // Perform 10 consecutive requests for the unrevoked media
+    for (let i = 0; i < 10; i++) {
+      const res = await getPublicMediaRoute({
+        locals: {}, params: { id: mediaId },
+        request: new Request(`${origin}/media/${mediaId}`),
+        platform: { env: { COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+        cookies: { getAll: () => [] }
+      });
+      expect(res.status).toBe(200);
+    }
+
+    // Inspect KV get calls: It MUST NOT query the individual tombstone!
+    const tombstoneKey = `${REVOCATION_KEY_PREFIX}${mediaId}`;
+    const tombstoneCalls = mockKv.get.mock.calls.filter((call: any[]) => call[0] === tombstoneKey);
+    expect(tombstoneCalls.length, 'Unrevoked media must NEVER query individual tombstone on cache hits').toBe(0);
+  });
+
+  // TEST M: Probes with non-existent UUIDs MUST NOT trigger KV writes (Cloudflare Free Tier 1k write limit DoS protection)
+  it('Teste M: UUIDs inexistentes não disparam escritas no KV (Proteção contra Esgotamento de Cota de Escrita)', async () => {
+    const nonExistentId = 'eeeeeeee-5555-4eee-8eee-eeeeeeeeeeee';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+    const origin = 'https://projectnox.org';
+
+    // ID is NOT in DB (mocks.mediaStore does not have it)
+    mockKv.put.mockClear();
+
+    const res = await getPublicMediaRoute({
+      locals: {}, params: { id: nonExistentId },
+      request: new Request(`${origin}/media/${nonExistentId}`),
+      platform: { env: { COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+
+    // Assert: mockKv.put was NEVER called (no fake tombstone written to KV)
+    expect(mockKv.put).not.toHaveBeenCalled();
+  });
+
+  // TEST N: Legacy redirect alias respects revocation
+  it('Teste N: redirecionamentos de alias legados respeitam revogação imediata', async () => {
+    const legacyId = 'bdaa2c94-260c-4f9c-85dc-edfc196815f1';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+    const origin = 'https://projectnox.org';
+
+    // 1. Before revocation: returns 302 redirect
+    const normalRes = await getPublicMediaRoute({
+      locals: {}, params: { id: legacyId },
+      request: new Request(`${origin}/media/${legacyId}`),
+      platform: { env: { COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+      cookies: { getAll: () => [] }
+    });
+    expect(normalRes.status).toBe(302);
+    expect(normalRes.headers.get('Location')).toBe('/media/4c86bd8d-1ad8-4142-a660-55fc0824b22a');
+
+    // 2. Revoke the legacy ID
+    await revokeMedia(legacyId, { kv: mockKv, cache: mockCache, origin, reason: 'REVOKED' });
+
+    // 3. After revocation: MUST NOT return 302! MUST return 404 with no-store!
+    const revokedRes = await getPublicMediaRoute({
+      locals: {}, params: { id: legacyId },
+      request: new Request(`${origin}/media/${legacyId}`),
+      platform: { env: { COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+      cookies: { getAll: () => [] }
+    });
+    expect(revokedRes.status).toBe(404);
+    expect(revokedRes.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  // TEST O: Expanded query string variants (?size=thumb&v=1, ?size=hero&v=2) are all evicted
+  it('Teste O: variantes legadas v1 e v2 são expurgadas na revogação', async () => {
+    const mediaId = 'ffffffff-6666-4fff-8fff-ffffffffffff';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+    const origin = 'https://projectnox.org';
+
+    const legacyVariants = [
+      `${origin}/media/${mediaId}?size=thumb&v=1`,
+      `${origin}/media/${mediaId}?size=hero&v=1`,
+      `${origin}/media/${mediaId}?size=thumb&v=2`,
+      `${origin}/media/${mediaId}?size=hero&v=2`
+    ];
+
+    for (const vUrl of legacyVariants) {
+      await mockCache.put(new Request(vUrl), new Response('legacy_data', { status: 200 }));
+    }
+
+    // Revoke
+    const result = await revokeMedia(mediaId, { kv: mockKv, cache: mockCache, origin, reason: 'DELETED' });
+    expect(result.success).toBe(true);
+
+    // All legacy variants must be purged from cache
+    for (const vUrl of legacyVariants) {
+      expect(await mockCache.match(vUrl), `Legacy variant ${vUrl} must be purged from cache`).toBeNull();
+    }
+  });
 });
+

@@ -178,18 +178,21 @@ const WORKER_REVOCATION_SYNC_INTERVAL_MS = 2000;
 
 let workerRevokedMediaSet = new Set();
 let workerLastRevocationSync = 0;
+let workerManifestLoaded = false;
 
-async function checkMediaRevocationWorker(mediaId, kv) {
+async function checkMediaRevocationWorker(mediaId, kv, options) {
   if (!mediaId) return false;
   if (workerRevokedMediaSet.has(mediaId)) return true;
   if (!kv) return false;
 
   const now = Date.now();
-  if (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS) {
+  const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
+  if (shouldSync) {
     try {
       workerLastRevocationSync = now;
       const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
       if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
+        workerManifestLoaded = true;
         for (const id of manifest.revokedIds) {
           workerRevokedMediaSet.add(id);
         }
@@ -198,13 +201,15 @@ async function checkMediaRevocationWorker(mediaId, kv) {
     } catch {}
   }
 
-  try {
-    const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
-    if (tombstone) {
-      workerRevokedMediaSet.add(mediaId);
-      return true;
-    }
-  } catch {}
+  if (options?.forceFresh || options?.checkTombstone || !workerManifestLoaded) {
+    try {
+      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+      if (tombstone) {
+        workerRevokedMediaSet.add(mediaId);
+        return true;
+      }
+    } catch {}
+  }
 
   return false;
 }
@@ -344,7 +349,8 @@ var worker_default = {
     if (url.pathname.startsWith('/media/') && (req.method === 'GET' || req.method === 'HEAD')) {
       const cache = typeof caches !== 'undefined' && caches.default;
       if (cache && !req.headers.has('authorization') && !shouldBypassSharedCache(req)) {
-        const mediaId = url.pathname.slice(7);
+        const rawId = url.pathname.slice(7);
+        const mediaId = rawId.replace(/\/+$/, '');
         if (/^[0-9a-f-]{36}$/i.test(mediaId)) {
           const sizeParam = url.searchParams.get('size');
           const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
@@ -358,14 +364,31 @@ var worker_default = {
               const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS);
               if (isRevoked) {
                 try {
-                  const deletePromise = Promise.allSettled([
+                  const deleteTasks = [
                     cache.delete(cacheKey),
+                    cache.delete(new Request(req.url, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}`, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=3`, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=3`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=2`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=2`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=1`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=1`, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb`, { method: 'GET' })),
-                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero`, { method: 'GET' }))
-                  ]);
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?v=3`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?v=2`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?v=1`, { method: 'GET' }))
+                  ];
+                  if (env2?.COVER_THUMBNAILS && typeof env2.COVER_THUMBNAILS.delete === 'function') {
+                    deleteTasks.push(
+                      env2.COVER_THUMBNAILS.delete(`cover-thumb:v1:${mediaId}`).catch(() => {}),
+                      env2.COVER_THUMBNAILS.delete(`cover-hero:v1:${mediaId}`).catch(() => {}),
+                      env2.COVER_THUMBNAILS.delete(`cover-thumb:v1:${mediaId}:warm`).catch(() => {}),
+                      env2.COVER_THUMBNAILS.delete(`cover-hero:v1:${mediaId}:warm`).catch(() => {})
+                    );
+                  }
+                  const deletePromise = Promise.allSettled(deleteTasks);
                   if (ctx && typeof ctx.waitUntil === 'function') {
                     ctx.waitUntil(deletePromise);
                   } else {
@@ -373,7 +396,7 @@ var worker_default = {
                   }
                 } catch {}
 
-                return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+                return new Response(req.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
                   status: 404,
                   headers: {
                     'Content-Type': 'application/json',

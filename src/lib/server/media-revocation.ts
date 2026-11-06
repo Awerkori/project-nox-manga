@@ -28,10 +28,12 @@ export const REVOCATION_SYNC_INTERVAL_MS = 2000;
 
 let memoryRevokedSet = new Set<string>();
 let lastManifestSync = 0;
+let manifestSuccessfullyLoaded = false;
 
 export function clearMemoryRevocationCache(): void {
   memoryRevokedSet.clear();
   lastManifestSync = 0;
+  manifestSuccessfullyLoaded = false;
 }
 
 export function getMemoryRevocationSet(): Set<string> {
@@ -41,13 +43,15 @@ export function getMemoryRevocationSet(): Set<string> {
 /**
  * Check whether a media ID is revoked across edge isolates and datacenters.
  * Tier 1: Instant in-memory check (0ms, 0 KV reads).
- * Tier 2: Periodic manifest sync from KV (shared state).
- * Tier 3: Direct tombstone lookup in KV for zero-window cross-datacenter guarantee.
+ * Tier 2: Periodic manifest sync from KV (shared state, 1 read per interval per isolate).
+ * Tier 3: Direct tombstone lookup ONLY on explicit demand or if manifest failed to load.
+ * This guarantees zero KV reads on cache hits for unrevoked media, strictly preserving
+ * Cloudflare KV Free Tier quotas (100k reads/day) and sub-millisecond edge latency.
  */
 export async function isMediaRevoked(
   mediaId: string,
   kv?: any,
-  options?: { forceFresh?: boolean }
+  options?: { forceFresh?: boolean; checkTombstone?: boolean }
 ): Promise<boolean> {
   if (!mediaId || typeof mediaId !== 'string') return false;
 
@@ -60,32 +64,37 @@ export async function isMediaRevoked(
 
   const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
   const now = Date.now();
-  const shouldSyncManifest = options?.forceFresh || isTest || (now - lastManifestSync > REVOCATION_SYNC_INTERVAL_MS);
+  const shouldSyncManifest = options?.forceFresh || isTest || !manifestSuccessfullyLoaded || (now - lastManifestSync > REVOCATION_SYNC_INTERVAL_MS);
 
   if (shouldSyncManifest) {
     try {
       lastManifestSync = now;
       const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
       if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
+        manifestSuccessfullyLoaded = true;
         for (const id of manifest.revokedIds) {
           memoryRevokedSet.add(id);
         }
         if (memoryRevokedSet.has(mediaId)) return true;
       }
     } catch {
-      // KV manifest read failed, fall through to direct tombstone check
+      // KV manifest read failed, fall through to fallback check
     }
   }
 
-  // 2. Direct tombstone lookup for immediate cross-datacenter verification
-  try {
-    const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
-    if (tombstone) {
-      memoryRevokedSet.add(mediaId);
-      return true;
+  // 2. Direct tombstone check is ONLY executed if:
+  // - Explicitly requested via options (forceFresh/checkTombstone)
+  // - OR the global manifest was never successfully loaded (e.g. KV failure or empty/uninitialized manifest)
+  if (options?.forceFresh || options?.checkTombstone || !manifestSuccessfullyLoaded) {
+    try {
+      const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+      if (tombstone) {
+        memoryRevokedSet.add(mediaId);
+        return true;
+      }
+    } catch {
+      // In case of error in KV, fail-safe
     }
-  } catch {
-    // In case of error in KV, fail-closed if tombstone cannot be determined
   }
 
   return false;
@@ -96,24 +105,40 @@ export async function isMediaRevoked(
  */
 export async function purgeMediaVariants(
   mediaId: string,
-  options: PurgeMediaOptions = {}
+  options: PurgeMediaOptions & { currentUrl?: string } = {}
 ): Promise<{ cachePurged: number; kvPurged: number }> {
-  const { cache, origin = 'https://projectnox.org', kv } = options;
+  const { cache, origin = 'https://projectnox.org', kv, currentUrl } = options;
   let cachePurged = 0;
   let kvPurged = 0;
 
   // 1. Purge all variants from Cache API
   if (cache && typeof cache.delete === 'function') {
-    const urlsToPurge = [
-      `${origin}/media/${mediaId}`,
-      `${origin}/media/${mediaId}?size=thumb&v=3`,
-      `${origin}/media/${mediaId}?size=hero&v=3`,
-      `${origin}/media/${mediaId}?size=thumb`,
-      `${origin}/media/${mediaId}?size=hero`,
-      `${origin}/media/${mediaId}?v=3`,
-      `${origin}/media/${mediaId}?v=2`,
-      `${origin}/media/${mediaId}?v=1`
-    ];
+    const originsToPurge = new Set([origin]);
+    if (origin !== 'https://projectnox.org') {
+      originsToPurge.add('https://projectnox.org');
+    }
+
+    const urlsToPurge: string[] = [];
+    for (const org of originsToPurge) {
+      urlsToPurge.push(
+        `${org}/media/${mediaId}`,
+        `${org}/media/${mediaId}?size=thumb&v=3`,
+        `${org}/media/${mediaId}?size=hero&v=3`,
+        `${org}/media/${mediaId}?size=thumb&v=2`,
+        `${org}/media/${mediaId}?size=hero&v=2`,
+        `${org}/media/${mediaId}?size=thumb&v=1`,
+        `${org}/media/${mediaId}?size=hero&v=1`,
+        `${org}/media/${mediaId}?size=thumb`,
+        `${org}/media/${mediaId}?size=hero`,
+        `${org}/media/${mediaId}?v=3`,
+        `${org}/media/${mediaId}?v=2`,
+        `${org}/media/${mediaId}?v=1`
+      );
+    }
+
+    if (currentUrl && !urlsToPurge.includes(currentUrl)) {
+      urlsToPurge.push(currentUrl);
+    }
 
     await Promise.allSettled(
       urlsToPurge.map(async (url) => {

@@ -122,6 +122,20 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   // Preserve heavy 31MB uncompressed original and typo alias by redirecting to the 5.6MB optimized animated avatar
   if (params.id === 'bdaa2c94-260c-4f9c-85dc-edfc196815f1' || params.id === '4c812f93-6bb1-40f9-9151-dc2d20e86e5e') {
+    const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+    if (isRevoked) {
+      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+    }
     return new Response(null, {
       status: 302,
       headers: {
@@ -154,9 +168,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
         if (isRevoked) {
           if (platform?.context?.waitUntil) {
-            platform.context.waitUntil(purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS }));
+            platform.context.waitUntil(purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS, currentUrl: request.url }));
           } else {
-            await purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS });
+            await purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS, currentUrl: request.url });
           }
           return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
             status: 404,
@@ -192,9 +206,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
     if (isRevoked) {
       if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS }));
+        platform.context.waitUntil(purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS, currentUrl: request.url }));
       } else {
-        await purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS });
+        await purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS, currentUrl: request.url });
       }
       return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
@@ -220,12 +234,12 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    if (platform?.env?.COVER_THUMBNAILS) {
+    if (media && platform?.env?.COVER_THUMBNAILS) {
       const purgeTask = revokeMedia(params.id, {
         kv: platform.env.COVER_THUMBNAILS,
         cache,
         origin: url.origin,
-        reason: 'DELETED'
+        reason: media.status || 'DELETED'
       }).catch(() => {});
       if (platform?.context?.waitUntil) {
         platform.context.waitUntil(purgeTask);
