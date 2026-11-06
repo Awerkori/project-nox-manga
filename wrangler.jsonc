@@ -22,6 +22,10 @@
   "observability": {
     "enabled": true
   },
+  "cache": {
+    "enabled": true,
+    "cross_version_cache": true
+  },
   "placement": {
     "mode": "off"
   },

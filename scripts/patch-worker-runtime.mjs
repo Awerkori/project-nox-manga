@@ -58,7 +58,12 @@ function patchGeneratedWorker() {
     headers: cacheHeaders
   });
 
-  ctx.waitUntil(cache.put(req, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
+  const putReq = typeof req === 'string'
+    ? req
+    : req.method === 'HEAD'
+      ? new Request(req.url, { method: 'GET', headers: req.headers })
+      : req;
+  ctx.waitUntil(cache.put(putReq, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
   return clientRes;
 };`;
   if (content.includes(rawWorktopT)) {
@@ -154,7 +159,7 @@ function getSharedCacheKey(req) {
 
 const WORKER_REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
 const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
-const WORKER_REVOCATION_SYNC_INTERVAL_MS = 2000;
+const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
 let workerLastRevocationSync = 0;
@@ -194,7 +199,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
   return false;
 }`;
 
-  content = content.replace(/const AUTHENTICATED_SESSION_COOKIE[\s\S]*?function getSharedCacheKey\(req\)[\s\S]*?\n\}/m, sharedCacheLogic);
+  content = content.replace(/const AUTHENTICATED_SESSION_COOKIE[\s\S]*?async function checkMediaRevocationWorker[\s\S]*?\n\}/m, sharedCacheLogic);
   if (!content.includes('getSharedCacheKey')) {
     content = content.replace('var worker_default = {', `${sharedCacheLogic}\n\nvar worker_default = {`);
   }
@@ -266,6 +271,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
                     cache.delete(cacheKey),
                     cache.delete(new Request(req.url, { method: 'GET' })),
                     cache.delete(new Request(\`\${url.origin}/media/\${mediaId}\`, { method: 'GET' })),
+                    cache.delete(new Request(\`\${url.origin}/media/\${mediaId}/\`, { method: 'GET' })),
                     cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=thumb&v=3\`, { method: 'GET' })),
                     cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=hero&v=3\`, { method: 'GET' })),
                     cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=thumb&v=2\`, { method: 'GET' })),

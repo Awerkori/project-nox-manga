@@ -61,6 +61,15 @@ describe('Zero-Worker Architecture Verification Suite', () => {
     expect(wranglerConfig.triggers?.crons).toEqual(['0 * * * *']);
   });
 
+  it('enforces native Workers Caching in wrangler.jsonc for zero worker invocation on cache hits', () => {
+    const wranglerPath = path.join(root, 'wrangler.jsonc');
+    const wranglerConfig = JSON.parse(fs.readFileSync(wranglerPath, 'utf8'));
+
+    expect(wranglerConfig.cache).toBeDefined();
+    expect(wranglerConfig.cache?.enabled).toBe(true);
+    expect(wranglerConfig.cache?.cross_version_cache).toBe(true);
+  });
+
   it('routes member action directly and securely to /api/action without legacy Supabase RPC', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

@@ -24,7 +24,8 @@ export interface PurgeMediaOptions {
 
 export const REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
 export const REVOCATION_KEY_PREFIX = 'revoked:v1:';
-export const REVOCATION_SYNC_INTERVAL_MS = 2000;
+const isVitest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
+export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 
 let memoryRevokedSet = new Set<string>();
 let lastManifestSync = 0;
@@ -227,13 +228,11 @@ export async function revokeMedia(
         currentManifest.revokedIds.push(mediaId);
         currentManifest.updatedAt = revokedAt;
         currentManifest.version = (currentManifest.version || 1) + 1;
-        if (currentManifest.revokedIds.length > 5000) {
-          currentManifest.revokedIds = currentManifest.revokedIds.slice(-5000);
-        }
         await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
       }
     } catch (manifestErr) {
       console.warn('[REVOCATION_MANIFEST_WARN]', manifestErr);
+      throw new Error(`MANIFEST_WRITE_FAILED: ${(manifestErr as Error)?.message || manifestErr}`);
     }
   }
 

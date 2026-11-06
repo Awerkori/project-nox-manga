@@ -247,4 +247,21 @@ describe('Zero Waste Cloudflare Optimizations', () => {
       expect(source).toContain("'Cloudflare-CDN-Cache-Control': 'no-store'");
     }
   });
+
+  it('guarantees stable canonical image URLs in Mihon pages matching web reader for shared CDN caching', () => {
+    const chapterRoute = readFileSync('src/routes/api/mihon/chapter/[id]/pages/+server.ts', 'utf8');
+    const mediaRoute = readFileSync('src/routes/media/[id]/+server.ts', 'utf8');
+
+    // Mihon pages uses canonical /media/{media_id} without query string or user token
+    expect(chapterRoute).toContain('url: `${origin}/media/${p.media_id}`');
+
+    // Media route returns 1-year immutable caching for public media
+    expect(mediaRoute).toContain("'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable'");
+    expect(mediaRoute).toContain("'CDN-Cache-Control': 'public, max-age=31536000'");
+    expect(mediaRoute).toContain("'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000'");
+
+    // Private or adult media strictly enforces no-store
+    expect(mediaRoute).toContain("'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'");
+    expect(mediaRoute).toContain("'CDN-Cache-Control': 'no-store'");
+  });
 });

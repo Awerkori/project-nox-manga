@@ -52,38 +52,66 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
     error(400, 'JSON inválido');
   }
 
-  const mediaIds: string[] = Array.isArray(body?.mediaIds)
+  const rawIds: string[] = Array.isArray(body?.mediaIds)
     ? body.mediaIds
     : body?.mediaId
     ? [body.mediaId]
     : [];
 
-  if (mediaIds.length === 0) {
+  if (rawIds.length === 0) {
     error(400, 'mediaId ou mediaIds obrigatório');
   }
 
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   const kv = platform?.env?.COVER_THUMBNAILS;
-  const results = [];
 
-  for (const id of mediaIds) {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) continue;
-    const res = await revokeMedia(id, {
-      kv,
-      cache,
-      origin: url.origin,
-      reason: body.reason || 'MANUAL_REVOCATION',
-      accessClass: body.accessClass,
-      status: body.status
-    });
-    results.push(res);
+  const processedIds: string[] = [];
+  const revokedIds: string[] = [];
+  const pendingIds: string[] = [];
+  const invalidIds: string[] = [];
+  const errors: Array<{ mediaId: string; error: string }> = [];
+  const results: any[] = [];
+
+  for (const rawId of rawIds) {
+    const id = typeof rawId === 'string' ? rawId.trim() : '';
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+      invalidIds.push(id);
+      continue;
+    }
+
+    processedIds.push(id);
+    try {
+      const res = await revokeMedia(id, {
+        kv,
+        cache,
+        origin: url.origin,
+        reason: body.reason || 'MANUAL_REVOCATION',
+        accessClass: body.accessClass,
+        status: body.status
+      });
+      revokedIds.push(id);
+      results.push(res);
+    } catch (err: any) {
+      pendingIds.push(id);
+      errors.push({ mediaId: id, error: err?.message || 'REVOCATION_FAILED' });
+    }
   }
 
+  const allSucceeded = errors.length === 0 && invalidIds.length === 0;
+
   return json({
-    success: true,
-    revokedCount: results.length,
+    success: allSucceeded,
+    revokedCount: revokedIds.length,
+    totalRequested: rawIds.length,
+    processedIds,
+    revokedIds,
+    pendingIds,
+    invalidIds,
+    errors,
+    retryRequired: errors.length > 0,
     results
   }, {
+    status: allSucceeded ? 200 : (revokedIds.length > 0 ? 207 : 400),
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
     }

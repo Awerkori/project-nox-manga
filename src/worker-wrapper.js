@@ -34,7 +34,12 @@ function t(cache, req, res, ctx) {
     headers: cacheHeaders
   });
 
-  ctx.waitUntil(cache.put(req, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
+  const putReq = typeof req === 'string'
+    ? req
+    : req.method === 'HEAD'
+      ? new Request(req.url, { method: 'GET', headers: req.headers })
+      : req;
+  ctx.waitUntil(cache.put(putReq, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
   return clientRes;
 };
 var n = /* @__PURE__ */ new Set([200, 203, 204, 300, 301, 404, 405, 410, 414, 501]);
@@ -174,7 +179,7 @@ function getSharedCacheKey(req) {
 
 const WORKER_REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
 const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
-const WORKER_REVOCATION_SYNC_INTERVAL_MS = 2000;
+const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
 let workerLastRevocationSync = 0;
@@ -368,6 +373,7 @@ var worker_default = {
                     cache.delete(cacheKey),
                     cache.delete(new Request(req.url, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}/`, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=3`, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=3`, { method: 'GET' })),
                     cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=2`, { method: 'GET' })),
