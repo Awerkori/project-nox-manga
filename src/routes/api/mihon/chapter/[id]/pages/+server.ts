@@ -106,7 +106,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
   const cacheControl =
     chapter.content_rating === 'ADULT_18'
       ? 'private, no-cache, no-store, must-revalidate'
-      : 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
+      : 'public, max-age=300, s-maxage=3600, stale-while-revalidate=3600';
 
   if (matchesETag(request.headers.get('if-none-match'), etag)) {
     return new Response(null, {

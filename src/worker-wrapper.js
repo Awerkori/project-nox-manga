@@ -131,8 +131,13 @@ function getSharedCacheKey(req) {
             }
           } else if (param === 'ordem') {
             if (val !== 'recentes') normalizedParams.set('ordem', val);
+          } else if (param === 'q') {
+            const cleanQ = val.trim().toLowerCase().replace(/\s+/g, ' ');
+            if (cleanQ) normalizedParams.set('q', cleanQ);
+          } else if (param === 'tipo' || param === 'status') {
+            normalizedParams.set(param, val.trim().toUpperCase());
           } else {
-            normalizedParams.set(param, val);
+            normalizedParams.set(param, val.trim());
           }
         }
       }
@@ -228,6 +233,30 @@ var worker_default = {
           'Allow': 'GET, HEAD',
           'Cache-Control': 'public, max-age=86400',
           'Content-Type': 'text/plain; charset=utf-8'
+        }
+      });
+    }
+
+    // Vulnerability scanner & probe fast-path rejection: block dotfiles and common PHP/exploit scans before SSR
+    const pLower = url.pathname.toLowerCase();
+    const isDotfileProbe = (pLower.startsWith('/.') || pLower.includes('/.')) && !pLower.startsWith('/.well-known/');
+    const isExploitProbe =
+      pLower.startsWith('/wp-') ||
+      pLower === '/xmlrpc.php' ||
+      pLower.endsWith('.php') ||
+      pLower.endsWith('.bak') ||
+      pLower.endsWith('.sql') ||
+      pLower.endsWith('.env') ||
+      pLower.endsWith('.conf') ||
+      pLower.endsWith('.ini');
+
+    if (isDotfileProbe || isExploitProbe) {
+      return new Response('Not Found', {
+        status: 404,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+          'X-Robots-Tag': 'noindex, nofollow'
         }
       });
     }
@@ -372,6 +401,18 @@ var worker_default = {
     const sharedCacheKey = !cacheBypassRequest ? getSharedCacheKey(req) : null;
     let res = !cacheBypassRequest && !pragma.includes("no-cache") && sharedCacheKey && await r2(sharedCacheKey);
     if (res) {
+      const etag = res.headers.get('etag');
+      const ifNoneMatch = req.headers.get('if-none-match');
+      if (etag && ifNoneMatch) {
+        const cleanEtag = etag.trim().replace(/^W\//, '');
+        const isMatch = ifNoneMatch.trim() === '*' ||
+          ifNoneMatch.split(',').some((t) => t.trim().replace(/^W\//, '') === cleanEtag);
+        if (isMatch) {
+          const headers = new Headers(res.headers);
+          headers.set('X-Nox-Edge-Cache', 'HIT');
+          return new Response(null, { status: 304, headers });
+        }
+      }
       res = new Response(res.body, res);
       res.headers.set('X-Nox-Edge-Cache', 'HIT');
       return res;
