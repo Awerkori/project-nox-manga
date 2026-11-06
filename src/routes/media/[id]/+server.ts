@@ -15,6 +15,7 @@ import {
   readBoundedCoverResponse,
   readCoverThumbnail
 } from '$lib/server/cover-thumbnail-cache';
+import { isMediaRevoked, revokeMedia, purgeMediaVariants } from '$lib/server/media-revocation';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -144,12 +145,31 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // that buffered a complete small original merely to make a thumbnail.
   const canonicalUrl = coverVariant ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
-  const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
+  const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
   const hasAuth = Boolean(auth) || Boolean(extractFullAuthCookie(cookies.getAll()));
   if (cache && !internalCoverWarm && !hasAuth) {
     try {
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
+        const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+        if (isRevoked) {
+          if (platform?.context?.waitUntil) {
+            platform.context.waitUntil(purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS }));
+          } else {
+            await purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS });
+          }
+          return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+            status: 404,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+              'CDN-Cache-Control': 'no-store',
+              'Cloudflare-CDN-Cache-Control': 'no-store',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+        }
         const etag = cached.headers.get('ETag');
         if (etag && request.headers.get('if-none-match') === etag) {
           const res = new Response(null, { status: 304, headers: cached.headers });
@@ -169,6 +189,26 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
   // on another region/device. Never use it for full pages or private media.
   if (coverVariant) {
+    const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+    if (isRevoked) {
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS }));
+      } else {
+        await purgeMediaVariants(params.id, { cache, origin: url.origin, kv: platform?.env?.COVER_THUMBNAILS });
+      }
+      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+    }
+
     const prewarmed = await readCoverThumbnail(
       platform?.env?.COVER_THUMBNAILS,
       params.id,
@@ -180,7 +220,32 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
+    if (platform?.env?.COVER_THUMBNAILS) {
+      const purgeTask = revokeMedia(params.id, {
+        kv: platform.env.COVER_THUMBNAILS,
+        cache,
+        origin: url.origin,
+        reason: 'DELETED'
+      }).catch(() => {});
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(purgeTask);
+      }
+    }
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
+      status: 404,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
+  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS)) {
+    return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -242,6 +307,17 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
     const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
     if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
+      if (platform?.env?.COVER_THUMBNAILS) {
+        const purgeTask = revokeMedia(params.id, {
+          kv: platform.env.COVER_THUMBNAILS,
+          cache,
+          origin: url.origin,
+          reason: media.access_class || 'RESTRICTED'
+        }).catch(() => {});
+        if (platform?.context?.waitUntil) {
+          platform.context.waitUntil(purgeTask);
+        }
+      }
       return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
@@ -546,7 +622,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
   const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);
-  if (cache && isPublic && isCachableAtEdge) {
+  const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+  if (cache && isPublic && isCachableAtEdge && !isRevoked) {
     try {
       const cacheResponse = response.clone();
       if (platform?.context?.waitUntil) {

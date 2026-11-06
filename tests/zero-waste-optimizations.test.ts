@@ -231,4 +231,20 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(chapterRoute).toContain('chapterTime');
     expect(chapterRoute).toContain('matchesETag(request.headers.get(\'if-none-match\'), etag)');
   });
+
+  it('enforces media revocation verification and cache eviction on edge cache fast-path in worker wrapper and patcher', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+    const patcher = readFileSync('scripts/patch-worker-runtime.mjs', 'utf8');
+
+    for (const source of [wrapper, patcher]) {
+      expect(source).toContain('WORKER_REVOCATION_MANIFEST_KEY');
+      expect(source).toContain('WORKER_REVOCATION_KEY_PREFIX');
+      expect(source).toContain('checkMediaRevocationWorker');
+      expect(source).toContain('const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS);');
+      expect(source).toContain('cache.delete(cacheKey)');
+      expect(source).toContain("status: 404");
+      expect(source).toContain("'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'");
+      expect(source).toContain("'Cloudflare-CDN-Cache-Control': 'no-store'");
+    }
+  });
 });

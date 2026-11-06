@@ -1,3 +1,5 @@
+import { isMediaRevoked } from '$lib/server/media-revocation';
+
 export const MAX_COVER_THUMBNAIL_BYTES = 2 * 1024 * 1024;
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
 
@@ -15,6 +17,7 @@ type ThumbnailKv = {
     metadata: ThumbnailMetadata | null;
   } | null>;
   put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata }): Promise<void>;
+  delete?(key: string): Promise<void>;
 };
 
 // Publication can be retried or observed by more than one request in the same
@@ -45,6 +48,7 @@ export async function persistCoverThumbnail(
     return 'skipped';
   }
   if (!metadata.contentType?.startsWith('image/')) return 'skipped';
+  if (await isMediaRevoked(mediaId, kv)) return 'skipped';
   await kv.put(coverThumbnailKey(mediaId, variant), bytes, {
     metadata: {
       contentType: metadata.contentType,
@@ -108,6 +112,12 @@ export async function readCoverThumbnail(
   variant: CoverVariant = 'thumb'
 ): Promise<Response | null> {
   if (!kv || !isMediaId(mediaId)) return null;
+  if (await isMediaRevoked(mediaId, kv)) {
+    if (typeof (kv as any).delete === 'function') {
+      void (kv as any).delete(coverThumbnailKey(mediaId, variant)).catch(() => {});
+    }
+    return null;
+  }
   const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
   if (!cached?.value) return null;
 

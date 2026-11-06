@@ -150,6 +150,43 @@ function getSharedCacheKey(req) {
   } catch {
     return null;
   }
+}
+
+const WORKER_REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
+const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
+const WORKER_REVOCATION_SYNC_INTERVAL_MS = 2000;
+
+let workerRevokedMediaSet = new Set();
+let workerLastRevocationSync = 0;
+
+async function checkMediaRevocationWorker(mediaId, kv) {
+  if (!mediaId) return false;
+  if (workerRevokedMediaSet.has(mediaId)) return true;
+  if (!kv) return false;
+
+  const now = Date.now();
+  if (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS) {
+    try {
+      workerLastRevocationSync = now;
+      const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+      if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
+        for (const id of manifest.revokedIds) {
+          workerRevokedMediaSet.add(id);
+        }
+        if (workerRevokedMediaSet.has(mediaId)) return true;
+      }
+    } catch {}
+  }
+
+  try {
+    const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+    if (tombstone) {
+      workerRevokedMediaSet.add(mediaId);
+      return true;
+    }
+  } catch {}
+
+  return false;
 }`;
 
   content = content.replace(/const AUTHENTICATED_SESSION_COOKIE[\s\S]*?function getSharedCacheKey\(req\)[\s\S]*?\n\}/m, sharedCacheLogic);
@@ -216,6 +253,37 @@ function getSharedCacheKey(req) {
           try {
             const cached = await cache.match(cacheKey);
             if (cached && cached.status === 200) {
+              const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS);
+              if (isRevoked) {
+                try {
+                  const deletePromise = Promise.allSettled([
+                    cache.delete(cacheKey),
+                    cache.delete(new Request(\`\${url.origin}/media/\${mediaId}\`, { method: 'GET' })),
+                    cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=thumb&v=3\`, { method: 'GET' })),
+                    cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=hero&v=3\`, { method: 'GET' })),
+                    cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=thumb\`, { method: 'GET' })),
+                    cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?size=hero\`, { method: 'GET' }))
+                  ]);
+                  if (ctx && typeof ctx.waitUntil === 'function') {
+                    ctx.waitUntil(deletePromise);
+                  } else {
+                    await deletePromise;
+                  }
+                } catch {}
+
+                return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+                  status: 404,
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                    'CDN-Cache-Control': 'no-store',
+                    'Cloudflare-CDN-Cache-Control': 'no-store',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                  }
+                });
+              }
+
               const headers = new Headers(cached.headers);
               headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
               headers.set('Access-Control-Allow-Origin', '*');
