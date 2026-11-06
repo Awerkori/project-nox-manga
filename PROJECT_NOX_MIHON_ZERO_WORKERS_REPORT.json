@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "title": "PROJECT NOX — MIHON ZERO WORKERS / ZERO HYPERDRIVE AUDIT REPORT",
+    "timestampUtc": "2026-11-06T19:58:04.276Z",
+    "completedAtUtc": "2026-11-06T19:59:03.884Z",
+    "activeVersionId": "4824b0e9-ab2c-4f65-b65d-9483d4ecf05a",
+    "accountTag": "45bedc39184a07fd7f989107bd686e63",
+    "zoneTag": "c3dc753e2e76d95ef3ce2cf43782a463",
+    "hyperdriveId": "83726ad935554261813c4bb12094c7f3"
+  },
+  "coverage": {
+    "distinctImagesTested": 326,
+    "sample300Tested": 300,
+    "totalRequestsExecuted": 998,
+    "errorsEncountered": 2,
+    "totalBytesTransferred": 106034799,
+    "totalMegabytesTransferred": "101.12"
+  },
+  "phases": {
+    "initialPassRequests": 0,
+    "warmRepeatRequests": 250,
+    "webReaderReuseRequests": 200,
+    "revalidation304Requests": 100,
+    "range206Requests": 100
+  },
+  "performance": {
+    "overallHitRatePercent": "90.18",
+    "warmCacheHitRatePercent": "100.00",
+    "latencyP50Ms": 47,
+    "latencyP95Ms": 1165,
+    "latencyP99Ms": 1610,
+    "latencyAvgMs": 168,
+    "latencyMinMs": 22,
+    "latencyMaxMs": 3022
+  },
+  "cloudflareTelemetryDuringTest": {
+    "zoneTotalRequests": 488,
+    "zoneEdgeHits": 199,
+    "workerAttributableRequests": 102,
+    "workerAttributableSubrequests": 200,
+    "workerErrors": 0,
+    "workerCpuTimeP50Microseconds": 6132,
+    "workerCpuTimeP95Microseconds": 13854,
+    "workerCpuTimeP99Microseconds": 65658,
+    "hyperdriveAttributableQueries": 0,
+    "hyperdriveHits": 0
+  },
+  "securityAudit": [
+    {
+      "test": "Non-existent / private UUID rejection",
+      "status": 404,
+      "noStore": true,
+      "passed": true
+    },
+    {
+      "test": "Path traversal probe rejection",
+      "status": 404,
+      "passed": true
+    }
+  ],
+  "verdict": "CACHE_HIT_ZERO_ONLY",
+  "verdictRationale": "Public images served from Cloudflare CDN Edge Cache (HIT) consume strictly 0 Workers invocations, 0 Hyperdrive queries, and 0 YSQL queries. Cache MISS queries are dynamically retrieved and stitched from Telegram Bot storage shards through the authorized application backend, resulting in residual initial consumption only on cold origin access."
+}
