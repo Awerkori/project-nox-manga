@@ -113,4 +113,35 @@ describe('Zero-Worker Architecture Verification Suite', () => {
     expect(chContent).toContain('s-maxage=3600');
     expect(workContent).toContain('s-maxage=300');
   });
+
+  it('validates Mihon zero-worker benchmark report integrity and regulatory criteria', () => {
+    const reportPath = path.join(root, 'PROJECT_NOX_MIHON_ZERO_WORKERS_REPORT.json');
+    if (!fs.existsSync(reportPath)) return;
+
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    expect(report.coverage.distinctImagesTested).toBeGreaterThanOrEqual(300);
+    expect(report.coverage.sample300Tested).toBeGreaterThanOrEqual(300);
+    expect(report.coverage.totalRequestsExecuted).toBeGreaterThanOrEqual(1000);
+
+    const phases = report.phases;
+    expect(phases.initialProtocolRequests).toBeGreaterThanOrEqual(300);
+    expect(phases.sequentialChapterRequests).toBeGreaterThan(0);
+    expect(phases.warmRepeatRequests).toBeGreaterThan(0);
+    expect(phases.webReaderReuseRequests).toBeGreaterThan(0);
+    expect(phases.revalidation304Requests).toBeGreaterThan(0);
+    expect(phases.range206Requests).toBeGreaterThan(0);
+
+    const sumPhases =
+      phases.initialProtocolRequests +
+      phases.sequentialChapterRequests +
+      phases.warmRepeatRequests +
+      phases.webReaderReuseRequests +
+      phases.revalidation304Requests +
+      phases.range206Requests;
+    expect(sumPhases).toBe(report.coverage.totalRequestsExecuted);
+
+    expect(report.performance.warmCacheHitRatePercent).toBe('100.00');
+    expect(report.securityAudit.every((s: any) => s.passed)).toBe(true);
+    expect(report.verdict).toBe('CACHE_HIT_ZERO_ONLY');
+  });
 });

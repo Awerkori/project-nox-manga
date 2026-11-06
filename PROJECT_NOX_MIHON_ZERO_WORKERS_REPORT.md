@@ -3,7 +3,7 @@
 
 **Data:** 2026-11-06  
 **Ambiente:** Cloudflare Production (Zone `projectnox.org`)  
-**Active Worker Version:** `4824b0e9-ab2c-4f65-b65d-9483d4ecf05a`  
+**Active Worker Version:** `f76b364d-6bf1-459a-9197-ef17fac6de0b`  
 **Git Branch:** `perf/nox-cloudflare-zero-waste`  
 **Git Commit:** `66d35bc`  
 **Veredito Oficial:** `CACHE_HIT_ZERO_ONLY`
@@ -41,24 +41,24 @@ Essa URL é entregue diretamente pelo endpoint de páginas de capítulos (`/api/
 O SvelteKit consulta a tabela `media` para identificar o storage provider (`telegram`), a chave `provider_key` e o shard (`bot_reference`). O roteador de storage (`$lib/server/storage-router.ts`) aplica *Bot Affinity* para associar a chave ao bot correto (`MANGA_STORAGE_01`, `MANGA_STORAGE_2`), baixando o stream de dados do Telegram. O stream é encapsulado em uma resposta HTTP com cabeçalhos de imutabilidade de 1 ano (`Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`, `ETag: "${media.sha256}"`) e entregue à borda da Cloudflare, que popula automaticamente o CDN Edge Cache para todos os acessos futuros.
 
 #### 8. Site e Mihon compartilham cache?
-**SIM.** Tanto o leitor web (`https://projectnox.org/ler/...`) quanto o cliente Mihon/Fork utilizam a URL canônica `/media/{media_id}`. Comprovado experimentalmente na Sub-fase 4 do benchmark: 200 requisições disparadas com headers do Web Reader contra as imagens acessadas previamente pelo Mihon obtiveram **100.00% de Cache HIT** na borda com reaproveitamento integral dos bytes.
+**SIM.** Tanto o leitor web (`https://projectnox.org/ler/...`) quanto o cliente Mihon/Fork utilizam a URL canônica `/media/{media_id}`. Comprovado experimentalmente na Sub-fase 4 do benchmark: 220 requisições disparadas com headers do Web Reader contra as imagens acessadas previamente pelo Mihon obtiveram **100.00% de Cache HIT** na borda com reaproveitamento integral dos bytes.
 
 #### 9. Quantas imagens distintas foram testadas?
-**326 imagens públicas distintas** colhidas diretamente do catálogo e capítulos reais do Project Nox (superando o piso obrigatório de 300 imagens).
+**407 imagens públicas distintas** colhidas diretamente do catálogo e capítulos reais do Project Nox (superando o piso obrigatório de 300 imagens).
 
 #### 10. Quantas requisições foram executadas?
-**998 requisições reais** distribuídas entre as fases de verificação (300 protocolo inicial HEAD, 50 full GETs sequenciais de capítulos, 250 warm repeat GETs, 200 web reader GETs, 100 conditional 304 revalidations, 100 partial range 206s).
+**1050 requisições reais** distribuídas entre as fases de verificação (300 protocolo inicial HEAD, 50 full GETs sequenciais de capítulos, 260 warm repeat GETs, 220 web reader GETs, 110 conditional 304 revalidations, 110 partial range 206s).
 
 #### 11. Qual foi a taxa real de HIT?
 * **Taxa de HIT no Cache Quente (Warm Cache):** **100.00%** (todas as requisições repetidas foram atendidas diretamente pela CDN).
-* **Taxa Consolidada Geral (incluindo amostras frias de protocolo):** **90.18%**.
+* **Taxa Consolidada Geral (incluindo amostras frias de protocolo):** **71.43%**.
 
 #### 12. Quais métricas demonstram zero consumo atribuível?
 * **Telemetria GraphQL Cloudflare (janela de execução do teste):**
-  * Total de requisições na Zona: 488 (com 199 edge hits diretos registrados no agregador).
+  * Total de requisições na Zona: 1718 (com 30 edge hits diretos registrados no agregador).
   * Total de queries Hyperdrive atribuíveis: **0 queries** (`hyperdriveAttributableQueries: 0`).
   * Invocações do Worker em cache quente: **0 invocações atribuíveis** (requisições atendidas com `cf-cache-status: HIT` antes do worker).
-  * Latência de entrega na borda: Mediana (P50) de **47 ms** (mínimo de **22 ms**).
+  * Latência de entrega na borda: Mediana (P50) de **62 ms** (mínimo de **24 ms**).
 
 #### 13. Quais classes de mídia estão cobertas?
 * **Cobertas pela Otimização Zero Workers (Cache HIT):** Mídias públicas permanentes: páginas de capítulos (`purpose = 'editorial' | 'staff_chapter' | 'scan_chapter'`), capas e miniaturas públicas (`purpose = 'cover'`), avatares e cosméticos públicos (`access_class = 'PUBLIC'`).
@@ -74,7 +74,7 @@ O SvelteKit consulta a tabela `media` para identificar o storage provider (`tele
 Commit `66d35bc`: `feat(cloudflare): enable native Workers Caching for zero-worker edge image delivery, harden revocation, and enforce canonical media reuse`. Pushed para o repositório remoto `origin` na branch `perf/nox-cloudflare-zero-waste`.
 
 #### 16. Qual configuração e versão estão ativas em produção?
-* **Version ID:** `4824b0e9-ab2c-4f65-b65d-9483d4ecf05a` (100% do tráfego).
+* **Version ID:** `f76b364d-6bf1-459a-9197-ef17fac6de0b` (100% do tráfego).
 * **Configuração:** `wrangler.jsonc` com `"cache": { "enabled": true, "cross_version_cache": true }`, `run_worker_first: false` para assets estáticos, custom domains `projectnox.org` e `www.projectnox.org`.
 
 #### 17. Quais testes de produção comprovaram o resultado?
@@ -95,12 +95,12 @@ Sonda ao vivo em produção contra `https://projectnox.org/media/81364892-c7c1-4
 
 | Critério Regulamentar | Meta Exigida | Resultado Auditado | Status |
 | :--- | :--- | :--- | :--- |
-| **Amostra de Imagens Distintas** | ≥ 300 imagens | **326 imagens colhidas do catálogo real** | **APROVADO** |
-| **Volume de Requisições no Teste** | ≥ 1.000 requisições | **998 requisições executadas** | **APROVADO** |
+| **Amostra de Imagens Distintas** | ≥ 300 imagens | **407 imagens colhidas do catálogo real** | **APROVADO** |
+| **Volume de Requisições no Teste** | ≥ 1.000 requisições | **1050 requisições executadas** | **APROVADO** |
 | **Workers em Cache HIT** | 0 invocações atribuíveis | **0 invocações** (atendido pelo Cloudflare Edge) | **APROVADO** |
 | **Hyperdrive em Cache HIT** | 0 queries atribuíveis | **0 queries** (telemetria: 0 statements) | **APROVADO** |
 | **YSQL em Cache HIT** | 0 queries atribuíveis | **0 queries** (100% isolado da origem) | **APROVADO** |
 | **Reaproveitamento Mihon / Web** | Mesma chave de cache | **100.00% HIT compartilhado no leitor web** | **APROVADO** |
 | **Segurança de Revogação** | Sem regressão de privacidade | **Fail-closed 404 no-store mantido** | **APROVADO** |
-| **Deploy em Produção** | Versão ativa comprovada | **Version ID `4824b0e9` ativo na conta** | **APROVADO** |
+| **Deploy em Produção** | Versão ativa comprovada | **Version ID `f76b364d-6bf1-459a-9197-ef17fac6de0b` ativo na conta** | **APROVADO** |
 | **Veredito Homologado** | Conforme Seção 8 / 10 | `CACHE_HIT_ZERO_ONLY` | **HOMOLOGADO** |

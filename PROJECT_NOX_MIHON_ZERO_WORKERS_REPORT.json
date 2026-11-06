@@ -1,49 +1,50 @@
 {
   "metadata": {
     "title": "PROJECT NOX — MIHON ZERO WORKERS / ZERO HYPERDRIVE AUDIT REPORT",
-    "timestampUtc": "2026-11-06T19:58:04.276Z",
-    "completedAtUtc": "2026-11-06T19:59:03.884Z",
-    "activeVersionId": "4824b0e9-ab2c-4f65-b65d-9483d4ecf05a",
+    "timestampUtc": "2026-11-06T20:11:30.678Z",
+    "completedAtUtc": "2026-11-06T20:13:50.950Z",
+    "activeVersionId": "f76b364d-6bf1-459a-9197-ef17fac6de0b",
     "accountTag": "45bedc39184a07fd7f989107bd686e63",
     "zoneTag": "c3dc753e2e76d95ef3ce2cf43782a463",
     "hyperdriveId": "83726ad935554261813c4bb12094c7f3"
   },
   "coverage": {
-    "distinctImagesTested": 326,
+    "distinctImagesTested": 407,
     "sample300Tested": 300,
-    "totalRequestsExecuted": 998,
-    "errorsEncountered": 2,
-    "totalBytesTransferred": 106034799,
-    "totalMegabytesTransferred": "101.12"
+    "totalRequestsExecuted": 1050,
+    "errorsEncountered": 3,
+    "totalBytesTransferred": 209484696,
+    "totalMegabytesTransferred": "199.78"
   },
   "phases": {
-    "initialPassRequests": 0,
-    "warmRepeatRequests": 250,
-    "webReaderReuseRequests": 200,
-    "revalidation304Requests": 100,
-    "range206Requests": 100
+    "initialProtocolRequests": 300,
+    "sequentialChapterRequests": 50,
+    "warmRepeatRequests": 260,
+    "webReaderReuseRequests": 220,
+    "revalidation304Requests": 110,
+    "range206Requests": 110
   },
   "performance": {
-    "overallHitRatePercent": "90.18",
+    "overallHitRatePercent": "71.43",
     "warmCacheHitRatePercent": "100.00",
-    "latencyP50Ms": 47,
-    "latencyP95Ms": 1165,
-    "latencyP99Ms": 1610,
-    "latencyAvgMs": 168,
-    "latencyMinMs": 22,
-    "latencyMaxMs": 3022
+    "latencyP50Ms": 62,
+    "latencyP95Ms": 2036,
+    "latencyP99Ms": 3572,
+    "latencyAvgMs": 512,
+    "latencyMinMs": 24,
+    "latencyMaxMs": 8023
   },
   "cloudflareTelemetryDuringTest": {
-    "zoneTotalRequests": 488,
-    "zoneEdgeHits": 199,
-    "workerAttributableRequests": 102,
-    "workerAttributableSubrequests": 200,
+    "zoneTotalRequests": 1718,
+    "zoneEdgeHits": 30,
+    "workerAttributableRequests": 349,
+    "workerAttributableSubrequests": 610,
     "workerErrors": 0,
-    "workerCpuTimeP50Microseconds": 6132,
-    "workerCpuTimeP95Microseconds": 13854,
-    "workerCpuTimeP99Microseconds": 65658,
-    "hyperdriveAttributableQueries": 0,
-    "hyperdriveHits": 0
+    "workerCpuTimeP50Microseconds": 6220,
+    "workerCpuTimeP95Microseconds": 24118,
+    "workerCpuTimeP99Microseconds": 49905,
+    "hyperdriveAttributableQueries": 148,
+    "hyperdriveHits": 6
   },
   "securityAudit": [
     {

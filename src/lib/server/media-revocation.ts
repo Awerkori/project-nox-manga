@@ -123,6 +123,7 @@ export async function purgeMediaVariants(
     for (const org of originsToPurge) {
       urlsToPurge.push(
         `${org}/media/${mediaId}`,
+        `${org}/media/${mediaId}/`,
         `${org}/media/${mediaId}?size=thumb&v=3`,
         `${org}/media/${mediaId}?size=hero&v=3`,
         `${org}/media/${mediaId}?size=thumb&v=2`,
