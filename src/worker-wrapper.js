@@ -124,8 +124,8 @@ function getSharedCacheKey(req) {
         if (val) {
           if (param === 'pagina') {
             const rawNum = Number(val);
-            if (rawNum > 50) {
-              normalizedParams.set('pagina', '51');
+            if (rawNum > 1000) {
+              normalizedParams.set('pagina', '1001');
             } else if (rawNum > 1) {
               normalizedParams.set('pagina', String(Math.floor(rawNum)));
             }
@@ -143,8 +143,8 @@ function getSharedCacheKey(req) {
       const rawNum = Number(url.searchParams.get('page'));
       const kind = url.searchParams.get('kind');
       const normalizedParams = new URLSearchParams();
-      if (rawNum > 50) {
-        normalizedParams.set('page', '51');
+      if (rawNum > 1000) {
+        normalizedParams.set('page', '1001');
       } else if (rawNum > 1) {
         normalizedParams.set('page', String(Math.floor(rawNum)));
       }
@@ -312,11 +312,13 @@ var worker_default = {
                   }
 
                   const actualEnd = Math.min(end, total - 1);
-                  const sliced = ab.slice(start, actualEnd + 1);
+                  const rangeLen = actualEnd - start + 1;
                   headers.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+                  headers.set('Content-Length', String(rangeLen));
                   if (req.method === 'HEAD') {
                     return new Response(null, { status: 206, headers });
                   }
+                  const sliced = ab.slice(start, actualEnd + 1);
                   return new Response(sliced, { status: 206, headers });
                 }
               }

@@ -4,16 +4,16 @@ import { load as lancamentosLoad } from '../src/routes/lancamentos/+page.server'
 import { GET as releasesGet } from '../src/routes/api/releases/+server';
 
 describe('Cloudflare Ultra Omega Optimization Contracts', () => {
-  it('catalog out-of-bounds normalizes to canonical page 51 with 1h public cache', async () => {
+  it('catalog out-of-bounds normalizes to canonical page 1001 with 1h public cache', async () => {
     const setHeaders = vi.fn();
     const result = await catalogLoad({
       locals: {},
-      url: new URL('https://projectnox.org/catalogo?pagina=999'),
+      url: new URL('https://projectnox.org/catalogo?pagina=1500'),
       setHeaders,
       platform: {}
     });
 
-    expect(result.page).toBe(51);
+    expect(result.page).toBe(1001);
     expect(result.works).toEqual([]);
     expect(result.hasMore).toBe(false);
     expect(setHeaders).toHaveBeenCalledWith({
@@ -21,17 +21,17 @@ describe('Cloudflare Ultra Omega Optimization Contracts', () => {
     });
   });
 
-  it('lancamentos out-of-bounds normalizes to canonical page 51 with 1h public cache without querying DB', async () => {
+  it('lancamentos out-of-bounds normalizes to canonical page 1001 with 1h public cache without querying DB', async () => {
     const setHeaders = vi.fn();
     const result = await lancamentosLoad({
-      url: new URL('https://projectnox.org/lancamentos?page=500'),
+      url: new URL('https://projectnox.org/lancamentos?page=1500'),
       platform: {},
       setHeaders
     });
 
-    expect(result.currentPage).toBe(51);
+    expect(result.currentPage).toBe(1001);
     expect(result.releases).toEqual([]);
-    expect(result.totalPages).toBe(50);
+    expect(result.totalPages).toBe(761);
     expect(result.loadError).toBe(false);
     expect(setHeaders).toHaveBeenCalledWith({
       'cache-control': 'public, max-age=3600, s-maxage=3600'

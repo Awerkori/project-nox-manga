@@ -90,3 +90,18 @@ export async function generateMihonToken(userId: string, deviceName = 'Mihon App
 
   return { token, expiresAt };
 }
+
+/**
+ * RFC 9110 compliant weak comparison function for If-None-Match headers.
+ * Compares incoming If-None-Match header (which may contain weak prefix W/, quotes, or multiple tags)
+ * against the target representation entity tag.
+ */
+export function matchesETag(ifNoneMatch: string | null | undefined, etag: string): boolean {
+  if (!ifNoneMatch) return false;
+  const trimmed = ifNoneMatch.trim();
+  if (!trimmed) return false;
+  if (trimmed === '*') return true;
+  const cleanEtag = etag.replace(/^W\//, '');
+  const tags = trimmed.split(',').map((t) => t.trim().replace(/^W\//, ''));
+  return tags.includes(cleanEtag);
+}

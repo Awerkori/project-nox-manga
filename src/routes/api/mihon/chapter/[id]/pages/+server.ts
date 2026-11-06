@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { verifyMihonAuth } from '$lib/server/mihon';
+import { verifyMihonAuth, matchesETag } from '$lib/server/mihon';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 type MihonPagesPayload = {
@@ -102,7 +102,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
       ? 'private, no-cache, no-store, must-revalidate'
       : 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 
-  if (request.headers.get('if-none-match') === etag) {
+  if (matchesETag(request.headers.get('if-none-match'), etag)) {
     return new Response(null, {
       status: 304,
       headers: {

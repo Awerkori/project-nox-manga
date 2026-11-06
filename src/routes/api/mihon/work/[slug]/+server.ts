@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { verifyMihonAuth } from '$lib/server/mihon';
+import { verifyMihonAuth, matchesETag } from '$lib/server/mihon';
 import { fetchFullWorkPageFromYugabyte } from '$lib/server/yugabyte';
 
 type MihonWorkBundle = {
@@ -72,7 +72,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
       ? 'private, no-cache, no-store, must-revalidate'
       : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
 
-  if (request.headers.get('if-none-match') === etag) {
+  if (matchesETag(request.headers.get('if-none-match'), etag)) {
     return new Response(null, {
       status: 304,
       headers: {

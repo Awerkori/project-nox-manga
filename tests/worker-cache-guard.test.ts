@@ -57,12 +57,12 @@ describe('shared Worker cache guard', () => {
     expect(wrapper).toContain('Method Not Allowed');
   });
 
-  it('isolates out-of-bounds catalog and lancamentos pagination to prevent cache pollution of page 50', () => {
+  it('isolates out-of-bounds catalog and lancamentos pagination to prevent cache pollution of valid pages', () => {
     const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
 
-    expect(wrapper).toContain("rawNum > 50");
-    expect(wrapper).toContain("normalizedParams.set('pagina', '51')");
-    expect(wrapper).toContain("normalizedParams.set('page', '51')");
+    expect(wrapper).toContain("rawNum > 1000");
+    expect(wrapper).toContain("normalizedParams.set('pagina', '1001')");
+    expect(wrapper).toContain("normalizedParams.set('page', '1001')");
   });
 
   it('implements RFC 9110 compliant range handling for media edge fast-path', () => {
@@ -71,6 +71,7 @@ describe('shared Worker cache guard', () => {
     expect(wrapper).toContain("status: 416");
     expect(wrapper).toContain("bytes */");
     expect(wrapper).toContain("status: 206");
+    expect(wrapper).toContain("headers.set('Content-Length', String(rangeLen))");
   });
 
   it('strictly isolates MINOR age status from GUEST and ADULT in cache key segmentation', () => {

@@ -18,17 +18,17 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     status = url.searchParams.get('status') || '',
     sort = url.searchParams.get('ordem') || 'recentes';
   const rawPage = Number(url.searchParams.get('pagina')) || 1;
-  const page = Math.floor(Math.max(1, Math.min(50, rawPage)));
+  const page = Math.floor(Math.max(1, Math.min(1000, rawPage)));
 
   const isUnfiltered = !q && !tag && !kind && !status && sort === 'recentes';
   const selectedTag = tag
     ? [{ id: `selected:${tag}`, slug: tag, name: tag, kind: 'TAG' }]
     : [];
 
-  // Out of range catalog guard: catalog has fewer than 50 pages (1,000 works)
-  // Normalizes all pages > 50 to canonical page 51 so edge caches share a single entry
-  // without polluting or overwriting page 50's legitimate works.
-  if (rawPage > 50) {
+  // Out of range catalog guard: catalog has up to ~913 pages (18,254 works / 20 per page).
+  // Normalizes all pages > 1000 to canonical page 1001 so edge caches share a single entry
+  // without polluting legitimate works.
+  if (rawPage > 1000) {
     if (!locals.user) {
       setHeaders({ 'cache-control': 'public, max-age=3600, s-maxage=3600' });
     }
@@ -43,7 +43,7 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
       kind,
       status,
       sort,
-      page: 51
+      page: 1001
     };
   }
 

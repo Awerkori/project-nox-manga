@@ -14,9 +14,10 @@ export const load = async ({ url, platform, setHeaders }: any) => {
   const PAGE_SIZE = 24;
   const CHAPTERS_PER_WORK = 4;
 
-  // Out-of-bounds guard: project has fewer than 50 releases pages.
-  // Normalizes all pages > 50 to canonical page 51 with 1h edge cache without querying the DB.
-  if (parsedPage > 50) {
+  // Out-of-bounds guard: protects against automated scrapers querying astronomical page numbers.
+  // The database currently contains ~761 pages (18,254 works / 24 per page).
+  // Pages beyond safe ceiling (> 1000) normalize to canonical page 1001 with 1h edge cache without querying DB.
+  if (parsedPage > 1000) {
     if (setHeaders) {
       setHeaders({
         "cache-control": "public, max-age=3600, s-maxage=3600"
@@ -25,8 +26,8 @@ export const load = async ({ url, platform, setHeaders }: any) => {
     return {
       releases: [],
       totalWorks: 0,
-      totalPages: 50,
-      currentPage: 51,
+      totalPages: 761,
+      currentPage: 1001,
       pageSize: PAGE_SIZE,
       selectedKind: kind || "ALL",
       loadError: false
