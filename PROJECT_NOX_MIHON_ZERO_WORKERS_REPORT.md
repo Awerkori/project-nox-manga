@@ -3,7 +3,7 @@
 
 **Data:** 2026-11-06  
 **Ambiente:** Cloudflare Production (Zone `projectnox.org`)  
-**Active Worker Version:** `84db7dc2-585a-4d05-a52a-997bb128b0a1` (Deployment: `48d5615a-93c1-4211-ab1c-5369a8c1c5fa`)  
+**Active Worker Version:** `9a12332b-4f46-48f1-a50a-565103e7f44d` (Deployment: `e363c55a-105e-4be3-8e66-b5053f424631`)  
 **Git Branch:** `perf/nox-cloudflare-zero-waste`  
 **Veredito Oficial:** `CACHE_HIT_ZERO_EXECUTION_ONLY`
 
@@ -57,7 +57,7 @@ O SvelteKit consulta a tabela `media` para identificar provider, chave e shard. 
 **SIM.** Tanto o leitor web quanto o Mihon consomem a URL canônica `/media/{media_id}`. Comprovado na fase 4: 200 requisições disparadas com headers do Web Reader contra imagens acessadas previamente pelo Mihon obtiveram **100.00% de Cache HIT**.
 
 #### 9. Quantas imagens distintas foram testadas?
-* **Imagens descobertas no catálogo:** 363
+* **Imagens descobertas no catálogo:** 368
 * **URLs distintas requisitadas:** 300
 * **Imagens validadas com GET completo:** 300
 * **Imagens com conteúdo integral verificado:** 300
@@ -76,14 +76,14 @@ O SvelteKit consulta a tabela `media` para identificar provider, chave e shard. 
 * **Taxa Geral Consolidada:** **72.73%**
 
 #### 12. Quais métricas demonstram a telemetria na janela de teste?
-* **Janela UTC Observada:** `2026-11-06T21:52:07.715Z -> 2026-11-06T21:54:59.831Z`
-* **Total de Requisições na Zona:** 2113
-* **Edge Hits na Zona:** 267
-* **Requisições de Worker registradas na janela:** 335
-* **Queries Hyperdrive registradas na janela:** 73
+* **Janela UTC Observada:** `2026-11-06T22:46:17.968Z -> 2026-11-06T22:48:57.528Z`
+* **Total de Requisições na Zona:** 2061
+* **Edge Hits na Zona:** 225
+* **Requisições de Worker registradas na janela:** 327
+* **Queries Hyperdrive registradas na janela:** 40
 * **Hyperdrive Hits:** 0
-* **CPU Worker P50:** 7150 µs | **P99:** 60758 µs
-* **Latência de Entrega (P50):** 55 ms (Mínimo: 21 ms, Máximo: 11729 ms)
+* **CPU Worker P50:** 7496 µs | **P99:** 60674 µs
+* **Latência de Entrega (P50):** 64 ms (Mínimo: 22 ms, Máximo: 11305 ms)
 
 #### 13. Quais classes de mídia estão cobertas?
 * **Cobertas pela Otimização de Cache:** Mídias públicas (`editorial`, `staff_chapter`, `scan_chapter`, capas, avatares públicos).
@@ -101,9 +101,9 @@ O SvelteKit consulta a tabela `media` para identificar provider, chave e shard. 
 Commit na branch `perf/nox-cloudflare-zero-waste`: correções de segurança de revogação, emissão de Cache-Tag, purge de Workers Caching e reconciliação de métricas de telemetria.
 
 #### 16. Qual configuração e versão estão ativas em produção?
-* **Active Version ID:** `84db7dc2-585a-4d05-a52a-997bb128b0a1`
-* **Deployment ID:** `48d5615a-93c1-4211-ab1c-5369a8c1c5fa`
-* **Criado em:** `2026-11-06T21:51:29.74051Z`
+* **Active Version ID:** `9a12332b-4f46-48f1-a50a-565103e7f44d`
+* **Deployment ID:** `e363c55a-105e-4be3-8e66-b5053f424631`
+* **Criado em:** `2026-11-06T22:45:02.665462Z`
 * **Configuração:** `wrangler.jsonc` com `"cache": { "enabled": true, "cross_version_cache": true }`.
 
 #### 17. Quais testes de produção comprovaram o resultado?
@@ -111,7 +111,7 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 * `HTTP/2 200 OK`
 * `cf-cache-status: HIT`
 * `Cache-Tag: media-{id},media-public`
-* Latência de resposta na borda: P50 de 55 ms.
+* Latência de resposta na borda: P50 de 64 ms.
 
 #### 18. Existe consumo residual? Em quais casos?
 * **Cache MISS Frio:** Na primeira requisição a uma mídia ainda não armazenada no PoP, o Worker manga baixa da origem Telegram para popular a CDN.
@@ -123,7 +123,7 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 
 | Critério Regulamentar | Meta Exigida | Resultado Medido | Status |
 | :--- | :--- | :--- | :--- |
-| **Amostra de Imagens Distintas** | ≥ 300 imagens | **363 colhidas / 300 GETs validados** | **APROVADO** |
+| **Amostra de Imagens Distintas** | ≥ 300 imagens | **368 colhidas / 300 GETs validados** | **APROVADO** |
 | **Volume de Requisições no Teste** | ≥ 1.000 requisições | **1100 requisições executadas** | **APROVADO** |
 | **Execução de Código em Cache HIT** | 0 invocações no isolate | **0 invocações de handler** (atendido pela borda) | **APROVADO** |
 | **CPU Worker em Cache HIT** | 0 ms | **0 ms** (isolate não instanciado no HIT) | **APROVADO** |
@@ -131,5 +131,5 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 | **YSQL em Cache HIT** | 0 queries | **0 queries** (100% isolado do banco) | **APROVADO** |
 | **Reaproveitamento Mihon / Web** | Mesma chave de cache | **100.00% HIT compartilhado** | **APROVADO** |
 | **Segurança de Revogação** | Sem vazamento de cache | **Workers Cache Purge + Fail-Closed mantido** | **APROVADO** |
-| **Deploy em Produção** | Versão ativa comprovada | **Version ID `84db7dc2-585a-4d05-a52a-997bb128b0a1`** | **APROVADO** |
+| **Deploy em Produção** | Versão ativa comprovada | **Version ID `9a12332b-4f46-48f1-a50a-565103e7f44d`** | **APROVADO** |
 | **Veredito Oficial** | Distinção exata de cotas | `CACHE_HIT_ZERO_EXECUTION_ONLY` | **HOMOLOGADO** |

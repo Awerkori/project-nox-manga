@@ -1,24 +1,24 @@
 {
   "metadata": {
     "title": "PROJECT NOX — MIHON ZERO WORKERS / ZERO HYPERDRIVE AUDIT REPORT",
-    "timestampUtc": "2026-11-06T21:52:07.715Z",
-    "completedAtUtc": "2026-11-06T21:54:59.831Z",
-    "activeVersionId": "84db7dc2-585a-4d05-a52a-997bb128b0a1",
-    "deploymentId": "48d5615a-93c1-4211-ab1c-5369a8c1c5fa",
-    "deploymentCreatedOn": "2026-11-06T21:51:29.74051Z",
+    "timestampUtc": "2026-11-06T22:46:17.968Z",
+    "completedAtUtc": "2026-11-06T22:48:57.528Z",
+    "activeVersionId": "9a12332b-4f46-48f1-a50a-565103e7f44d",
+    "deploymentId": "e363c55a-105e-4be3-8e66-b5053f424631",
+    "deploymentCreatedOn": "2026-11-06T22:45:02.665462Z",
     "accountTag": "45bedc39184a07fd7f989107bd686e63",
     "zoneTag": "c3dc753e2e76d95ef3ce2cf43782a463",
     "hyperdriveId": "83726ad935554261813c4bb12094c7f3"
   },
   "coverage": {
-    "imagesDiscovered": 363,
+    "imagesDiscovered": 368,
     "sample300Tested": 300,
     "distinctUrlsRequested": 300,
     "distinctImagesHeadChecked": 300,
     "distinctImagesFullGetAttempted": 300,
     "distinctImagesFullGetSucceeded": 300,
     "distinctImagesContentValidated": 300,
-    "distinctImagesTested": 363,
+    "distinctImagesTested": 368,
     "totalHttpAttempts": 1100,
     "totalRequestsExecuted": 1100,
     "successfulHttpResponses": 1100,
@@ -26,8 +26,8 @@
     "cacheHitResponses": 800,
     "cacheMissResponses": 300,
     "errorsEncountered": 0,
-    "totalBytesTransferred": 336234665,
-    "totalMegabytesTransferred": "320.66",
+    "totalBytesTransferred": 363857902,
+    "totalMegabytesTransferred": "347.00",
     "errorLog": []
   },
   "phases": {
@@ -41,74 +41,74 @@
   "performance": {
     "overallHitRatePercent": "72.73",
     "warmCacheHitRatePercent": "100.00",
-    "latencyP50Ms": 55,
-    "latencyP95Ms": 1931,
-    "latencyP99Ms": 9453,
-    "latencyAvgMs": 519,
-    "latencyMinMs": 21,
-    "latencyMaxMs": 11729,
+    "latencyP50Ms": 64,
+    "latencyP95Ms": 2161,
+    "latencyP99Ms": 2954,
+    "latencyAvgMs": 478,
+    "latencyMinMs": 22,
+    "latencyMaxMs": 11305,
     "breakdown": {
       "cacheHits": {
-        "p50": 48,
-        "p95": 79,
-        "p99": 99,
-        "min": 21,
-        "max": 135,
-        "avg": 49
+        "p50": 55,
+        "p95": 86,
+        "p99": 369,
+        "min": 22,
+        "max": 372,
+        "avg": 56
       },
       "cacheMisses": {
-        "p50": 1496,
-        "p95": 2544,
-        "p99": 9996,
-        "min": 651,
-        "max": 11729,
-        "avg": 1771
+        "p50": 1308,
+        "p95": 2809,
+        "p99": 7329,
+        "min": 857,
+        "max": 11305,
+        "avg": 1601
       },
       "fullGets": {
-        "p50": 52,
-        "p95": 86,
-        "p99": 135,
-        "min": 25,
-        "max": 135,
-        "avg": 55
+        "p50": 60,
+        "p95": 92,
+        "p99": 369,
+        "min": 23,
+        "max": 372,
+        "avg": 65
       },
       "heads": {
-        "p50": 1496,
-        "p95": 2544,
-        "p99": 9996,
-        "min": 651,
-        "max": 11729,
-        "avg": 1771
+        "p50": 1308,
+        "p95": 2809,
+        "p99": 7329,
+        "min": 857,
+        "max": 11305,
+        "avg": 1601
       },
       "revalidations304": {
         "p50": 32,
-        "p95": 37,
-        "p99": 46,
-        "min": 21,
-        "max": 46,
-        "avg": 31
+        "p95": 36,
+        "p99": 109,
+        "min": 25,
+        "max": 109,
+        "avg": 32
       },
       "ranges206": {
-        "p50": 32,
-        "p95": 41,
-        "p99": 42,
-        "min": 25,
-        "max": 42,
-        "avg": 32
+        "p50": 29,
+        "p95": 37,
+        "p99": 39,
+        "min": 22,
+        "max": 39,
+        "avg": 29
       }
     }
   },
   "cloudflareTelemetryDuringTest": {
-    "observationWindowUtc": "2026-11-06T21:52:07.715Z -> 2026-11-06T21:54:59.831Z",
-    "zoneTotalRequests": 2113,
-    "zoneEdgeHits": 267,
-    "workerAttributableRequests": 335,
-    "workerAttributableSubrequests": 606,
+    "observationWindowUtc": "2026-11-06T22:46:17.968Z -> 2026-11-06T22:48:57.528Z",
+    "zoneTotalRequests": 2061,
+    "zoneEdgeHits": 225,
+    "workerAttributableRequests": 327,
+    "workerAttributableSubrequests": 600,
     "workerErrors": 0,
-    "workerCpuTimeP50Microseconds": 7150,
-    "workerCpuTimeP95Microseconds": 43068,
-    "workerCpuTimeP99Microseconds": 60758,
-    "hyperdriveAttributableQueries": 73,
+    "workerCpuTimeP50Microseconds": 7496,
+    "workerCpuTimeP95Microseconds": 35338,
+    "workerCpuTimeP99Microseconds": 60674,
+    "hyperdriveAttributableQueries": 40,
     "hyperdriveHits": 0,
     "telemetryStatus": "COMPLETE"
   },
@@ -134,7 +134,7 @@
     {
       "test": "Cache-Tag emission for selective Workers Caching purge",
       "status": 200,
-      "tagHeader": "media-203dca12-a536-4d58-baf6-4c5fd28c4dde,media-public",
+      "tagHeader": "media-077258da-b500-4932-a51a-ae33bd9586d9,media-public",
       "passed": true
     }
   ],
