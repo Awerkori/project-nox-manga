@@ -34,7 +34,7 @@
 2. **Branch Isolada da Missão Cloudflare:**
    - Branch: `perf/nox-cloudflare-zero-waste`
    - Local: `/home/awerkori/nox-site-cloudflare`
-   - Novo Commit Gerado: `9c6a5e5`
+   - Commits Gerados: `9c6a5e5` e `51646af`
    - Arquivos alterados:
      - `src/worker-wrapper.js`
      - `scripts/patch-worker-runtime.mjs`
