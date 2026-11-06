@@ -196,8 +196,25 @@ function getSharedCacheKey(req) {
                 return new Response(null, { status: 304, headers });
               }
 
+              const ifMatch = req.headers.get('if-match');
+              if (ifMatch && ifMatch !== '*' && etag) {
+                const matchEtags = ifMatch.split(',').map((s) => s.trim());
+                if (!matchEtags.includes(etag.trim()) || etag.startsWith('W/')) {
+                  return new Response(null, { status: 412, headers });
+                }
+              }
+
               const rangeHeader = req.headers.get('range');
-              if (rangeHeader && req.method === 'GET') {
+              const ifRange = req.headers.get('if-range');
+              let evaluateRange = Boolean(rangeHeader && req.method === 'GET');
+              if (evaluateRange && ifRange) {
+                // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+                if (!etag || ifRange.trim().startsWith('W/') || ifRange.trim() !== etag.trim()) {
+                  evaluateRange = false;
+                }
+              }
+
+              if (evaluateRange) {
                 const ab = await cached.arrayBuffer();
                 const total = ab.byteLength;
                 const match = rangeHeader.match(/bytes=(\\d*)-(\\d*)/);

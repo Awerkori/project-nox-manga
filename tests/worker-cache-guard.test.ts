@@ -65,10 +65,13 @@ describe('shared Worker cache guard', () => {
     expect(wrapper).toContain("normalizedParams.set('page', '1001')");
   });
 
-  it('implements RFC 9110 compliant range handling for media edge fast-path (GET only, HEAD ignores Range)', () => {
+  it('implements RFC 9110 compliant range handling for media edge fast-path (GET only, HEAD ignores Range, If-Range & If-Match supported)', () => {
     const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
 
     expect(wrapper).toContain("rangeHeader && req.method === 'GET'");
+    expect(wrapper).toContain("req.headers.get('if-match')");
+    expect(wrapper).toContain("req.headers.get('if-range')");
+    expect(wrapper).toContain("status: 412");
     expect(wrapper).toContain("status: 416");
     expect(wrapper).toContain("bytes */");
     expect(wrapper).toContain("status: 206");

@@ -291,6 +291,14 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     return new Response(null, { status: 304, headers });
   }
 
+  const ifMatch = request.headers.get('if-match');
+  if (ifMatch && ifMatch !== '*' && headers.ETag) {
+    const matchEtags = ifMatch.split(',').map((s) => s.trim());
+    if (!matchEtags.includes(headers.ETag.trim()) || headers.ETag.startsWith('W/')) {
+      return new Response(null, { status: 412, headers });
+    }
+  }
+
   if (request.method === 'HEAD') {
     return new Response(null, { status: 200, headers });
   }
@@ -462,7 +470,17 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   const rangeHeader = request.headers.get('range');
-  if (rangeHeader) {
+  const ifRange = request.headers.get('if-range');
+  const currentEtag = headers['ETag'] ? String(headers['ETag']).trim() : null;
+  let evaluateRange = Boolean(rangeHeader && request.method === 'GET');
+  if (evaluateRange && ifRange) {
+    // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+    if (!currentEtag || ifRange.trim().startsWith('W/') || ifRange.trim() !== currentEtag) {
+      evaluateRange = false;
+    }
+  }
+
+  if (evaluateRange && rangeHeader) {
     const bytes = body instanceof Uint8Array ? body : await toUint8Array(body);
     const total = bytes.byteLength;
     const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
