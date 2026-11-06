@@ -102,22 +102,27 @@ function getSharedCacheKey(req) {
       for (const param of allowedParams) {
         const val = url.searchParams.get(param);
         if (val) {
+          const trimmed = val.trim();
+          if (!trimmed) continue;
           if (param === 'pagina') {
-            const rawNum = Number(val);
+            const rawNum = Number(trimmed);
             if (rawNum > 1000) {
               normalizedParams.set('pagina', '1001');
             } else if (rawNum > 1) {
               normalizedParams.set('pagina', String(Math.floor(rawNum)));
             }
           } else if (param === 'ordem') {
-            if (val !== 'recentes') normalizedParams.set('ordem', val);
+            const lowerSort = trimmed.toLowerCase();
+            if (lowerSort === 'titulo' || lowerSort === 'views') {
+              normalizedParams.set('ordem', lowerSort);
+            }
           } else if (param === 'q') {
-            const cleanQ = val.trim().toLowerCase().replace(/\s+/g, ' ');
+            const cleanQ = trimmed.toLowerCase().replace(/\\s+/g, ' ');
             if (cleanQ) normalizedParams.set('q', cleanQ);
           } else if (param === 'tipo' || param === 'status') {
-            normalizedParams.set(param, val.trim().toUpperCase());
+            normalizedParams.set(param, trimmed.toUpperCase());
           } else {
-            normalizedParams.set(param, val.trim());
+            normalizedParams.set(param, trimmed);
           }
         }
       }
@@ -165,10 +170,7 @@ function getSharedCacheKey(req) {
     );
   }
 
-  if (!content.includes('X-Nox-Edge-Cache')) {
-    content = content.replace(
-      'if (res) return res;',
-      `if (res) {
+  const edgeCacheHitBlock = `if (res) {
       const etag = res.headers.get('etag');
       const ifNoneMatch = req.headers.get('if-none-match');
       if (etag && ifNoneMatch) {
@@ -178,13 +180,24 @@ function getSharedCacheKey(req) {
         if (isMatch) {
           const headers = new Headers(res.headers);
           headers.set('X-Nox-Edge-Cache', 'HIT');
+          headers.delete('content-length');
+          headers.delete('content-type');
+          headers.delete('content-encoding');
+          headers.delete('content-range');
           return new Response(null, { status: 304, headers });
         }
       }
       res = new Response(res.body, res);
       res.headers.set('X-Nox-Edge-Cache', 'HIT');
       return res;
-    }`
+    }`;
+
+  if (!content.includes('X-Nox-Edge-Cache')) {
+    content = content.replace('if (res) return res;', edgeCacheHitBlock);
+  } else if (!content.includes("headers.delete('content-length');")) {
+    content = content.replace(
+      /if \(res\) \{\s*const etag = res\.headers\.get\('etag'\);[\s\S]*?return res;\s*\}/m,
+      edgeCacheHitBlock
     );
   }
 
@@ -321,18 +334,27 @@ function getSharedCacheKey(req) {
       });
     }
 
-    // Vulnerability scanner & probe fast-path rejection: block dotfiles and common PHP/exploit scans before SSR
+    // Vulnerability scanner & probe fast-path rejection: block dotfiles, encoded probes, and common PHP/exploit scans before SSR
     const pLower = url.pathname.toLowerCase();
-    const isDotfileProbe = (pLower.startsWith('/.') || pLower.includes('/.')) && !pLower.startsWith('/.well-known/');
+    let decodedPath = pLower;
+    try {
+      decodedPath = decodeURIComponent(pLower);
+    } catch {}
+
+    const isDotfileProbe =
+      ((pLower.startsWith('/.') || pLower.includes('/.') || decodedPath.startsWith('/.') || decodedPath.includes('/.') || decodedPath.includes('..')) &&
+       !pLower.startsWith('/.well-known') && !decodedPath.startsWith('/.well-known'));
+
     const isExploitProbe =
-      pLower.startsWith('/wp-') ||
-      pLower === '/xmlrpc.php' ||
-      pLower.endsWith('.php') ||
-      pLower.endsWith('.bak') ||
-      pLower.endsWith('.sql') ||
-      pLower.endsWith('.env') ||
-      pLower.endsWith('.conf') ||
-      pLower.endsWith('.ini');
+      decodedPath.includes('.php') ||
+      decodedPath.startsWith('/wp-') ||
+      decodedPath.startsWith('/wordpress') ||
+      decodedPath.startsWith('/cgi-bin') ||
+      decodedPath.startsWith('/actuator') ||
+      decodedPath.startsWith('/pma') ||
+      decodedPath.startsWith('/phpmyadmin') ||
+      decodedPath.startsWith('/boaform') ||
+      /\\.(?:bak|sql|env|conf|ini|asp|aspx|jsp)(?:$|[\\/?])/i.test(decodedPath);
 
     if (isDotfileProbe || isExploitProbe) {
       return new Response('Not Found', {
