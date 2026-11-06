@@ -192,8 +192,14 @@ function getSharedCacheKey(req) {
               headers.set('Accept-Ranges', 'bytes');
 
               const etag = cached.headers.get('ETag');
-              if (etag && req.headers.get('if-none-match') === etag) {
-                return new Response(null, { status: 304, headers });
+              const ifNoneMatch = req.headers.get('if-none-match');
+              if (etag && ifNoneMatch) {
+                const cleanEtag = etag.trim().replace(/^W\\//, '');
+                const isMatch = ifNoneMatch.trim() === '*' ||
+                  ifNoneMatch.split(',').some((t) => t.trim().replace(/^W\\//, '') === cleanEtag);
+                if (isMatch) {
+                  return new Response(null, { status: 304, headers });
+                }
               }
 
               const ifMatch = req.headers.get('if-match');

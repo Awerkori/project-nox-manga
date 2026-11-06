@@ -470,4 +470,72 @@ describe('Media Security and Cache Guard', () => {
     expect(returnedBytes.length).toBe(gifBytes.length);
     expect(Buffer.from(returnedBytes).equals(Buffer.from(gifBytes))).toBe(true);
   });
+
+  it('revalidates with 304 Not Modified when client sends a weak If-None-Match matching the media ETag', async () => {
+    const mediaId = '81818181-8181-4181-8181-818181818181';
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'weak_etag_target', provider_key: 'target_key', bytes: 100
+    };
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}`, {
+        headers: { 'If-None-Match': 'W/"weak_etag_target"' }
+      }),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(304);
+    expect(res.headers.get('ETag')).toBe('"weak_etag_target"');
+  });
+
+  it('rejects conditional request with 412 Precondition Failed when If-Match does not match', async () => {
+    const mediaId = '82828282-8282-4282-8282-828282828282';
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'actual_etag_val', provider_key: 'target_key', bytes: 100
+    };
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}`, {
+        headers: { 'If-Match': '"mismatched_etag"' }
+      }),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(412);
+  });
+
+  it('serves 200 with full entity when If-Range validator does not match target ETag', async () => {
+    const mediaId = '83838383-8383-4383-8383-838383838383';
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    mocks.mediaRecord = {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'real_range_etag', provider_key: 'target_key', bytes: 10
+    };
+    mocks.download.mockResolvedValue(originalBytes);
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}`, {
+        headers: {
+          'Range': 'bytes=0-3',
+          'If-Range': '"stale_or_mismatched_etag"'
+        }
+      }),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Length')).toBe('10');
+    expect(res.headers.get('Content-Range')).toBeNull();
+  });
 });

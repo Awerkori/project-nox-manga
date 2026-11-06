@@ -237,13 +237,13 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
       response.headers.set('Expires', '0');
     } else if (isExplicitlyPublic) {
       // Preserve explicit public caching configured by public routes (+page.server.ts)
-      response.headers.set('Vary', 'Accept');
+      response.headers.set('Vary', 'Accept-Encoding');
     } else if (hasExplicitCache) {
       // Preserve explicit private max-age caching (e.g. for anonymous user with adult/blur preferences)
       response.headers.set('Vary', 'Cookie, Accept');
     } else if (isSharedAnonymousHome) {
       response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=30, stale-while-revalidate=60');
-      response.headers.set('Vary', 'Accept');
+      response.headers.set('Vary', 'Accept-Encoding');
     } else if (response.status >= 400) {
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       response.headers.set('Pragma', 'no-cache');

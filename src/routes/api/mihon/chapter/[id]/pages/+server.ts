@@ -44,15 +44,20 @@ async function fetchChapterPagesData(id: string, platformEnv?: any): Promise<Mih
   }
 
   const pages = Array.isArray(chapter.pages) ? chapter.pages : [];
-  let mediaHash = 0;
+  let pagesHash = 0;
   for (const p of pages) {
-    const m = String(p.media_id || '');
-    for (let i = 0; i < m.length; i++) {
-      mediaHash = ((mediaHash << 5) - mediaHash + m.charCodeAt(i)) | 0;
+    const pageSig = `${p.position}:${p.media_id}:${p.width || 0}:${p.height || 0};`;
+    for (let i = 0; i < pageSig.length; i++) {
+      pagesHash = ((pagesHash << 5) - pagesHash + pageSig.charCodeAt(i)) | 0;
     }
   }
+  let metaHash = 0;
+  const metaSig = `${chapter.id}:${chapter.number}:${chapter.display_number}:${chapter.title || ''}:${chapter.chapter_kind || ''}:${chapter.edition || ''}:${chapter.language || ''}:${chapter.content_rating || ''}:${chapter.work_updated_at || ''}`;
+  for (let i = 0; i < metaSig.length; i++) {
+    metaHash = ((metaHash << 5) - metaHash + metaSig.charCodeAt(i)) | 0;
+  }
   const chapterTime = new Date(chapter.published_at || chapter.created_at || 0).getTime();
-  const etag = `"${chapter.id}-${pages.length}-${(mediaHash >>> 0).toString(36)}-${chapterTime}"`;
+  const etag = `"${chapter.id}-${pages.length}-${(pagesHash >>> 0).toString(36)}-${(metaHash >>> 0).toString(36)}-${chapterTime}"`;
 
   return { chapter, pages, etag };
 }

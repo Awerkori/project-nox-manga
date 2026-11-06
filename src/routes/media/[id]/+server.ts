@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { matchesETag } from '$lib/server/mihon';
 import {
   resolveBotDownloadClient,
   normalizeBotReference,
@@ -287,7 +288,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     headers['Content-Length'] = String(media.bytes);
   }
 
-  if (request.headers.get('if-none-match') === headers.ETag) {
+  if (matchesETag(request.headers.get('if-none-match'), headers.ETag)) {
     return new Response(null, { status: 304, headers });
   }
 

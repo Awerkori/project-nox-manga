@@ -44,6 +44,7 @@ type HomeCachePayload = {
 // Public content cache (updated dynamically from live database queries)
 let homePublicCache: HomeCachePayload | null = null;
 const HOME_CACHE_TTL_MS = 60_000;
+const MAX_LKG_FALLBACK_AGE_MS = 15 * 60 * 1000; // 15-minute maximum safe stale fallback window
 
 export const load = async ({ locals, setHeaders, url, platform, cookies }: any) => {
   const forceFresh = url.searchParams.has('fresh') || url.searchParams.has('nocache');
@@ -470,7 +471,7 @@ export const load = async ({ locals, setHeaders, url, platform, cookies }: any) 
       recentReleases,
       mostReadWorks
     };
-  } else if (homePublicCache && (recentReleases.length === 0 || isDegraded)) {
+  } else if (homePublicCache && (Date.now() - homePublicCache.timestamp < MAX_LKG_FALLBACK_AGE_MS) && (recentReleases.length === 0 || isDegraded)) {
     // Upstream query failed or returned empty due to degradation - use Last-Known-Good from real previous runs
     works = homePublicCache.works;
     featuredList = homePublicCache.featuredList;
