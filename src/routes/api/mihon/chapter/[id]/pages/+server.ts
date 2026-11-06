@@ -16,8 +16,8 @@ const mihonPagesInFlight = new Map<string, Promise<MihonPagesPayload | null>>();
 async function fetchChapterPagesData(id: string, platformEnv?: any): Promise<MihonPagesPayload | null> {
   const chRes = await executeYugabyteSql(
     `SELECT c.id, c.number, c.display_number, c.canonical_chapter_key, c.chapter_order_key,
-            c.chapter_kind, c.edition, c.language, c.title, c.published_at, c.updated_at, c.work_id,
-            w.title AS work_title, w.slug AS work_slug, w.content_rating, w.published AS work_published,
+            c.chapter_kind, c.edition, c.language, c.title, c.published_at, c.created_at, c.work_id,
+            w.title AS work_title, w.slug AS work_slug, w.content_rating, w.published AS work_published, w.updated_at AS work_updated_at,
             COALESCE(
               (SELECT json_agg(json_build_object(
                 'position', p.position,
@@ -51,7 +51,7 @@ async function fetchChapterPagesData(id: string, platformEnv?: any): Promise<Mih
       mediaHash = ((mediaHash << 5) - mediaHash + m.charCodeAt(i)) | 0;
     }
   }
-  const chapterTime = new Date(chapter.updated_at || chapter.published_at || 0).getTime();
+  const chapterTime = new Date(chapter.published_at || chapter.created_at || 0).getTime();
   const etag = `"${chapter.id}-${pages.length}-${(mediaHash >>> 0).toString(36)}-${chapterTime}"`;
 
   return { chapter, pages, etag };
