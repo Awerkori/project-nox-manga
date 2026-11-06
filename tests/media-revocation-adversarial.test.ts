@@ -779,5 +779,185 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(await mockCache.match(vUrl), `Legacy variant ${vUrl} must be purged from cache`).toBeNull();
     }
   });
+
+  // TEST P: Workers Caching Purge via ctx.cache.purge
+  it('Teste P: revogação dispara expurgo nativo do Workers Caching via ctx.cache.purge', async () => {
+    const mediaId = '77777777-7777-4777-8777-777777777777';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+    const mockCtx = {
+      cache: {
+        purge: vi.fn().mockResolvedValue(undefined)
+      }
+    };
+
+    const res = await revokeMedia(mediaId, {
+      kv: mockKv,
+      cache: mockCache,
+      ctx: mockCtx,
+      reason: 'PRIVATE'
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.workersCachePurged).toBeGreaterThan(0);
+    expect(mockCtx.cache.purge).toHaveBeenCalledWith({
+      tags: [`media-${mediaId}`],
+      pathPrefixes: [`/media/${mediaId}`]
+    });
+  });
+
+  // TEST Q: Fail-Closed behavior when KV throws or is unavailable during cached hit
+  it('Teste Q: fast-path se comporta fail-closed se KV falhar ao verificar revogação', async () => {
+    const mediaId = '88888888-8888-4888-8888-888888888888';
+    const brokenKv = {
+      get: vi.fn().mockRejectedValue(new Error('KV_NETWORK_TIMEOUT')),
+      put: vi.fn(),
+      delete: vi.fn()
+    };
+
+    // When failClosed: true is passed, KV failure MUST return true (revoked)
+    const isRevokedOnFail = await isMediaRevoked(mediaId, brokenKv, { failClosed: true });
+    expect(isRevokedOnFail).toBe(true);
+
+    // If KV is completely absent and failClosed: true, MUST return true
+    const isRevokedNoKv = await isMediaRevoked(mediaId, null, { failClosed: true });
+    expect(isRevokedNoKv).toBe(true);
+  });
+
+  // TEST Q2: Public media responses include Cache-Tag for declarative Workers Caching
+  it('Teste Q2: respostas de mídia pública emitem Cache-Tag para purge seletivo da Cloudflare', async () => {
+    const mediaId = '99999999-9999-4999-8999-999999999999';
+    mocks.mediaStore.set(mediaId, {
+      id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+      access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg', sha256: 'sha_test_q2', provider_key: 'tg_key_q2', bytes: 4
+    });
+
+    const res = await getPublicMediaRoute({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`https://projectnox.org/media/${mediaId}`),
+      platform: { env: {}, caches: {} },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Tag')).toBe(`media-${mediaId},media-public`);
+    expect(res.headers.get('Cache-Control')).toContain('public');
+    expect(res.headers.get('Cloudflare-CDN-Cache-Control')).toContain('public');
+  });
+
+  // TEST R: Concurrent Revocations preserve individual tombstones and merge manifest IDs
+  it('Teste R: revogações concorrentes preservam tombstones e mesclam IDs no manifesto', async () => {
+    const idA = 'aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa';
+    const idB = 'bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb';
+    const mockKv = createMockKv();
+
+    // Revoke A
+    const resA = await revokeMedia(idA, { kv: mockKv, reason: 'REVOKED_A' });
+    expect(resA.success).toBe(true);
+    expect(resA.tombstoneWritten).toBe(true);
+
+    // Revoke B concurrently
+    const resB = await revokeMedia(idB, { kv: mockKv, reason: 'REVOKED_B' });
+    expect(resB.success).toBe(true);
+    expect(resB.tombstoneWritten).toBe(true);
+
+    // Both tombstones must exist
+    const tombA = await mockKv.get(`${REVOCATION_KEY_PREFIX}${idA}`);
+    const tombB = await mockKv.get(`${REVOCATION_KEY_PREFIX}${idB}`);
+    expect(tombA).not.toBeNull();
+    expect(tombB).not.toBeNull();
+
+    // Manifest must contain BOTH IDs
+    const manifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+    expect(manifest.revokedIds).toContain(idA);
+    expect(manifest.revokedIds).toContain(idB);
+  });
+
+  // TEST S: Unrevoke restoration clears tombstone, updates manifest, and purges negative cache
+  it('Teste S: unrevokeMedia restaura mídia legitimamente e limpa tombstone e cache negativo', async () => {
+    const mediaId = 'cccccccc-3333-4ccc-8ccc-cccccccccccc';
+    const mockKv = createMockKv();
+    const mockCache = createMockCache();
+
+    // Revoke
+    await revokeMedia(mediaId, { kv: mockKv, cache: mockCache, reason: 'TEMP_BAN' });
+    expect(await isMediaRevoked(mediaId, mockKv)).toBe(true);
+
+    // Unrevoke
+    const { unrevokeMedia } = await import('../src/lib/server/media-revocation');
+    await unrevokeMedia(mediaId, { kv: mockKv, cache: mockCache });
+
+    // In-memory set must no longer have mediaId
+    expect(await isMediaRevoked(mediaId, mockKv, { forceFresh: true })).toBe(false);
+
+    // Tombstone must be deleted
+    expect(await mockKv.get(`${REVOCATION_KEY_PREFIX}${mediaId}`)).toBeNull();
+
+    // Manifest must not contain mediaId
+    const manifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+    expect(manifest.revokedIds).not.toContain(mediaId);
+  });
+
+  // TEST T: Partial failure reporting in /api/internal/media/revoke
+  it('Teste T: falha parcial de KV reporta status 207 Multi-Status e erros detalhados', async () => {
+    const idValid = 'dddddddd-4444-4ddd-8ddd-dddddddddddd';
+    const brokenKv = {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockRejectedValue(new Error('KV_QUOTA_EXCEEDED')),
+      delete: vi.fn()
+    };
+
+    const res = await revokeMediaEndpoint({
+      request: new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer test_token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaIds: [idValid] })
+      }),
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: { env: { NOX_STORAGE_BRIDGE_TOKEN: 'test_token', COVER_THUMBNAILS: brokenKv } },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(207); // Partial failure status
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.retryRequired).toBe(true);
+    expect(body.pendingIds).toContain(idValid);
+    expect(body.errors.length).toBeGreaterThan(0);
+    expect(body.errors[0].error).toContain('TOMBSTONE_WRITE_FAILED');
+  });
+
+  // TEST U: Complete Access Class Coverage
+  it('Teste U: garante proteção estrita para todas as classes privadas (PRIVATE, STAFF_ONLY, RESTRICTED, AUTHENTICATED)', async () => {
+    const testCases: Array<{ accessClass: string; purpose: string }> = [
+      { accessClass: 'PRIVATE', purpose: 'editorial' },
+      { accessClass: 'STAFF_ONLY', purpose: 'editorial' },
+      { accessClass: 'RESTRICTED', purpose: 'editorial' },
+      { accessClass: 'AUTHENTICATED', purpose: 'editorial' }
+    ];
+
+    for (let i = 0; i < testCases.length; i++) {
+      const tc = testCases[i];
+      const mediaId = `eeeeeee${i}-5555-4eee-8eee-eeeeeeeeeee${i}`;
+      mocks.mediaStore.set(mediaId, {
+        id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+        access_class: tc.accessClass, purpose: tc.purpose, bot_reference: 'MANGA_STORAGE_01',
+        mime: 'image/jpeg', sha256: `sha_u_${i}`, provider_key: `tg_key_u_${i}`, bytes: 4
+      });
+
+      const res = await getPublicMediaRoute({
+        locals: {}, params: { id: mediaId },
+        request: new Request(`https://projectnox.org/media/${mediaId}`),
+        platform: { env: {}, caches: {} },
+        cookies: { getAll: () => [] }
+      });
+
+      // Anonymous attempt against non-public media MUST return 404 unauthorized
+      expect(res.status, `Access class ${tc.accessClass} must be blocked`).toBe(404);
+      expect(res.headers.get('Cache-Control')).toContain('no-store');
+      expect(res.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');
+    }
+  });
 });
 

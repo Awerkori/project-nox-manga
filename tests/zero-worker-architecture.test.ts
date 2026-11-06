@@ -142,6 +142,6 @@ describe('Zero-Worker Architecture Verification Suite', () => {
 
     expect(report.performance.warmCacheHitRatePercent).toBe('100.00');
     expect(report.securityAudit.every((s: any) => s.passed)).toBe(true);
-    expect(report.verdict).toBe('CACHE_HIT_ZERO_ONLY');
+    expect(report.verdict).toBe('CACHE_HIT_ZERO_EXECUTION_ONLY');
   });
 });

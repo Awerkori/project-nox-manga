@@ -84,12 +84,18 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
       const res = await revokeMedia(id, {
         kv,
         cache,
+        ctx: platform?.context || platform?.ctx,
         origin: url.origin,
         reason: body.reason || 'MANUAL_REVOCATION',
         accessClass: body.accessClass,
         status: body.status
       });
-      revokedIds.push(id);
+      if (res.success && res.errors.length === 0) {
+        revokedIds.push(id);
+      } else {
+        pendingIds.push(id);
+        errors.push({ mediaId: id, error: res.errors.join('; ') || 'PARTIAL_REVOCATION_FAILURE' });
+      }
       results.push(res);
     } catch (err: any) {
       pendingIds.push(id);
@@ -111,7 +117,7 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
     retryRequired: errors.length > 0,
     results
   }, {
-    status: allSucceeded ? 200 : (revokedIds.length > 0 ? 207 : 400),
+    status: allSucceeded ? 200 : 207,
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
     }

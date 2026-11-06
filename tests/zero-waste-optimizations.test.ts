@@ -240,7 +240,7 @@ describe('Zero Waste Cloudflare Optimizations', () => {
       expect(source).toContain('WORKER_REVOCATION_MANIFEST_KEY');
       expect(source).toContain('WORKER_REVOCATION_KEY_PREFIX');
       expect(source).toContain('checkMediaRevocationWorker');
-      expect(source).toContain('const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS);');
+      expect(source).toContain('checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS');
       expect(source).toContain('cache.delete(cacheKey)');
       expect(source).toContain("status: 404");
       expect(source).toContain("'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'");

@@ -168,7 +168,7 @@ let workerManifestLoaded = false;
 async function checkMediaRevocationWorker(mediaId, kv, options) {
   if (!mediaId) return false;
   if (workerRevokedMediaSet.has(mediaId)) return true;
-  if (!kv) return false;
+  if (!kv) return Boolean(options?.failClosed);
 
   const now = Date.now();
   const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
@@ -182,8 +182,13 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           workerRevokedMediaSet.add(id);
         }
         if (workerRevokedMediaSet.has(mediaId)) return true;
+      } else {
+        workerManifestLoaded = false;
       }
-    } catch {}
+    } catch {
+      workerManifestLoaded = false;
+      if (options?.failClosed) return true;
+    }
   }
 
   if (options?.forceFresh || options?.checkTombstone || !workerManifestLoaded) {
@@ -193,7 +198,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         workerRevokedMediaSet.add(mediaId);
         return true;
       }
-    } catch {}
+    } catch {
+      if (options?.failClosed) return true;
+    }
   }
 
   return false;
@@ -264,7 +271,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           try {
             const cached = await cache.match(cacheKey);
             if (cached && cached.status === 200) {
-              const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS);
+              const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS, { failClosed: true });
               if (isRevoked) {
                 try {
                   const deleteTasks = [
@@ -284,6 +291,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
                     cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?v=2\`, { method: 'GET' })),
                     cache.delete(new Request(\`\${url.origin}/media/\${mediaId}?v=1\`, { method: 'GET' }))
                   ];
+                  if (ctx?.cache && typeof ctx.cache.purge === 'function') {
+                    deleteTasks.push(ctx.cache.purge({ tags: [\`media-\${mediaId}\`], pathPrefixes: [\`/media/\${mediaId}\`] }).catch(() => {}));
+                  }
                   if (env2?.COVER_THUMBNAILS && typeof env2.COVER_THUMBNAILS.delete === 'function') {
                     deleteTasks.push(
                       env2.COVER_THUMBNAILS.delete(\`cover-thumb:v1:\${mediaId}\`).catch(() => {}),
