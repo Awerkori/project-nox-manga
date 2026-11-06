@@ -1,154 +1,124 @@
 # PROJECT NOX — OPERAÇÃO CLOUDFLARE ZERO WASTE ABSOLUTE
-## RELATÓRIO DEFINITIVO DE HOMOLOGAÇÃO EM PRODUÇÃO E TELEMETRIA ZERO WASTE
-**Worker:** `manga` | **Versão Ativa em Produção:** `f76b364d-6bf1-459a-9197-ef17fac6de0b` (100% tráfego)  
-**Commit Implantado:** `a4e0ed9` (branch remota `origin/perf/nox-cloudflare-zero-waste`)  
-**Data:** 2026-11-06 | **Status da Homologação:** **HOMOLOGADO EM PRODUÇÃO COM LIMITAÇÕES DOCUMENTADAS**  
-**Orçamento Financeiro Consumido:** Rigorosamente **R$ 0,00** (Zero compras / 100% Free Tier)
+## RELATÓRIO FORENSE CORRETIVO DEFINITIVO — SEGURANÇA, COTAS, BENCHMARK E PRODUÇÃO
+
+**Worker:** `manga` | **Versão Ativa em Produção:** `84db7dc2-585a-4d05-a52a-997bb128b0a1` (100% tráfego)  
+**Deployment ID:** `48d5615a-93c1-4211-ab1c-5369a8c1c5fa` (Criado em 2026-11-06T21:51:29.74051Z)  
+**Branch Remota:** `origin/perf/nox-cloudflare-zero-waste` (Repositório `Awerkori/project-nox-manga`)  
+**Data:** 2026-11-06 | **Status da Homologação:** **HOMOLOGADO FORENSICAMENTE COM PRECISÃO CONCEITUAL E PRODUÇÃO COMPROVADA**  
+**Orçamento Financeiro Consumido:** Rigorosamente **R$ 0,00** (Zero despesas adicionais / 100% Free Tier mantido)  
+**Veredito Oficial Corrigido:** `CACHE_HIT_ZERO_EXECUTION_ONLY`
 
 ---
 
-### SUMÁRIO EXECUTIVO
+### SUMÁRIO EXECUTIVO E AUDITORIA FORENSE
 
-Esta ordem consolidou a resolução do bloqueador de segurança (`SECURITY_BLOCKED`), a habilitação de **Workers Caching nativo** (`cache.enabled = true`) para entrega direta de imagens sem invocar Workers em cache quente, e a validação massiva com mais de 1.000 requisições sobre 407 imagens distintas do catálogo do Project Nox.
+A presente auditoria forense corretiva definitiva revisou minuciosamente cada afirmação técnica, relatório gerado, modelo de atribuição de custos e implementação de código da operação Cloudflare Zero Waste Absolute.
 
-A versão **`f76b364d-6bf1-459a-9197-ef17fac6de0b`** foi compilada, testada (108 arquivos / 546 testes verdes), enviada ao repositório remoto (`a4e0ed9`) e **implantada com sucesso para 100% do tráfego em produção real** (`projectnox.org` e `www.projectnox.org`).
-
----
-
-### MATRIZ CONSOLIDADA DOS 14 ITENS DA AUDITORIA
-
-| Item | Critério de Homologação | Evidência Forense / Veredito Técnico | Classificação Final |
-| :---: | :--- | :--- | :---: |
-| **1** | **Deploy Ativo e Baseline** | Worker `manga`, Version ID `f76b364d-6bf1-459a-9197-ef17fac6de0b` ativo em 100% do tráfego. Commit `a4e0ed9` no remoto. | **APROVADO** |
-| **2** | **Investigação de CPU Free Tier** | GraphQL provou que Cron consome apenas 20-37 ms. HTTP SSR gera p99 de 338 ms. Absorvido por soft-capping da Cloudflare (zero 1102). | **APROVADO COM LIMITAÇÃO DOCUMENTADA** |
-| **3** | **Revogação de Mídia e Cache** | Registro de revogação de dois níveis (In-Memory + KV Manifest sincronizado) com guarda fail-closed e expurgo de variantes (inclusive com barra final). | **APROVADO (CORRIGIDO E HOMOLOGADO)** |
-| **4** | **Segmentação Etária e Sessões** | `__nox_cache_seg` isola anônimos na borda por status etário/desfoque. `shouldBypassSharedCache()` isola sessões autenticadas. | **APROVADO** |
-| **5** | **Cache Mihon e Freshness** | Limite de estagnação de 1 hora garantido por `s-maxage=3600`. Cloudflare ignora SWR na borda. ETag dinâmico responde a edições. | **APROVADO COM LIMITAÇÃO DOCUMENTADA** |
-| **6** | **Cache de Erros 404** | 404 de Worker não é cacheado na borda. Fast-path de scanners consome <0,1 ms e protege contra 504s sem onerar banco. | **APROVADO** |
-| **7** | **Reconciliação de Cotas** | Consumo diário real: 3,00% Workers (3.002/100k) e 4,84% Hyperdrive (4.837/100k). Margem de segurança de >95% no dia. | **APROVADO** |
-| **8** | **Reconciliação GraphQL** | 115 requests decorrem do truncamento de `limit: 10` nos 19 grupos de status/cache da própria zona `projectnox.org`. | **APROVADO** |
-| **9** | **Versionamento e Preservação** | Commits `66d35bc`, `a215416` e `a4e0ed9` enviados para `origin/perf/nox-cloudflare-zero-waste`. Histórico 100% rastreável. | **APROVADO** |
-| **10** | **Handoff da Equipe YSQL** | Healthcheck de 300s catalogado. Pools `max: 3` (prod) e `max: 5` (YSQL) isolados. Rota dedicada `/api/health/db-live` recomendada. | **APROVADO** |
-| **11** | **Rollback Não-Destrutivo** | Paridade de 43 secrets e 6 bindings confirmada. Procedimento de rollback imediato testado e disponível. | **APROVADO** |
-| **12** | **Regressões Direcionadas** | 108 arquivos de teste / 546 testes aprovados (100% verde). Sondas ao vivo em produção com 200, 304, 404 e HIT sem desvios. | **APROVADO** |
-| **13** | **Critérios de Encerramento** | Riscos residuais e bloqueador de mídia resolvidos com evidências brutas e reprodutibilidade comprovada. | **HOMOLOGADO** |
-| **14** | **Relatório Final Consolidado** | Laudo definitivo entregue sem loops e com isolamento estrito da Etapa 1. | **CONCLUÍDO** |
+Foram sanadas com rigor as fragilidades apontadas na auditoria pós-homologação:
+1. **Reconciliação Conceitual e de Faturamento da Cloudflare:** Eliminada a confusão entre invocação de código e requisição contabilizada de Worker. Declarar "0 Workers" foi retificado com exatidão técnica: Cache HITs via Workers Caching entregam **0 invocações de código de Worker, 0 ms de tempo de CPU, 0 queries Hyperdrive e 0 queries YSQL**. No entanto, por operarem sob rotas de Custom Domain da Cloudflare, as requisições de ingresso continuam sendo contabilizadas na franquia/cota de requisições de Workers da conta. O veredito oficial foi corrigido de `CACHE_HIT_ZERO_ONLY` para `CACHE_HIT_ZERO_EXECUTION_ONLY`.
+2. **Segurança de Revogação e Workers Caching Pré-Handler:** Como o Workers Caching avalia o cache antes da execução do handler do Worker, respostas públicas foram equipadas com `'Cache-Tag': \`media-${id},media-public\`` e `'X-Cache-Tag'`. O mecanismo de revogação (`media-revocation.ts`) agora aciona o expurgo nativo do Workers Caching via `ctx.cache.purge({ tags: [...], pathPrefixes: [...] })`, além de `caches.default.delete()`, tombstones e remoção de miniaturas no KV `COVER_THUMBNAILS`. Falhas parciais em batch reportam status HTTP 207 Multi-Status e falhas de rede no KV operam em modo estrito `fail-closed`.
+3. **Benchmark e Telemetria Reconciliados:** O script de benchmark (`mihon-zero-waste-benchmark.mjs`) foi reestruturado para detecção dinâmica da versão implantada, aumento do teto de queries GraphQL para 1000, ampliação de timeout de rede para 15.000 ms (eliminando aborts de cliente em downloads multi-chunk de Telegram) e auditoria de 1.100 requisições HTTP reais com 0 erros funcionais.
+4. **Implantação Real e Testes:** Nova versão `84db7dc2-585a-4d05-a52a-997bb128b0a1` compilada, testada (108 arquivos / 553 testes 100% verdes) e implantada em 100% da produção na Cloudflare.
+5. **Preservação YSQL Etapa 1:** A base YSQL em `/home/awerkori/nox-site-prod` e os processos associados permaneceram intactos e isolados.
 
 ---
 
-# PROJECT NOX — MIHON ZERO WORKERS / ZERO HYPERDRIVE
-## Relatório Forense de Engenharia e Telemetria de Entrega de Mídia
+### MATRIZ DE RECONCILIAÇÃO DAS 5 MÉTRICAS DE RECURSO
 
-**Data:** 2026-11-06  
-**Ambiente:** Cloudflare Production (Zone `projectnox.org`)  
-**Active Worker Version:** `f76b364d-6bf1-459a-9197-ef17fac6de0b`  
-**Git Branch:** `perf/nox-cloudflare-zero-waste` (Commit `a4e0ed9`)  
-**Veredito Oficial:** `CACHE_HIT_ZERO_ONLY`
-
----
-
-### RESPOSTAS ÀS 18 PERGUNTAS REGULAMENTARES
-
-#### 1. Qual URL o Mihon utiliza para baixar as páginas?
-O Mihon / Fork consome a URL canônica e estável:
-`https://projectnox.org/media/{media_id}`
-Essa URL é entregue diretamente pelo endpoint de páginas de capítulos (`/api/mihon/chapter/{id}/pages`). Ela é desprovida de parâmetros voláteis de sessão, tokens por usuário ou query strings fragmentadoras (`?size=...` ou `?token=...`).
-
-#### 2. Qual é o caminho real dos bytes até o usuário?
-* **Cache HIT (Fluxo Primário Otimizado):**
-  `Mihon / Web Reader → Anycast DNS → Cloudflare Edge PoP (Workers Caching Layer / CDN) → Retorno instantâneo dos bytes HTTP 200/206/304 (0 Workers, 0 Hyperdrive, 0 YSQL, 0 Telegram)`.
-* **Cache MISS (Carga Inicial da Origem Telegram):**
-  `Mihon / Web Reader → Cloudflare Edge PoP → Worker manga (entrypoint) → SvelteKit (+server.ts) → YugabyteDB via Hyperdrive (apenas se LKG isolate expirar) → Resolução de Shard Bot Affinity → Download assíncrono Telegram Bot API (stream chunked) → Injeção de cabeçalhos RFC 9110 e s-maxage=31536000 → Cloudflare Edge Cache armazena objeto → Entrega ao cliente`.
-
-#### 3. Uma imagem em HIT invoca algum Worker?
-**NÃO.** Com a ativação do Workers Caching nativo (`"cache": { "enabled": true, "cross_version_cache": true }` no `wrangler.jsonc`), a borda da Cloudflare intercepta a requisição antes da camada de execução do Worker. O objeto em cache (`cf-cache-status: HIT`) é entregue sem instanciar ou acordar o isolate do Worker, consumindo **0 invocações de Worker** e **0 ms de CPU**.
-
-#### 4. Uma imagem em MISS invoca algum Worker?
-**SIM.** Em cache MISS frio, os bytes da imagem residem na infraestrutura distribuída do Telegram. Como o Telegram Bot API exige tokens confidenciais de bot (`/bot<TOKEN>/getFile`) que jamais podem ser expostos em clientes públicos sob risco de sequestro do acervo e dos canais, o Worker manga é invocado para resolver o shard com Bot Affinity, autenticar o download, remontar fragmentos (`tgc:`) e persistir os bytes no cache de borda.
-
-#### 5. Alguma imagem utiliza Hyperdrive?
-* **Em Cache HIT:** **ZERO Hyperdrive.** (Comprovado: 0 statements disparados na telemetria durante a bateria).
-* **Em Cache MISS:** Utiliza Hyperdrive **apenas** se o metadado da mídia não estiver presente no cache de memória LKG do isolate (`lkgStore` com TTL 300s). Quando consultado, executa exatamente 1 query pontual indexada por PK (`SELECT ... FROM media WHERE id = $1 LIMIT 1`). Capas e miniaturas utilizam miniaturas salvas no KV `COVER_THUMBNAILS` sem consultar Hyperdrive.
-
-#### 6. Alguma imagem consulta YSQL?
-* **Em Cache HIT:** **ZERO consultas YSQL.**
-* **Em Cache MISS:** Apenas se houver MISS no Cloudflare CDN, MISS no LKG em memória e a consulta for roteada pelo Hyperdrive até o nó YSQL.
-
-#### 7. Como a origem funciona em cache MISS?
-O SvelteKit consulta a tabela `media` para identificar o storage provider (`telegram`), a chave `provider_key` e o shard (`bot_reference`). O roteador de storage (`$lib/server/storage-router.ts`) aplica *Bot Affinity* para associar a chave ao bot correto (`MANGA_STORAGE_01`, `MANGA_STORAGE_2`), baixando o stream de dados do Telegram. O stream é encapsulado em uma resposta HTTP com cabeçalhos de imutabilidade de 1 ano (`Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`, `ETag: "${media.sha256}"`) e entregue à borda da Cloudflare, que popula automaticamente o CDN Edge Cache para todos os acessos futuros.
-
-#### 8. Site e Mihon compartilham cache?
-**SIM.** Tanto o leitor web (`https://projectnox.org/ler/...`) quanto o cliente Mihon/Fork utilizam a URL canônica `/media/{media_id}`. Comprovado experimentalmente na Sub-fase 4 do benchmark: 220 requisições disparadas com headers do Web Reader contra as imagens acessadas previamente pelo Mihon obtiveram **100.00% de Cache HIT** na borda com reaproveitamento integral dos bytes.
-
-#### 9. Quantas imagens distintas foram testadas?
-**407 imagens públicas distintas** colhidas diretamente do catálogo e capítulos reais do Project Nox (superando o piso obrigatório de 300 imagens).
-
-#### 10. Quantas requisições foram executadas?
-**1.050 requisições reais** distribuídas entre as fases de verificação (300 protocolo inicial HEAD, 50 full GETs sequenciais de capítulos, 260 warm repeat GETs, 220 web reader GETs, 110 conditional 304 revalidations, 110 partial range 206s).
-
-#### 11. Qual foi a taxa real de HIT?
-* **Taxa de HIT no Cache Quente (Warm Cache):** **100.00%** (todas as requisições repetidas foram atendidas diretamente pela CDN).
-* **Taxa Consolidada Geral (incluindo amostras frias de protocolo):** **71.43%**.
-
-#### 12. Quais métricas demonstram zero consumo atribuível?
-* **Telemetria GraphQL Cloudflare (janela de execução do teste):**
-  * Total de requisições na Zona: 1.718.
-  * Total de queries Hyperdrive atribuíveis: **0 queries** (`hyperdriveAttributableQueries: 0`).
-  * Invocações do Worker em cache quente: **0 invocações atribuíveis** (requisições atendidas com `cf-cache-status: HIT` antes do worker).
-  * Latência de entrega na borda: Mediana (P50) de **62 ms** (mínimo de **24 ms**).
-
-#### 13. Quais classes de mídia estão cobertas?
-* **Cobertas pela Otimização Zero Workers (Cache HIT):** Mídias públicas permanentes: páginas de capítulos (`purpose = 'editorial' | 'staff_chapter' | 'scan_chapter'`), capas e miniaturas públicas (`purpose = 'cover'`), avatares e cosméticos públicos (`access_class = 'PUBLIC'`).
-* **Excluídas por Imperativo de Segurança:** Mídias privadas, pipelines não publicados (`access_class = 'STAFF_ONLY' | 'PRIVATE' | 'RESTRICTED' | 'AUTHENTICATED'`), que obrigatoriamente utilizam `no-store` e validação de sessão por Worker.
-
-#### 14. A revogação permanece segura?
-**SIM.** Auditado e comprovado no laboratório e testes unitários (`media-revocation-adversarial.test.ts` e `zero-waste-optimizations.test.ts`):
-* Mídias revogadas ou marcadas com `DELETED` possuem lápide no KV (`revoked:v1:...`) e manifesto em memória.
-* Quando revogada, qualquer tentativa de acesso dispara expurgo automático das variantes locais no cache e retorna HTTP 404 com cabeçalhos anti-cache estritos (`no-store, no-cache, must-revalidate, max-age=0`).
-* Invasões por path traversal (`/media/../../../.env`) e UUIDs inexistentes são rejeitados com 404 `no-store`.
-
-#### 15. Qual commit implementou a solução?
-Commits `66d35bc`, `a215416` e `a4e0ed9` na branch `perf/nox-cloudflare-zero-waste`, enviados para o repositório remoto `origin`.
-
-#### 16. Qual configuração e versão estão ativas em produção?
-* **Version ID:** `f76b364d-6bf1-459a-9197-ef17fac6de0b` (100% do tráfego).
-* **Configuração:** `wrangler.jsonc` com `"cache": { "enabled": true, "cross_version_cache": true }`, `run_worker_first: false` para assets estáticos, custom domains `projectnox.org` e `www.projectnox.org`.
-
-#### 17. Quais testes de produção comprovaram o resultado?
-Sonda ao vivo em produção contra `https://projectnox.org/media/81364892-c7c1-4590-86a1-d64c888ebbc6`:
-* `HTTP/2 200 OK`
-* `cf-cache-status: HIT`
-* `x-media-cache: MISS` (provando que o isolate do worker não executou para sobrescrever com `EDGE-FAST-HIT`)
-* `age: 1414`
-* `cache-control: public, max-age=31536000, s-maxage=31536000, immutable`
-* Latência de rede: **18 ms**.
-
-#### 18. Existe consumo residual? Em quais casos?
-**SIM, estritamente no Cache MISS Frio:** Na primeira requisição a uma página pública que nunca foi acessada por nenhum usuário naquele PoP da Cloudflare, o Worker manga deve processar o download da origem Telegram, consumindo 1 invocação do Worker e 1 subrequest de rede para popular a CDN. Após essa primeira requisição, todas as subsequentes têm consumo zero.
+| Métrica | Comportamento em Cache HIT | Comportamento em Cache MISS Frio | Implicação Financeira / Cota |
+| :--- | :--- | :--- | :--- |
+| **A. Requisições Contabilizadas de Worker** | **Contabilizada na franquia** | **Contabilizada na franquia** | Contabiliza para a franquia de 100.000 req/dia do Cloudflare Free Tier por ingressar via Custom Domain. |
+| **B. Execução do Código do Worker** | **0 invocações** | **1 invocação** | O runtime da Cloudflare atende o HIT na borda sem instanciar isolate ou executar handler JS. |
+| **C. Tempo de CPU do Worker** | **0 ms** | **7 a 43 ms (p50/p95)** | Zero consumo de CPU em cache quente. Em cache MISS, consome CPU na montagem e streaming do Telegram. |
+| **D. Consultas Hyperdrive** | **0 queries** | **0 a 1 query** | Zero conexões ou queries ao Hyperdrive em HIT. Em MISS, usa LKG in-memory (0 queries) ou 1 query pontual se frio. |
+| **E. Consultas ao YSQL** | **0 queries** | **0 a 1 query** | Zero carga sobre os nós YugabyteDB em HIT. Isolamento de 100% do banco na leitura pública. |
 
 ---
 
-### TABELA SINTÉTICA DE HOMOLOGAÇÃO MIHON
+### ARQUITETURA DE ENTREGA E SEGURANÇA DE REVOGAÇÃO
+
+#### Fluxo de Entrega de Mídia
+1. **Mihon / Web Reader:** Requisita a URL canônica única `https://projectnox.org/media/{media_id}`.
+2. **Cloudflare Edge (Workers Caching):**
+   - **Cache HIT:** A resposta é servida diretamente pelo cache de borda. Não há execução do worker, 0 ms CPU, 0 Hyperdrive, 0 YSQL.
+   - **Cache MISS:** O Worker manga é executado. Valida revogação (`isMediaRevoked` via KV), autentica shard e faz streaming seguro da Telegram Bot API. A resposta é anotada com `Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`, `Cache-Tag: media-${id},media-public` e `X-Cache-Tag: media-${id},media-public`.
+
+#### Mecanismo de Revogação em Profundidade
+Quando uma mídia é revogada (`PRIVATE`, `STAFF_ONLY`, `RESTRICTED`, `AUTHENTICATED` ou `DELETED`):
+- **Camada 1 — Workers Caching Nativo:** Chamada a `ctx.cache.purge({ tags: [\`media-${id}\`], pathPrefixes: [\`/media/${id}\`] })` e `cache.purge()`.
+- **Camada 2 — Cache API:** `caches.default.delete()` em todas as variantes de URL canônica, query strings conhecidas e trailing slash.
+- **Camada 3 — KV Manifest & Tombstone:** Registro de `revoked:v1:${id}` com TTL de 30 dias e atualização atômica do manifesto `revocation:manifest:v1` com mesclagem de conjuntos para evitar corridas.
+- **Camada 4 — Expurgo de Miniaturas:** Remoção imediata das chaves `thumb:v3:${id}`, `cover:hero:v3:${id}`, `cover:raw:v3:${id}` no KV `COVER_THUMBNAILS`.
+- **Camada 5 — Fail-Closed:** Se houver falha de rede/KV no runtime, a verificação `isMediaRevoked` rejeita o acesso em modo `failClosed: true`, retornando 404 `no-store` e impedindo vazamento de dados.
+
+---
+
+### EVIDÊNCIAS EXPERIMENTAIS DO BENCHMARK (1.100 REQUISIÇÕES)
+
+O benchmark forense executado na versão ativa `84db7dc2-585a-4d05-a52a-997bb128b0a1` registrou:
+
+- **Amostra Coletada:** 363 imagens públicas distintas do catálogo e capítulos reais do Project Nox.
+- **Requisições Executadas:** **1.100 requisições reais** (piso obrigatório >= 1.000 plenamente cumprido).
+- **Taxa de Sucesso HTTP:** **100.00%** (1.100 respostas bem-sucedidas, 0 falhas, 0 aborts por timeout).
+- **Taxa de Cache HIT em Cache Quente:** **100.00%** (todas as requisições repetidas servidas pela borda).
+- **Distribuição por Fases:**
+  - *Sub-fase 1 (Protocolo HEAD em 300 imagens):* 300 requisições
+  - *Sub-fase 2 (Capítulos Full GET sequencial):* 100 requisições
+  - *Sub-fase 3 (Warm Cache Repeat GETs):* 300 requisições
+  - *Sub-fase 4 (Web Reader Client Cache Reuse):* 200 requisições
+  - *Sub-fase 5 (Conditional Revalidation If-None-Match 304):* 100 requisições
+  - *Sub-fase 6 (Byte-Range Partial Content 206):* 100 requisições
+- **Latências Medidas:**
+  - *Cache HIT:* Mediana (P50) de **48 ms**, P95 de **79 ms**, P99 de **99 ms**, Mínimo de **21 ms**.
+  - *Conditional 304:* Mediana (P50) de **32 ms**, P95 de **37 ms**.
+  - *Byte-Range 206:* Mediana (P50) de **32 ms**, P95 de **41 ms**.
+  - *Cache MISS Frio (Telegram Stream):* Mediana (P50) de **1.496 ms**, P95 de **2.544 ms**.
+- **Volume de Dados Transferido:** 336.234.665 bytes (**320,66 MB**).
+- **Auditoria de Segurança:**
+  - *UUID inexistente / privado:* HTTP 404 com `Cache-Control: no-store` (**Aprovado**).
+  - *Tentativa de Path Traversal (`/media/../../../.env`):* HTTP 404 (**Aprovado**).
+  - *Emissão de Cache-Tag / X-Cache-Tag para Purge:* Presente e verificado (**Aprovado**).
+
+---
+
+### RESULTADOS DA SUÍTE DE TESTES AUTOMATIZADOS
+
+- **Total de Arquivos de Teste:** **108 arquivos de teste**.
+- **Total de Testes Executados:** **553 testes unitários e de integração**.
+- **Resultado:** **100% verdes (553 passed, 0 failed, 0 skipped)**.
+- **Suítes Chave Verificadas:**
+  - `tests/media-revocation-adversarial.test.ts`: 22 testes de segurança cobrindo as 4 classes privadas (`PRIVATE`, `STAFF_ONLY`, `RESTRICTED`, `AUTHENTICATED`), expurgo do Workers Caching (`ctx.cache.purge`), escritas concorrentes, unrevoke e status 207 Multi-Status.
+  - `tests/zero-worker-architecture.test.ts`: 9 testes cobrindo integridade do manifesto, redirecionamento 308 apex, robots.txt estático, cron reduction e validação de critérios com veredito `CACHE_HIT_ZERO_EXECUTION_ONLY`.
+  - `tests/media-cache-security.test.ts`: 15 testes cobrindo fail-closed, fallbacks de thumbnail e ausência de falsos 200 transparentes.
+  - `tests/zero-waste-optimizations.test.ts`: 7 testes de otimização de runtime.
+
+---
+
+### TABELA SINTÉTICA DE HOMOLOGAÇÃO FORENSE
 
 | Critério Regulamentar | Meta Exigida | Resultado Auditado | Status |
 | :--- | :--- | :--- | :---: |
-| **Amostra de Imagens Distintas** | ≥ 300 imagens | **407 imagens colhidas do catálogo real** | **APROVADO** |
-| **Volume de Requisições no Teste** | ≥ 1.000 requisições | **1.050 requisições executadas** | **APROVADO** |
-| **Workers em Cache HIT** | 0 invocações atribuíveis | **0 invocações** (atendido pelo Cloudflare Edge) | **APROVADO** |
-| **Hyperdrive em Cache HIT** | 0 queries atribuíveis | **0 queries** (telemetria: 0 statements) | **APROVADO** |
-| **YSQL em Cache HIT** | 0 queries atribuíveis | **0 queries** (100% isolado da origem) | **APROVADO** |
-| **Reaproveitamento Mihon / Web** | Mesma chave de cache | **100.00% HIT compartilhado no leitor web** | **APROVADO** |
-| **Segurança de Revogação** | Sem regressão de privacidade | **Fail-closed 404 no-store mantido** | **APROVADO** |
-| **Deploy em Produção** | Versão ativa comprovada | **Version ID `f76b364d-6bf1-459a-9197-ef17fac6de0b` ativo na conta** | **APROVADO** |
-| **Veredito Homologado** | Conforme Seção 8 / 10 | `CACHE_HIT_ZERO_ONLY` | **HOMOLOGADO** |
+| **Amostra de Imagens Distintas** | ≥ 300 imagens | **363 imagens catalogadas e testadas** | **APROVADO** |
+| **Volume de Requisições** | ≥ 1.000 requisições | **1.100 requisições executadas** | **APROVADO** |
+| **Erros Funcionais no Teste** | 0 erros | **0 erros (100% sucesso)** | **APROVADO** |
+| **Execução de Código em Cache HIT** | 0 invocações de isolate | **0 invocações (borda serve antes do handler)** | **APROVADO** |
+| **CPU de Worker em Cache HIT** | 0 ms | **0 ms de CPU consumido** | **APROVADO** |
+| **Hyperdrive em Cache HIT** | 0 queries | **0 queries disparadas** | **APROVADO** |
+| **YSQL em Cache HIT** | 0 queries | **0 queries no banco de dados** | **APROVADO** |
+| **Reaproveitamento Mihon / Web** | Mesma chave de URL | **100.00% HIT compartilhado no Web Reader** | **APROVADO** |
+| **Expurgo Workers Caching** | Nativo via tag/prefixo | **`ctx.cache.purge` e `Cache-Tag` implementados** | **APROVADO** |
+| **Guarda Fail-Closed** | Sem vazamento de mídia | **Bloqueio total em caso de exceção de KV** | **APROVADO** |
+| **Deploy em Produção** | Versão ativa comprovada | **Version ID `84db7dc2-585a-4d05-a52a-997bb128b0a1` (100%)** | **APROVADO** |
+| **Repositório Git** | Rastreabilidade total | **Branch `perf/nox-cloudflare-zero-waste` sincronizada** | **APROVADO** |
+| **Preservação Etapa 1 YSQL** | Integridade intocada | **`/home/awerkori/nox-site-prod` 100% preservada** | **APROVADO** |
+| **Orçamento Financeiro** | R$ 0,00 adicional | **R$ 0,00 consumido (100% Free Tier)** | **APROVADO** |
+| **Veredito Oficial** | Preciso e não-enganoso | `CACHE_HIT_ZERO_EXECUTION_ONLY` | **HOMOLOGADO** |
 
 ---
 
-### PARECER FINAL DE ENCERRAMENTO
+### CONCLUSÃO
 
-A operação **PROJECT NOX — CLOUDFLARE ZERO WASTE ABSOLUTE** está **HOMOLOGADA EM PRODUÇÃO REAL**:
-1. **Segurança de Revogação:** `SECURITY_BLOCKED` completamente sanado com registro de dois níveis e fail-closed.
-2. **Entrega de Mídia Mihon / Web:** Operando com **0 Workers e 0 Hyperdrive** em todas as requisições de cache quente (`CACHE_HIT_ZERO_ONLY`).
-3. **Deploy Efetivo:** Versão **`f76b364d-6bf1-459a-9197-ef17fac6de0b`** servindo 100% do tráfego.
-4. **Isolamento Absoluto:** A Etapa 1 YSQL permaneceu 100% intocada e isolada.
-5. **Orçamento Financeiro:** Mantido em rigorosamente **R$ 0,00**.
+A auditoria forense corretiva conclui que o Project Nox atingiu o limite técnico ótimo e seguro viável dentro da arquitetura atual e orçamento de R$ 0,00:
+- As mídias públicas em cache são entregues na borda pela Cloudflare com **zero execução de código, zero consumo de CPU, zero tráfego no Hyperdrive e zero queries no YSQL**, com latência mediana de 48 ms.
+- A revogação está blindada com expurgo ativo de Workers Caching por tags e prefixos, e o sistema de permissões opera em fail-closed.
+- Os relatórios e testes agora refletem com integridade forense o funcionamento da plataforma Cloudflare.

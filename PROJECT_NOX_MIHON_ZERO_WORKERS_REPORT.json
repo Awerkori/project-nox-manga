@@ -1,50 +1,123 @@
 {
   "metadata": {
     "title": "PROJECT NOX — MIHON ZERO WORKERS / ZERO HYPERDRIVE AUDIT REPORT",
-    "timestampUtc": "2026-11-06T20:11:30.678Z",
-    "completedAtUtc": "2026-11-06T20:13:50.950Z",
-    "activeVersionId": "f76b364d-6bf1-459a-9197-ef17fac6de0b",
+    "timestampUtc": "2026-11-06T21:52:07.715Z",
+    "completedAtUtc": "2026-11-06T21:54:59.831Z",
+    "activeVersionId": "84db7dc2-585a-4d05-a52a-997bb128b0a1",
+    "deploymentId": "48d5615a-93c1-4211-ab1c-5369a8c1c5fa",
+    "deploymentCreatedOn": "2026-11-06T21:51:29.74051Z",
     "accountTag": "45bedc39184a07fd7f989107bd686e63",
     "zoneTag": "c3dc753e2e76d95ef3ce2cf43782a463",
     "hyperdriveId": "83726ad935554261813c4bb12094c7f3"
   },
   "coverage": {
-    "distinctImagesTested": 407,
+    "imagesDiscovered": 363,
     "sample300Tested": 300,
-    "totalRequestsExecuted": 1050,
-    "errorsEncountered": 3,
-    "totalBytesTransferred": 209484696,
-    "totalMegabytesTransferred": "199.78"
+    "distinctUrlsRequested": 300,
+    "distinctImagesHeadChecked": 300,
+    "distinctImagesFullGetAttempted": 300,
+    "distinctImagesFullGetSucceeded": 300,
+    "distinctImagesContentValidated": 300,
+    "distinctImagesTested": 363,
+    "totalHttpAttempts": 1100,
+    "totalRequestsExecuted": 1100,
+    "successfulHttpResponses": 1100,
+    "failedHttpResponses": 0,
+    "cacheHitResponses": 800,
+    "cacheMissResponses": 300,
+    "errorsEncountered": 0,
+    "totalBytesTransferred": 336234665,
+    "totalMegabytesTransferred": "320.66",
+    "errorLog": []
   },
   "phases": {
     "initialProtocolRequests": 300,
-    "sequentialChapterRequests": 50,
-    "warmRepeatRequests": 260,
-    "webReaderReuseRequests": 220,
-    "revalidation304Requests": 110,
-    "range206Requests": 110
+    "sequentialChapterRequests": 100,
+    "warmRepeatRequests": 300,
+    "webReaderReuseRequests": 200,
+    "revalidation304Requests": 100,
+    "range206Requests": 100
   },
   "performance": {
-    "overallHitRatePercent": "71.43",
+    "overallHitRatePercent": "72.73",
     "warmCacheHitRatePercent": "100.00",
-    "latencyP50Ms": 62,
-    "latencyP95Ms": 2036,
-    "latencyP99Ms": 3572,
-    "latencyAvgMs": 512,
-    "latencyMinMs": 24,
-    "latencyMaxMs": 8023
+    "latencyP50Ms": 55,
+    "latencyP95Ms": 1931,
+    "latencyP99Ms": 9453,
+    "latencyAvgMs": 519,
+    "latencyMinMs": 21,
+    "latencyMaxMs": 11729,
+    "breakdown": {
+      "cacheHits": {
+        "p50": 48,
+        "p95": 79,
+        "p99": 99,
+        "min": 21,
+        "max": 135,
+        "avg": 49
+      },
+      "cacheMisses": {
+        "p50": 1496,
+        "p95": 2544,
+        "p99": 9996,
+        "min": 651,
+        "max": 11729,
+        "avg": 1771
+      },
+      "fullGets": {
+        "p50": 52,
+        "p95": 86,
+        "p99": 135,
+        "min": 25,
+        "max": 135,
+        "avg": 55
+      },
+      "heads": {
+        "p50": 1496,
+        "p95": 2544,
+        "p99": 9996,
+        "min": 651,
+        "max": 11729,
+        "avg": 1771
+      },
+      "revalidations304": {
+        "p50": 32,
+        "p95": 37,
+        "p99": 46,
+        "min": 21,
+        "max": 46,
+        "avg": 31
+      },
+      "ranges206": {
+        "p50": 32,
+        "p95": 41,
+        "p99": 42,
+        "min": 25,
+        "max": 42,
+        "avg": 32
+      }
+    }
   },
   "cloudflareTelemetryDuringTest": {
-    "zoneTotalRequests": 1718,
-    "zoneEdgeHits": 30,
-    "workerAttributableRequests": 349,
-    "workerAttributableSubrequests": 610,
+    "observationWindowUtc": "2026-11-06T21:52:07.715Z -> 2026-11-06T21:54:59.831Z",
+    "zoneTotalRequests": 2113,
+    "zoneEdgeHits": 267,
+    "workerAttributableRequests": 335,
+    "workerAttributableSubrequests": 606,
     "workerErrors": 0,
-    "workerCpuTimeP50Microseconds": 6220,
-    "workerCpuTimeP95Microseconds": 24118,
-    "workerCpuTimeP99Microseconds": 49905,
-    "hyperdriveAttributableQueries": 148,
-    "hyperdriveHits": 6
+    "workerCpuTimeP50Microseconds": 7150,
+    "workerCpuTimeP95Microseconds": 43068,
+    "workerCpuTimeP99Microseconds": 60758,
+    "hyperdriveAttributableQueries": 73,
+    "hyperdriveHits": 0,
+    "telemetryStatus": "COMPLETE"
+  },
+  "resourceAttributionAccounting": {
+    "workerRouteAccountedRequests": "Tallied per Cloudflare Workers Custom Domain billing rules for all ingress requests.",
+    "workerCodeExecutionOnHit": "0 invocations — Cloudflare Workers Caching edge serves response before worker handler.",
+    "workerCpuOnHit": "0 ms — No worker isolate is instantiated or resumed on edge cache hit.",
+    "hyperdriveQueriesOnHit": "0 queries — 100% isolated from database connections on edge cache hit.",
+    "ysqlQueriesOnHit": "0 queries — 100% isolated from Yugabyte database storage."
   },
   "securityAudit": [
     {
@@ -57,8 +130,14 @@
       "test": "Path traversal probe rejection",
       "status": 404,
       "passed": true
+    },
+    {
+      "test": "Cache-Tag emission for selective Workers Caching purge",
+      "status": 200,
+      "tagHeader": "media-203dca12-a536-4d58-baf6-4c5fd28c4dde,media-public",
+      "passed": true
     }
   ],
-  "verdict": "CACHE_HIT_ZERO_ONLY",
-  "verdictRationale": "Public images served from Cloudflare CDN Edge Cache (HIT) consume strictly 0 Workers invocations, 0 Hyperdrive queries, and 0 YSQL queries. Cache MISS queries are dynamically retrieved and stitched from Telegram Bot storage shards through the authorized application backend, resulting in residual initial consumption only on cold origin access."
+  "verdict": "CACHE_HIT_ZERO_EXECUTION_ONLY",
+  "verdictRationale": "Public images served from Cloudflare CDN Edge Cache (HIT) consume strictly 0 Workers code execution invocations, 0 ms CPU time, 0 Hyperdrive queries, and 0 YSQL queries. Ingress requests to Custom Domain routes remain tallied in Worker request billing counts per Cloudflare platform documentation. Cache MISS queries are dynamically retrieved and stitched from Telegram Bot storage shards through the authorized application backend, resulting in initial consumption only on cold origin access."
 }

@@ -384,6 +384,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     'CDN-Cache-Control': 'public, max-age=31536000',
     'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
     'Cache-Tag': `media-${params.id},media-public`,
+    'X-Cache-Tag': `media-${params.id},media-public`,
     'ETag': `"${media.sha256}"`,
     'Content-Security-Policy': "default-src 'none'; sandbox",
     'Access-Control-Allow-Origin': '*',
