@@ -88,14 +88,14 @@ export async function isMediaRevoked(
     try {
       lastManifestSync = now;
       const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
-      if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
+      if (manifest && Array.isArray(manifest.revokedIds)) {
         manifestSuccessfullyLoaded = true;
         for (const id of manifest.revokedIds) {
           memoryRevokedSet.add(id);
         }
         if (memoryRevokedSet.has(mediaId)) return true;
       } else {
-        manifestSuccessfullyLoaded = true; // Valid empty manifest
+        manifestSuccessfullyLoaded = false;
       }
     } catch {
       manifestSuccessfullyLoaded = false;
@@ -128,8 +128,9 @@ export async function isMediaRevoked(
 export async function purgeMediaVariants(
   mediaId: string,
   options: PurgeMediaOptions & { currentUrl?: string } = {}
-): Promise<{ cachePurged: number; workersCachePurged: number; kvPurged: number }> {
+): Promise<{ cachePurged: number; workersCachePurged: number; kvPurged: number; errors: string[] }> {
   const { cache, ctx, origin = 'https://projectnox.org', kv, currentUrl } = options;
+  const errors: string[] = [];
   let cachePurged = 0;
   let workersCachePurged = 0;
   let kvPurged = 0;
@@ -139,21 +140,33 @@ export async function purgeMediaVariants(
   const tagToPurge = `media-${mediaId}`;
   const prefixToPurge = `/media/${mediaId}`;
   try {
+    let purgePromise: Promise<any> | null = null;
     if (ctx?.cache && typeof ctx.cache.purge === 'function') {
-      await ctx.cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] }).catch(() => {});
-      workersCachePurged++;
+      purgePromise = ctx.cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
     } else if (cache && typeof cache.purge === 'function') {
-      await cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] }).catch(() => {});
-      workersCachePurged++;
+      purgePromise = cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
     } else {
       // Attempt dynamic import in runtime environments supporting cloudflare:workers
       const cw = await import('cloudflare:workers').catch(() => null);
       if (cw?.cache && typeof cw.cache.purge === 'function') {
-        await cw.cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] }).catch(() => {});
+        purgePromise = cw.cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
+      }
+    }
+
+    if (purgePromise) {
+      const purgeRes = await purgePromise;
+      if (purgeRes && typeof purgeRes === 'object' && purgeRes.success === false) {
+        const errorMsgs = Array.isArray(purgeRes.errors)
+          ? purgeRes.errors.map((e: any) => e.message || String(e)).join('; ')
+          : 'Workers cache purge returned unsuccessful';
+        errors.push(`WORKERS_CACHE_PURGE_ERROR: ${errorMsgs}`);
+      } else {
         workersCachePurged++;
       }
     }
-  } catch {}
+  } catch (err: any) {
+    errors.push(`WORKERS_CACHE_PURGE_FAILED: ${err?.message || err}`);
+  }
 
   // 2. Purge all variants from Cache API (caches.default)
   if (cache && typeof cache.delete === 'function') {
@@ -161,6 +174,7 @@ export async function purgeMediaVariants(
     if (origin !== 'https://projectnox.org') {
       originsToPurge.add('https://projectnox.org');
     }
+    originsToPurge.add('https://www.projectnox.org');
 
     const urlsToPurge: string[] = [];
     for (const org of originsToPurge) {
@@ -185,14 +199,21 @@ export async function purgeMediaVariants(
       urlsToPurge.push(currentUrl);
     }
 
-    await Promise.allSettled(
+    const deleteResults = await Promise.allSettled(
       urlsToPurge.map(async (url) => {
         try {
           const deleted = await cache.delete(new Request(url, { method: 'GET' }));
           if (deleted) cachePurged++;
-        } catch {}
+        } catch (err: any) {
+          throw new Error(`CACHE_API_DELETE_FAILED for ${url}: ${err?.message || err}`);
+        }
       })
     );
+    for (const dr of deleteResults) {
+      if (dr.status === 'rejected') {
+        errors.push(dr.reason?.message || 'CACHE_DELETE_REJECTED');
+      }
+    }
   }
 
   // 3. Purge from KV COVER_THUMBNAILS
@@ -204,17 +225,24 @@ export async function purgeMediaVariants(
       `cover-hero:v1:${mediaId}:warm`
     ];
 
-    await Promise.allSettled(
+    const kvResults = await Promise.allSettled(
       kvKeysToPurge.map(async (key) => {
         try {
           await kv.delete(key);
           kvPurged++;
-        } catch {}
+        } catch (err: any) {
+          throw new Error(`KV_DELETE_FAILED for ${key}: ${err?.message || err}`);
+        }
       })
     );
+    for (const kr of kvResults) {
+      if (kr.status === 'rejected') {
+        errors.push(kr.reason?.message || 'KV_DELETE_REJECTED');
+      }
+    }
   }
 
-  return { cachePurged, workersCachePurged, kvPurged };
+  return { cachePurged, workersCachePurged, kvPurged, errors };
 }
 
 /**
@@ -251,12 +279,16 @@ export async function revokeMedia(
   memoryRevokedSet.add(mediaId);
 
   // 2. Purge Workers Caching, Cache API, and KV thumbnails
-  const { cachePurged, workersCachePurged, kvPurged } = await purgeMediaVariants(mediaId, {
+  const purgeResult = await purgeMediaVariants(mediaId, {
     cache: options.cache,
     ctx: options.ctx,
     origin: options.origin,
     kv: options.kv
   });
+  const { cachePurged, workersCachePurged, kvPurged } = purgeResult;
+  if (purgeResult.errors && purgeResult.errors.length > 0) {
+    errors.push(...purgeResult.errors);
+  }
 
   // 3. Write tombstone to KV
   if (options.kv && typeof options.kv.put === 'function') {
@@ -267,21 +299,30 @@ export async function revokeMedia(
       errors.push(`TOMBSTONE_WRITE_FAILED: ${err?.message || err}`);
     }
 
-    // 4. Update manifest in KV with merge logic to avoid concurrent overwrite
-    try {
-      let currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-      if (!currentManifest || !Array.isArray(currentManifest.revokedIds)) {
-        currentManifest = { version: 1, updatedAt: revokedAt, revokedIds: [] };
+    // 4. Update manifest in KV with retry and merge logic to avoid concurrent overwrite
+    let manifestWriteAttempts = 0;
+    while (manifestWriteAttempts < 3 && !manifestUpdated) {
+      manifestWriteAttempts++;
+      try {
+        let currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+        if (!currentManifest || !Array.isArray(currentManifest.revokedIds)) {
+          currentManifest = { version: 1, updatedAt: revokedAt, revokedIds: [] };
+        }
+        const idSet = new Set(currentManifest.revokedIds);
+        for (const id of memoryRevokedSet) {
+          idSet.add(id);
+        }
+        idSet.add(mediaId);
+        currentManifest.revokedIds = Array.from(idSet);
+        currentManifest.updatedAt = revokedAt;
+        currentManifest.version = (currentManifest.version || 1) + 1;
+        await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
+        manifestUpdated = true;
+      } catch (manifestErr: any) {
+        if (manifestWriteAttempts >= 3) {
+          errors.push(`MANIFEST_WRITE_FAILED: ${manifestErr?.message || manifestErr}`);
+        }
       }
-      const idSet = new Set(currentManifest.revokedIds);
-      idSet.add(mediaId);
-      currentManifest.revokedIds = Array.from(idSet);
-      currentManifest.updatedAt = revokedAt;
-      currentManifest.version = (currentManifest.version || 1) + 1;
-      await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
-      manifestUpdated = true;
-    } catch (manifestErr: any) {
-      errors.push(`MANIFEST_WRITE_FAILED: ${manifestErr?.message || manifestErr}`);
     }
   }
 
@@ -307,10 +348,15 @@ export async function revokeMedia(
 export async function unrevokeMedia(
   mediaId: string,
   options: { kv?: any; cache?: any; ctx?: any; origin?: string } = {}
-): Promise<void> {
+): Promise<{ success: boolean; errors: string[] }> {
+  const errors: string[] = [];
   memoryRevokedSet.delete(mediaId);
   if (options.kv && typeof options.kv.delete === 'function') {
-    await options.kv.delete(REVOCATION_KEY_PREFIX + mediaId).catch(() => {});
+    try {
+      await options.kv.delete(REVOCATION_KEY_PREFIX + mediaId);
+    } catch (err: any) {
+      errors.push(`TOMBSTONE_DELETE_FAILED: ${err?.message || err}`);
+    }
     try {
       const currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
       if (currentManifest?.revokedIds && Array.isArray(currentManifest.revokedIds)) {
@@ -319,14 +365,22 @@ export async function unrevokeMedia(
         currentManifest.version = (currentManifest.version || 1) + 1;
         await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
       }
-    } catch {}
+    } catch (manifestErr: any) {
+      errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);
+    }
   }
 
   // Purge any negative (404) cache entries from Workers Caching and Cache API
-  await purgeMediaVariants(mediaId, {
+  const purgeRes = await purgeMediaVariants(mediaId, {
     cache: options.cache,
     ctx: options.ctx,
     origin: options.origin,
     kv: options.kv
-  }).catch(() => {});
+  }).catch((err) => ({ errors: [err?.message || 'PURGE_FAILED'] }));
+
+  if (purgeRes?.errors && purgeRes.errors.length > 0) {
+    errors.push(...purgeRes.errors);
+  }
+
+  return { success: errors.length === 0, errors };
 }

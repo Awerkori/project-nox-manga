@@ -488,9 +488,12 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       origin,
       reason: 'PARTIAL_FAIL'
     });
-    expect(res.success).toBe(true);
+    // System MUST NOT report misleading global success when an operation fails
+    expect(res.success).toBe(false);
+    expect(res.errors.length).toBeGreaterThan(0);
+    expect(res.errors.some(e => e.includes('CACHE_DELETE_REJECTED') || e.includes('partial failure'))).toBe(true);
 
-    // When media is checked, it still knows it is revoked via KV/memory
+    // When media is checked, it still knows it is revoked via KV/memory (fail-closed)
     expect(await isMediaRevoked(mediaId, mockKv)).toBe(true);
 
     // Route request fails closed and returns 404 with no-store
@@ -958,6 +961,122 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(res.headers.get('Cache-Control')).toContain('no-store');
       expect(res.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');
     }
+  });
+
+  // TEST V: Workers Caching purge error reporting (does not swallow errors)
+  it('Teste V: falha em ctx.cache.purge reporta success: false e detalha o erro', async () => {
+    const mediaId = 'ffffffff-aaaa-4fff-8fff-ffffffffffff';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+    const mockCtx = {
+      cache: {
+        purge: vi.fn().mockResolvedValue({
+          success: false,
+          errors: [{ code: 1001, message: 'Rate limit on cache tag purge' }]
+        })
+      }
+    };
+
+    const res = await revokeMedia(mediaId, {
+      kv: mockKv,
+      cache: mockCache,
+      ctx: mockCtx,
+      reason: 'PRIVATE'
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.workersCachePurged).toBe(0);
+    expect(res.errors.some(e => e.includes('Rate limit on cache tag purge'))).toBe(true);
+  });
+
+  // TEST W: isMediaRevoked falls through to tombstone when manifest is null
+  it('Teste W: manifesto nulo no KV força verificação de lápide direta', async () => {
+    const mediaId = '12345678-1234-4234-8234-123456789abc';
+    const mockKv = createMockKv();
+
+    // Manifest is null (never created)
+    await mockKv.delete(REVOCATION_MANIFEST_KEY);
+
+    // Tombstone exists
+    await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({ mediaId, reason: 'DELETED' }));
+
+    // Memory cache cleared
+    clearMemoryRevocationCache();
+
+    const isRevoked = await isMediaRevoked(mediaId, mockKv);
+    expect(isRevoked).toBe(true);
+  });
+
+  // TEST X: Cached hit in +server.ts fails closed on KV timeout/absence
+  it('Teste X: rota +server.ts falha fechada em cache hit se KV falhar', async () => {
+    const mediaId = 'abcdef01-2345-4678-89ab-cdef01234567';
+    const origin = 'https://projectnox.org';
+    const mockCache = createMockCache();
+
+    // Cache is hot
+    await mockCache.put(
+      new Request(`${origin}/media/${mediaId}`),
+      new Response('cached_bytes', {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg', 'ETag': '"cached_sha"' }
+      })
+    );
+
+    const brokenKv = {
+      get: vi.fn().mockRejectedValue(new Error('KV_UNAVAILABLE')),
+      put: vi.fn(),
+      delete: vi.fn()
+    };
+
+    const res = await getPublicMediaRoute({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`${origin}/media/${mediaId}`),
+      platform: { env: { COVER_THUMBNAILS: brokenKv }, caches: { default: mockCache } },
+      cookies: { getAll: () => [] }
+    });
+
+    // Fails closed: 404 with no-store
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  // TEST Y: HEAD request against revoked media returns HTTP 404 with null body
+  it('Teste Y: requisições HEAD para mídias revogadas retornam 404 sem corpo', async () => {
+    const mediaId = '98765432-1234-4234-8234-9876543210ab';
+    const origin = 'https://projectnox.org';
+    const mockCache = createMockCache();
+    const mockKv = createMockKv();
+
+    // Revoke
+    await revokeMedia(mediaId, { kv: mockKv, cache: mockCache, origin });
+
+    const headRes = await getPublicMediaRoute({
+      locals: {}, params: { id: mediaId },
+      request: new Request(`${origin}/media/${mediaId}`, { method: 'HEAD' }),
+      platform: { env: { COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+      cookies: { getAll: () => [] }
+    });
+
+    expect(headRes.status).toBe(404);
+    expect(headRes.headers.get('Cache-Control')).toContain('no-store');
+    const bodyText = await headRes.text();
+    expect(bodyText).toBe('');
+  });
+
+  // TEST Z: unrevokeMedia returns structured result
+  it('Teste Z: unrevokeMedia retorna resultado estruturado com sucesso e erros', async () => {
+    const mediaId = '11223344-5566-4778-8899-aabbccddeeff';
+    const mockKv = createMockKv();
+    const mockCache = createMockCache();
+
+    // Revoke
+    await revokeMedia(mediaId, { kv: mockKv, cache: mockCache });
+
+    // Unrevoke
+    const { unrevokeMedia: unrevoke } = await import('../src/lib/server/media-revocation');
+    const result = await unrevoke(mediaId, { kv: mockKv, cache: mockCache });
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 });
 

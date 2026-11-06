@@ -165,7 +165,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     try {
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
-        const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+        const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { failClosed: true });
         if (isRevoked) {
           const purgeOptions = {
             cache,
@@ -179,7 +179,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           } else {
             await purgeMediaVariants(params.id, purgeOptions);
           }
-          return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+          return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
             status: 404,
             headers: {
               'Content-Type': 'application/json',
@@ -209,8 +209,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // Cover thumbnails are derived public media. Unlike the per-PoP Worker cache,
   // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
   // on another region/device. Never use it for full pages or private media.
-  if (coverVariant) {
-    const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+  if (coverVariant && platform?.env?.COVER_THUMBNAILS) {
+    const isRevoked = await isMediaRevoked(params.id, platform.env.COVER_THUMBNAILS, { failClosed: true });
     if (isRevoked) {
       const purgeOptions = {
         cache,
@@ -224,7 +224,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       } else {
         await purgeMediaVariants(params.id, purgeOptions);
       }
-      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
           'Content-Type': 'application/json',
@@ -260,7 +260,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         platform.context.waitUntil(purgeTask);
       }
     }
-    return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -348,7 +348,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           platform.context.waitUntil(purgeTask);
         }
       }
-      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
           'Content-Type': 'application/json',

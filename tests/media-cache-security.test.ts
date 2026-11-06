@@ -61,6 +61,7 @@ describe('Media Security and Cache Guard', () => {
     const mediaId = '88888888-8888-4888-8888-888888888888';
     const records = new Map<string, { value: ArrayBuffer; metadata: Record<string, string> }>();
     const kv = {
+      get: vi.fn(async () => null),
       getWithMetadata: vi.fn(async (key: string) => records.get(key) || null),
       put: vi.fn(async (key: string, value: ArrayBuffer, options: { metadata: Record<string, string> }) => {
         records.set(key, { value, metadata: options.metadata });
@@ -91,7 +92,7 @@ describe('Media Security and Cache Guard', () => {
 
   it('does not let an unauthenticated cold cover view create a KV write', async () => {
     const mediaId = '99999999-9999-4999-8999-999999999999';
-    const kv = { getWithMetadata: vi.fn(async () => null), put: vi.fn() };
+    const kv = { get: vi.fn(async () => null), getWithMetadata: vi.fn(async () => null), put: vi.fn() };
     mocks.mediaRecord = {
       id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
       access_class: 'PUBLIC', purpose: 'editorial', bot_reference: 'MANGA_STORAGE_01',
@@ -195,6 +196,7 @@ describe('Media Security and Cache Guard', () => {
         locals: {},
         params: { id: '44444444-4444-4444-8444-444444444444' },
         request: new Request('https://nox.invalid/media/44444444-4444-4444-8444-444444444444'),
+        platform: { env: { COVER_THUMBNAILS: { get: vi.fn(async () => null) } } },
         cookies: { getAll: () => [] }
       });
 
