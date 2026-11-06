@@ -66,8 +66,8 @@ function patchGeneratedWorker() {
   }
 
   // 2. Shared Edge Cache Segmentation & Private Session Bypass
-  const sharedCacheLogic = `const AUTHENTICATED_SESSION_COOKIE = /(?:nox-auth-token|sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
-const PERSONALIZED_HOME_COOKIE = /(?:^|;\\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
+  const sharedCacheLogic = `const AUTHENTICATED_SESSION_COOKIE = /(?:^|[;\\s])(?:nox-auth(?:-token)?|sb-[a-z0-9_-]+(?:-auth-token|-access-token|-token)?|supabase[-_]auth[-_]token|sb:token|access[-_]token|session|auth[-_]token)\\s*=/i;
+const PERSONALIZED_HOME_COOKIE = /(?:^|[;\\s])(?:nox-age-status|nox-blur-nsfw)\\s*=/i;
 
 function shouldBypassSharedCache(req) {
   const cookie = req.headers.get('cookie') || '';
@@ -89,10 +89,10 @@ function getSharedCacheKey(req) {
     }
 
     const cookie = req.headers.get('cookie') || '';
-    const isAdult = /(?:^|;\\s*)nox-age-status=ADULT/i.test(cookie);
-    const isMinor = /(?:^|;\\s*)nox-age-status=MINOR/i.test(cookie);
+    const isAdult = /(?:^|[;\\s])nox-age-status\\s*=\\s*ADULT/i.test(cookie);
+    const isMinor = /(?:^|[;\\s])nox-age-status\\s*=\\s*MINOR/i.test(cookie);
     const ageSeg = isAdult ? 'ADULT' : (isMinor ? 'MINOR' : 'GUEST');
-    const isBlur = isMinor || !/(?:^|;\\s*)nox-blur-nsfw=false/i.test(cookie);
+    const isBlur = isMinor || !/(?:^|[;\\s])nox-blur-nsfw\\s*=\\s*false/i.test(cookie);
     const seg = ageSeg + '_' + (isBlur ? 'BLUR' : 'NOBLUR');
 
     const cacheUrl = new URL(req.url);
@@ -197,7 +197,7 @@ function getSharedCacheKey(req) {
               }
 
               const rangeHeader = req.headers.get('range');
-              if (rangeHeader) {
+              if (rangeHeader && req.method === 'GET') {
                 const ab = await cached.arrayBuffer();
                 const total = ab.byteLength;
                 const match = rangeHeader.match(/bytes=(\\d*)-(\\d*)/);
@@ -226,9 +226,6 @@ function getSharedCacheKey(req) {
                   const rangeLen = actualEnd - start + 1;
                   headers.set('Content-Range', \`bytes \${start}-\${actualEnd}/\${total}\`);
                   headers.set('Content-Length', String(rangeLen));
-                  if (req.method === 'HEAD') {
-                    return new Response(null, { status: 206, headers });
-                  }
                   const sliced = ab.slice(start, actualEnd + 1);
                   return new Response(sliced, { status: 206, headers });
                 }

@@ -65,21 +65,40 @@ describe('shared Worker cache guard', () => {
     expect(wrapper).toContain("normalizedParams.set('page', '1001')");
   });
 
-  it('implements RFC 9110 compliant range handling for media edge fast-path', () => {
+  it('implements RFC 9110 compliant range handling for media edge fast-path (GET only, HEAD ignores Range)', () => {
     const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
 
+    expect(wrapper).toContain("rangeHeader && req.method === 'GET'");
     expect(wrapper).toContain("status: 416");
     expect(wrapper).toContain("bytes */");
     expect(wrapper).toContain("status: 206");
     expect(wrapper).toContain("headers.set('Content-Length', String(rangeLen))");
+    expect(wrapper).toContain("if (req.method === 'HEAD') {\n                return new Response(null, { status: 200, headers });\n              }");
   });
 
   it('strictly isolates MINOR age status from GUEST and ADULT in cache key segmentation', () => {
     const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
 
-    expect(wrapper).toContain("nox-age-status=MINOR");
-    expect(wrapper).toContain("nox-age-status=ADULT");
+    expect(wrapper).toContain("nox-age-status\\s*=\\s*MINOR");
+    expect(wrapper).toContain("nox-age-status\\s*=\\s*ADULT");
     expect(wrapper).toContain("ageSeg = isAdult ? 'ADULT' : (isMinor ? 'MINOR' : 'GUEST')");
+  });
+
+  it('detects all authenticated session cookie variations including nox-auth and sb-access-token', () => {
+    const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
+    const cookieRegexMatch = wrapper.match(/const AUTHENTICATED_SESSION_COOKIE = (\/.*?\/[a-z]*);/);
+    expect(cookieRegexMatch).not.toBeNull();
+    const regex = new RegExp(cookieRegexMatch![1].slice(1, cookieRegexMatch![1].lastIndexOf('/')), 'i');
+
+    expect(regex.test('nox-auth=some_token')).toBe(true);
+    expect(regex.test('nox-auth-token=some_token')).toBe(true);
+    expect(regex.test('sb-access-token=some_token')).toBe(true);
+    expect(regex.test('sb-izregkwaqdygwioqzwwo-auth-token=some_token')).toBe(true);
+    expect(regex.test('cookie1=val; nox-auth=xyz')).toBe(true);
+    expect(regex.test('cookie1=val;nox-auth=xyz')).toBe(true);
+    expect(regex.test('cookie1=val ; nox-auth = xyz')).toBe(true);
+    expect(regex.test('access_token=token123')).toBe(true);
+    expect(regex.test('nox-age-status=ADULT; nox-blur-nsfw=false')).toBe(false);
   });
 
   it('strictly forbids caching responses with Set-Cookie, private Cache-Control, or invalid Vary', () => {

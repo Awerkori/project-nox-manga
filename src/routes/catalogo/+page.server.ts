@@ -25,9 +25,9 @@ export const load = async ({ locals, url, setHeaders, platform }: any) => {
     ? [{ id: `selected:${tag}`, slug: tag, name: tag, kind: 'TAG' }]
     : [];
 
-  // Out of range catalog guard: catalog has up to ~913 pages (18,254 works / 20 per page).
+  // Out of range catalog guard: catalog currently has ~913 pages (18,254 works / 20 per page).
   // Normalizes all pages > 1000 to canonical page 1001 so edge caches share a single entry
-  // without polluting legitimate works.
+  // without polluting legitimate works or exhausting database connections.
   if (rawPage > 1000) {
     if (!locals.user) {
       setHeaders({ 'cache-control': 'public, max-age=3600, s-maxage=3600' });
