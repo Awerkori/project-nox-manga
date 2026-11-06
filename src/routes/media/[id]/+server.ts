@@ -15,7 +15,7 @@ import {
   readBoundedCoverResponse,
   readCoverThumbnail
 } from '$lib/server/cover-thumbnail-cache';
-import { isMediaRevoked, revokeMedia, purgeMediaVariants } from '$lib/server/media-revocation';
+import { isMediaRevoked, revokeMedia, purgeMediaVariants, classifyMediaAccess } from '$lib/server/media-revocation';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -248,13 +248,14 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    if (media && platform?.env?.COVER_THUMBNAILS) {
+    if (media && media.status === 'DELETED' && platform?.env?.COVER_THUMBNAILS) {
       const purgeTask = revokeMedia(params.id, {
         kv: platform.env.COVER_THUMBNAILS,
         cache,
         ctx: platform?.context || platform?.ctx,
         origin: url.origin,
-        reason: media.status || 'DELETED'
+        reason: 'DELETED',
+        status: 'DELETED'
       }).catch(() => {});
       if (platform?.context?.waitUntil) {
         platform.context.waitUntil(purgeTask);
@@ -274,7 +275,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS)) {
-    return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -287,35 +288,9 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  // Media Access Classification:
-  // 1. Explicit private access classes MUST NEVER be treated as public.
-  // 2. Internal/unreleased purposes (staff_manual, pipeline, etc.) MUST NOT be public unless explicitly marked PUBLIC.
-  // 3. Published chapters (editorial, staff_chapter, scan_chapter), covers, avatars, banners are public.
-  const isExplicitlyPrivate =
-    media.access_class === 'STAFF_ONLY' ||
-    media.access_class === 'AUTHENTICATED' ||
-    media.access_class === 'PRIVATE' ||
-    media.access_class === 'RESTRICTED';
-
-  const isInternalPurpose =
-    media.purpose === 'staff_manual' ||
-    media.purpose === 'pipeline' ||
-    media.purpose === 'scan_pipeline' ||
-    media.purpose === 'production';
-
-  const isPublic =
-    !isExplicitlyPrivate &&
-    (media.access_class === 'PUBLIC' ||
-      (!isInternalPurpose &&
-        (media.purpose === 'editorial' ||
-          media.purpose === 'staff_chapter' ||
-          media.purpose === 'scan_chapter' ||
-          media.purpose === 'avatar' ||
-          media.purpose === 'banner' ||
-          media.purpose === 'scan_logo' ||
-          media.purpose === 'scan_banner' ||
-          media.purpose === 'cosmetic' ||
-          !media.access_class)));
+  // Authoritative Media Access Classification
+  const accessClassification = classifyMediaAccess(media);
+  const isPublic = accessClassification.isPublic;
 
   if (!isPublic) {
     let verifiedSession = null;
@@ -335,24 +310,16 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
     const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
     const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+
     if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
-      if (platform?.env?.COVER_THUMBNAILS) {
-        const purgeTask = revokeMedia(params.id, {
-          kv: platform.env.COVER_THUMBNAILS,
-          cache,
-          ctx: platform?.context || platform?.ctx,
-          origin: url.origin,
-          reason: media.access_class || 'RESTRICTED'
-        }).catch(() => {});
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(purgeTask);
-        }
-      }
+      // NOTE: Leitura não autorizada NÃO é revogação administrativa!
+      // Não grava tombstone, não altera manifesto global, não queima KV writes.
+      // Rejeita a requisição sem cachear na borda nem no navegador.
       return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
           'CDN-Cache-Control': 'no-store',
           'Cloudflare-CDN-Cache-Control': 'no-store',
           'Pragma': 'no-cache',

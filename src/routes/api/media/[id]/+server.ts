@@ -7,6 +7,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
+import { classifyMediaAccess } from '$lib/server/media-revocation';
 
 const PRIVATE_MEDIA_IDLE_TIMEOUT_MS = 12_000;
 
@@ -49,31 +50,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  const isExplicitlyPrivate =
-    media.access_class === 'STAFF_ONLY' ||
-    media.access_class === 'AUTHENTICATED' ||
-    media.access_class === 'PRIVATE' ||
-    media.access_class === 'RESTRICTED';
-
-  const isInternalPurpose =
-    media.purpose === 'staff_manual' ||
-    media.purpose === 'pipeline' ||
-    media.purpose === 'scan_pipeline' ||
-    media.purpose === 'production';
-
-  const isPublic =
-    !isExplicitlyPrivate &&
-    (media.access_class === 'PUBLIC' ||
-      (!isInternalPurpose &&
-        (media.purpose === 'editorial' ||
-          media.purpose === 'staff_chapter' ||
-          media.purpose === 'scan_chapter' ||
-          media.purpose === 'avatar' ||
-          media.purpose === 'banner' ||
-          media.purpose === 'scan_logo' ||
-          media.purpose === 'scan_banner' ||
-          media.purpose === 'cosmetic' ||
-          !media.access_class)));
+  const accessClassification = classifyMediaAccess(media);
+  const isPublic = accessClassification.isPublic;
 
   // For non-public media, require authentic cryptographic verification
   if (!isPublic) {

@@ -1,9 +1,24 @@
+export type RevocationPurgeState =
+  | 'PURGE_REQUESTED'
+  | 'PURGE_ACCEPTED'
+  | 'PURGE_VERIFIED'
+  | 'PURGE_FAILED'
+  | 'PURGE_SKIPPED';
+
+export type RevocationOverallState =
+  | 'REVOCATION_COMPLETED'
+  | 'REVOCATION_PARTIAL'
+  | 'REVOCATION_FAILED';
+
 export interface RevocationMetadata {
   mediaId: string;
   revokedAt: number;
   reason?: 'DELETED' | 'PRIVATE' | 'STAFF_ONLY' | 'AUTHENTICATED' | 'RESTRICTED' | string;
   accessClass?: string;
   status?: string;
+  purgeState?: RevocationPurgeState;
+  state?: RevocationOverallState;
+  version?: number;
 }
 
 export interface RevokeMediaOptions {
@@ -26,6 +41,8 @@ export interface PurgeMediaOptions {
 
 export interface RevokeMediaResult {
   success: boolean;
+  state: RevocationOverallState;
+  purgeState: RevocationPurgeState;
   mediaId: string;
   revokedAt: number;
   cachePurged: number;
@@ -34,6 +51,95 @@ export interface RevokeMediaResult {
   tombstoneWritten: boolean;
   manifestUpdated: boolean;
   errors: string[];
+}
+
+export interface MediaAccessClassification {
+  isPublic: boolean;
+  isExplicitlyPrivate: boolean;
+  reason: string;
+  category: 'PUBLIC' | 'PRIVATE' | 'STAFF_ONLY' | 'AUTHENTICATED' | 'RESTRICTED' | 'DELETED' | 'INTERNAL' | 'INVALID';
+}
+
+/**
+ * Authoritative classification of media visibility and public CDN cache eligibility.
+ * Evaluates the full matrix: PUBLIC, PRIVATE, STAFF_ONLY, AUTHENTICATED, RESTRICTED, DELETED,
+ * internal purposes, draft status, and legacy records without access_class.
+ * Conservative / fail-closed: if metadata is incomplete, unknown, or inconsistent, access is denied.
+ */
+export function classifyMediaAccess(media: any): MediaAccessClassification {
+  if (!media || typeof media !== 'object') {
+    return { isPublic: false, isExplicitlyPrivate: false, reason: 'METADATA_MISSING', category: 'INVALID' };
+  }
+
+  // 1. Storage and deletion guards (highest precedence)
+  if (media.status === 'DELETED') {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'STATUS_DELETED', category: 'DELETED' };
+  }
+  if (media.storage_ready === false) {
+    return { isPublic: false, isExplicitlyPrivate: false, reason: 'STORAGE_NOT_READY', category: 'INVALID' };
+  }
+  if (media.status && media.status !== 'ACTIVE') {
+    return { isPublic: false, isExplicitlyPrivate: false, reason: `INACTIVE_STATUS_${media.status}`, category: 'INVALID' };
+  }
+
+  // 2. Explicit access classes
+  const accessClass = typeof media.access_class === 'string' ? media.access_class.toUpperCase().trim() : '';
+
+  if (accessClass === 'PRIVATE') {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'ACCESS_CLASS_PRIVATE', category: 'PRIVATE' };
+  }
+  if (accessClass === 'STAFF_ONLY') {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'ACCESS_CLASS_STAFF_ONLY', category: 'STAFF_ONLY' };
+  }
+  if (accessClass === 'AUTHENTICATED') {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'ACCESS_CLASS_AUTHENTICATED', category: 'AUTHENTICATED' };
+  }
+  if (accessClass === 'RESTRICTED') {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'ACCESS_CLASS_RESTRICTED', category: 'RESTRICTED' };
+  }
+
+  // 3. Internal purposes (never eligible for public CDN caching)
+  const purpose = typeof media.purpose === 'string' ? media.purpose.toLowerCase().trim() : '';
+  const isInternalPurpose =
+    purpose === 'staff_manual' ||
+    purpose === 'pipeline' ||
+    purpose === 'scan_pipeline' ||
+    purpose === 'production' ||
+    purpose === 'staging' ||
+    purpose === 'internal_test' ||
+    purpose === 'temp';
+
+  if (isInternalPurpose) {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: `INTERNAL_PURPOSE_${purpose}`, category: 'INTERNAL' };
+  }
+
+  // 4. Public access confirmation
+  if (accessClass === 'PUBLIC') {
+    return { isPublic: true, isExplicitlyPrivate: false, reason: 'ACCESS_CLASS_PUBLIC', category: 'PUBLIC' };
+  }
+
+  // 5. Legacy records without access_class: conservative allowlist
+  // ONLY explicitly allowed public purposes with active status and storage_ready=true are accepted as public.
+  const allowedLegacyPublicPurposes = new Set([
+    'editorial',
+    'staff_chapter',
+    'scan_chapter',
+    'chapter_page',
+    'cover',
+    'work_cover',
+    'avatar',
+    'banner',
+    'scan_logo',
+    'scan_banner',
+    'cosmetic'
+  ]);
+
+  if (!accessClass && allowedLegacyPublicPurposes.has(purpose)) {
+    return { isPublic: true, isExplicitlyPrivate: false, reason: `LEGACY_PUBLIC_PURPOSE_${purpose}`, category: 'PUBLIC' };
+  }
+
+  // 6. Unknown, incomplete, or unverified state fails closed
+  return { isPublic: false, isExplicitlyPrivate: false, reason: 'METADATA_INSUFFICIENT_FOR_PUBLIC', category: 'INVALID' };
 }
 
 export const REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
@@ -247,12 +353,14 @@ export async function purgeMediaVariants(
 
 /**
  * Canonical media revocation function.
- * 1. Instantly updates in-memory set in local isolate.
- * 2. Purges Cloudflare Workers Caching (declarative edge cache before Worker).
- * 3. Purges local Cache API and KV thumbnails.
- * 4. Writes tombstone record to KV for global replication.
- * 5. Updates global revocation manifest in KV with retry and conflict merging.
- * 6. Logs audit trail and returns verified status of all operations.
+ * Protocol:
+ * 1. Instantly updates in-memory set in local isolate (0ms local protection).
+ * 2. Writes authoritative persistent tombstone record to KV (establishes durable revocation state BEFORE purge).
+ * 3. Updates global revocation manifest in KV with retry and conflict-free set union.
+ * 4. Purges Cloudflare Workers Caching (via ctx.cache.purge by tag and prefix).
+ * 5. Purges local Cache API and KV thumbnails.
+ * 6. Determines and registers distinct states: PURGE_REQUESTED, PURGE_ACCEPTED, PURGE_VERIFIED, REVOCATION_COMPLETED.
+ * 7. Updates tombstone with verified purge state and returns structured result.
  */
 export async function revokeMedia(
   mediaId: string,
@@ -266,40 +374,32 @@ export async function revokeMedia(
   const errors: string[] = [];
   let tombstoneWritten = false;
   let manifestUpdated = false;
-
-  const metadata: RevocationMetadata = {
-    mediaId,
-    revokedAt,
-    reason: options.reason || 'REVOKED',
-    accessClass: options.accessClass,
-    status: options.status
-  };
+  let purgeState: RevocationPurgeState = 'PURGE_REQUESTED';
 
   // 1. Instantly update in-memory set in current isolate
   memoryRevokedSet.add(mediaId);
 
-  // 2. Purge Workers Caching, Cache API, and KV thumbnails
-  const purgeResult = await purgeMediaVariants(mediaId, {
-    cache: options.cache,
-    ctx: options.ctx,
-    origin: options.origin,
-    kv: options.kv
-  });
-  const { cachePurged, workersCachePurged, kvPurged } = purgeResult;
-  if (purgeResult.errors && purgeResult.errors.length > 0) {
-    errors.push(...purgeResult.errors);
-  }
+  // 2. Write authoritative tombstone to KV BEFORE purge to ensure durable revocation
+  const initialMetadata: RevocationMetadata = {
+    mediaId,
+    revokedAt,
+    reason: options.reason || 'REVOKED',
+    accessClass: options.accessClass,
+    status: options.status,
+    purgeState: 'PURGE_REQUESTED',
+    state: 'REVOCATION_PARTIAL',
+    version: 1
+  };
 
-  // 3. Write tombstone to KV
   if (options.kv && typeof options.kv.put === 'function') {
     try {
-      await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify(metadata));
+      await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify(initialMetadata));
       tombstoneWritten = true;
     } catch (err: any) {
       errors.push(`TOMBSTONE_WRITE_FAILED: ${err?.message || err}`);
     }
 
-    // 4. Update manifest in KV with retry and merge logic to avoid concurrent overwrite
+    // 3. Update manifest in KV with retry and merge logic to avoid concurrent overwrite
     let manifestWriteAttempts = 0;
     while (manifestWriteAttempts < 3 && !manifestUpdated) {
       manifestWriteAttempts++;
@@ -326,11 +426,65 @@ export async function revokeMedia(
     }
   }
 
-  const success = errors.length === 0;
-  console.log(`[MEDIA_REVOCATION_LOG] mediaId=${mediaId} reason=${options.reason || 'REVOKED'} cachePurged=${cachePurged} workersPurged=${workersCachePurged} kvPurged=${kvPurged} success=${success}`);
+  // 4. Purge Workers Caching, Cache API, and KV thumbnails
+  const purgeResult = await purgeMediaVariants(mediaId, {
+    cache: options.cache,
+    ctx: options.ctx,
+    origin: options.origin,
+    kv: options.kv
+  });
+  const { cachePurged, workersCachePurged, kvPurged } = purgeResult;
+  if (purgeResult.errors && purgeResult.errors.length > 0) {
+    errors.push(...purgeResult.errors);
+    purgeState = 'PURGE_FAILED';
+  } else {
+    purgeState = 'PURGE_ACCEPTED';
+  }
+
+  // 5. Verify purge on local Cache API if available
+  if (purgeState === 'PURGE_ACCEPTED' && options.cache && typeof options.cache.match === 'function') {
+    try {
+      const origin = options.origin || 'https://projectnox.org';
+      const stillCached = await options.cache.match(`${origin}/media/${mediaId}`);
+      if (!stillCached) {
+        purgeState = 'PURGE_VERIFIED';
+      }
+    } catch {
+      // Keep PURGE_ACCEPTED
+    }
+  }
+
+  // 6. Determine overall revocation state
+  let overallState: RevocationOverallState = 'REVOCATION_FAILED';
+  const kvOk = options.kv ? tombstoneWritten : true;
+  if (kvOk && (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED') && errors.length === 0) {
+    overallState = 'REVOCATION_COMPLETED';
+  } else if (tombstoneWritten || memoryRevokedSet.has(mediaId)) {
+    overallState = 'REVOCATION_PARTIAL';
+  }
+
+  // 7. Update tombstone with final purge state
+  if (tombstoneWritten && options.kv && typeof options.kv.put === 'function') {
+    try {
+      const finalMetadata: RevocationMetadata = {
+        ...initialMetadata,
+        purgeState,
+        state: overallState,
+        version: 2
+      };
+      await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify(finalMetadata));
+    } catch {
+      // Non-fatal if initial tombstone is already recorded
+    }
+  }
+
+  const success = errors.length === 0 && overallState === 'REVOCATION_COMPLETED';
+  console.log(`[MEDIA_REVOCATION_LOG] mediaId=${mediaId} state=${overallState} purgeState=${purgeState} reason=${options.reason || 'REVOKED'} cachePurged=${cachePurged} workersPurged=${workersCachePurged} kvPurged=${kvPurged} success=${success}`);
 
   return {
     success,
+    state: overallState,
+    purgeState,
     mediaId,
     revokedAt,
     cachePurged,

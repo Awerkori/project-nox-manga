@@ -6,19 +6,23 @@
     "activeVersionId": "9a12332b-4f46-48f1-a50a-565103e7f44d",
     "deploymentId": "e363c55a-105e-4be3-8e66-b5053f424631",
     "deploymentCreatedOn": "2026-11-06T22:45:02.665462Z",
+    "deploymentVerified": true,
     "accountTag": "45bedc39184a07fd7f989107bd686e63",
     "zoneTag": "c3dc753e2e76d95ef3ce2cf43782a463",
     "hyperdriveId": "83726ad935554261813c4bb12094c7f3"
   },
   "coverage": {
     "imagesDiscovered": 368,
-    "sample300Tested": 300,
+    "imagesSelected": 300,
     "distinctUrlsRequested": 300,
     "distinctImagesHeadChecked": 300,
     "distinctImagesFullGetAttempted": 300,
     "distinctImagesFullGetSucceeded": 300,
+    "distinctImagesFullBodyReceived": 300,
+    "distinctImagesSizeValidated": 300,
+    "distinctImagesFormatValidated": 300,
     "distinctImagesContentValidated": 300,
-    "distinctImagesTested": 368,
+    "distinctImagesTested": 300,
     "totalHttpAttempts": 1100,
     "totalRequestsExecuted": 1100,
     "successfulHttpResponses": 1100,
@@ -100,6 +104,41 @@
   },
   "cloudflareTelemetryDuringTest": {
     "observationWindowUtc": "2026-11-06T22:46:17.968Z -> 2026-11-06T22:48:57.528Z",
+    "telemetryAttributionClasses": {
+      "DIRECTLY_OBSERVED": {
+        "clientTotalRequests": 1100,
+        "clientSuccessfulResponses": 1100,
+        "clientEdgeHitsObserved": 800,
+        "clientEdgeMissesObserved": 300,
+        "clientWarmCacheHitRatePercent": "100.00",
+        "clientOverallHitRatePercent": "72.73",
+        "clientHitLatencyP50Ms": 55,
+        "clientOverallLatencyP50Ms": 64,
+        "totalBytesTransferred": 363857902
+      },
+      "CORRELATED": {
+        "zoneTotalRequestsDuringWindow": 2061,
+        "zoneEdgeHitsDuringWindow": 225,
+        "workerInvocationsDuringWindow": 327,
+        "workerSubrequestsDuringWindow": 600,
+        "hyperdriveQueriesDuringWindow": 40,
+        "hyperdriveHitsDuringWindow": 0
+      },
+      "ESTIMATED": {
+        "workerColdMissInvocationsAttributableToBenchmark": 300,
+        "workerInvocationsOnHit": 0,
+        "hyperdriveQueriesOnHit": 0,
+        "ysqlQueriesOnHit": 0,
+        "telegramEgressOnHit": 0
+      },
+      "NOT_ATTRIBUTABLE": {
+        "zoneNonBenchmarkTraffic": 961,
+        "backgroundHyperdriveQueries": "Hyperdrive queries triggered by non-media zone endpoints during ingestion window"
+      },
+      "NOT_AVAILABLE": {
+        "perRequestWorkerCpuOnHit": "N/A (Cloudflare edge serves cached response before isolate invocation; 0 ms CPU)"
+      }
+    },
     "zoneTotalRequests": 2061,
     "zoneEdgeHits": 225,
     "workerAttributableRequests": 327,

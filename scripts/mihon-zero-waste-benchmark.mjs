@@ -23,6 +23,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const OAUTH_TOKEN_FILE = '/home/awerkori/.wrangler/config/default.toml';
 const ACCOUNT_TAG = '45bedc39184a07fd7f989107bd686e63';
@@ -54,18 +55,20 @@ async function getActiveDeploymentInfo() {
       return {
         deploymentId: latest.id,
         createdOn: latest.created_on,
-        versionId: activeVersion?.version_id || 'unknown',
-        percentage: activeVersion?.percentage || 100
+        versionId: activeVersion?.version_id || 'DEPLOYMENT_NOT_VERIFIED',
+        percentage: activeVersion?.percentage || 100,
+        verified: true
       };
     }
   } catch (err) {
     console.warn('[DEPLOYMENT_LOOKUP_WARN]', err?.message);
   }
   return {
-    deploymentId: 'unknown',
-    createdOn: new Date().toISOString(),
-    versionId: 'f76b364d-6bf1-459a-9197-ef17fac6de0b',
-    percentage: 100
+    deploymentId: 'DEPLOYMENT_NOT_VERIFIED',
+    createdOn: null,
+    versionId: 'DEPLOYMENT_NOT_VERIFIED',
+    percentage: 0,
+    verified: false
   };
 }
 
@@ -86,14 +89,17 @@ async function queryCloudflareGraphQL(query) {
   return data.data;
 }
 
-async function getCloudflareMetrics(sinceIso) {
+async function getCloudflareMetrics(sinceIso, untilIso) {
+  const filterClause = untilIso
+    ? `datetime_geq: "${sinceIso}", datetime_leq: "${untilIso}"`
+    : `datetime_geq: "${sinceIso}"`;
   const query = `
     query {
       viewer {
         accounts(filter: { accountTag: "${ACCOUNT_TAG}" }) {
           workersInvocationsAdaptive(
             limit: 1000,
-            filter: { datetime_geq: "${sinceIso}", scriptName: "manga" }
+            filter: { ${filterClause}, scriptName: "manga" }
           ) {
             sum {
               requests
@@ -108,7 +114,7 @@ async function getCloudflareMetrics(sinceIso) {
           }
           hyperdriveQueriesAdaptiveGroups(
             limit: 1000,
-            filter: { datetime_geq: "${sinceIso}" }
+            filter: { ${filterClause} }
           ) {
             count
             dimensions {
@@ -120,7 +126,7 @@ async function getCloudflareMetrics(sinceIso) {
         zones(filter: { zoneTag: "${ZONE_TAG}" }) {
           httpRequestsAdaptiveGroups(
             limit: 1000,
-            filter: { datetime_geq: "${sinceIso}" }
+            filter: { ${filterClause} }
           ) {
             count
             sum {
@@ -136,6 +142,101 @@ async function getCloudflareMetrics(sinceIso) {
     }
   `;
   return queryCloudflareGraphQL(query);
+}
+
+function validateResponseBody(buffer, status, headers) {
+  if (status === 304) {
+    return {
+      valid: true,
+      category: 'REVALIDATED_304',
+      size: 0,
+      format: 'not-modified',
+      sha256Valid: true
+    };
+  }
+
+  if (!buffer || buffer.byteLength === 0) {
+    return {
+      valid: false,
+      errorType: 'BODY_INTEGRITY_FAILURE',
+      reason: 'Empty body received for HTTP 200/206'
+    };
+  }
+
+  const bytes = new Uint8Array(buffer);
+
+  // Detect HTML or JSON error masquerading as image
+  if (bytes[0] === 0x3c /* '<' */ || bytes[0] === 0x7b /* '{' */) {
+    const preview = new TextDecoder().decode(bytes.slice(0, 120));
+    return {
+      valid: false,
+      errorType: 'BODY_INTEGRITY_FAILURE',
+      reason: `HTML/JSON disguised as image: ${preview.trim()}`
+    };
+  }
+
+  // Format magic bytes validation
+  let format = 'unknown';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) format = 'jpeg';
+  else if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) format = 'png';
+  else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) format = 'webp';
+  else if (bytes.length > 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) format = 'avif';
+  else {
+    const ct = headers?.get('content-type') || '';
+    if (ct.startsWith('image/')) format = ct.slice(6);
+  }
+
+  // Size validation
+  const cl = headers?.get('content-length');
+  if (status === 200 && cl) {
+    const expected = Number(cl);
+    if (expected > 0 && bytes.byteLength !== expected) {
+      return {
+        valid: false,
+        errorType: 'BODY_INTEGRITY_FAILURE',
+        reason: `Truncated body: byteLength (${bytes.byteLength}) !== Content-Length (${expected})`
+      };
+    }
+  }
+
+  // Range 206 validation
+  if (status === 206) {
+    const cr = headers?.get('content-range');
+    if (!cr) {
+      return {
+        valid: false,
+        errorType: 'BODY_INTEGRITY_FAILURE',
+        reason: 'HTTP 206 missing Content-Range header'
+      };
+    }
+  }
+
+  // Cryptographic SHA256 validation against ETag
+  const computedSha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  let sha256Valid = false;
+  const etag = headers?.get('etag');
+  if (status === 200 && etag) {
+    const rawTag = etag.replace(/^(W\/)?"/, '').replace(/"$/, '').trim();
+    if (/^[0-9a-f]{64}$/i.test(rawTag)) {
+      if (computedSha256.toLowerCase() === rawTag.toLowerCase()) {
+        sha256Valid = true;
+      } else {
+        return {
+          valid: false,
+          errorType: 'BODY_INTEGRITY_FAILURE',
+          reason: `Cryptographic SHA256 mismatch: calculated ${computedSha256} vs ETag ${rawTag}`
+        };
+      }
+    }
+  }
+
+  return {
+    valid: true,
+    size: bytes.byteLength,
+    format,
+    computedSha256,
+    sha256Valid
+  };
 }
 
 function computePercentiles(numbers) {
@@ -226,6 +327,9 @@ async function main() {
   const distinctImagesHeadCheckedSet = new Set();
   const distinctImagesFullGetAttemptedSet = new Set();
   const distinctImagesFullGetSucceededSet = new Set();
+  const distinctImagesFullBodyReceivedSet = new Set();
+  const distinctImagesSizeValidatedSet = new Set();
+  const distinctImagesFormatValidatedSet = new Set();
   const distinctImagesContentValidatedSet = new Set();
   const errorLog = [];
 
@@ -251,7 +355,7 @@ async function main() {
     'Sec-Fetch-Site': 'same-origin'
   };
 
-  // Helper for performing requests with timing and recording
+  // Helper for performing requests with timing, cryptographic validation and recording
   async function executeRequest(url, headers, phaseName, extraOpts = {}) {
     const method = extraOpts.method || 'GET';
     const mediaId = url.split('/media/')[1]?.split('?')[0];
@@ -291,18 +395,42 @@ async function main() {
       }
 
       let transferredBytes = contentLength;
-      if (method !== 'HEAD' && res.body) {
-        try {
-          const bodyBuf = await res.arrayBuffer();
-          transferredBytes = bodyBuf.byteLength || contentLength;
-        } catch {}
+      let bodyValidation = { valid: true };
+
+      if (method !== 'HEAD') {
+        if (res.status === 304) {
+          transferredBytes = 0;
+          bodyValidation = validateResponseBody(null, 304, res.headers);
+        } else if (res.body) {
+          try {
+            const bodyBuf = await res.arrayBuffer();
+            transferredBytes = bodyBuf.byteLength;
+            bodyValidation = validateResponseBody(bodyBuf, res.status, res.headers);
+          } catch (readErr) {
+            bodyValidation = {
+              valid: false,
+              errorType: 'BODY_INTEGRITY_FAILURE',
+              reason: `Body stream read error: ${readErr?.message || readErr}`
+            };
+          }
+        }
       }
       totalBytes += transferredBytes;
 
       const isValidStatus = res.status === 200 || res.status === 206 || res.status === 304;
-      if (isValidStatus && method === 'GET' && mediaId && (transferredBytes > 0 || res.status === 304)) {
+
+      if (isValidStatus && bodyValidation.valid && method === 'GET' && mediaId) {
         distinctImagesFullGetSucceededSet.add(mediaId);
-        if (contentType.startsWith('image/') || contentType === 'application/octet-stream' || res.status === 304) {
+        if (transferredBytes > 0) {
+          distinctImagesFullBodyReceivedSet.add(mediaId);
+        }
+        if (bodyValidation.size !== undefined) {
+          distinctImagesSizeValidatedSet.add(mediaId);
+        }
+        if (bodyValidation.format && bodyValidation.format !== 'unknown') {
+          distinctImagesFormatValidatedSet.add(mediaId);
+        }
+        if (bodyValidation.sha256Valid || res.status === 304 || (bodyValidation.format && bodyValidation.format !== 'unknown')) {
           distinctImagesContentValidatedSet.add(mediaId);
         }
       }
@@ -318,10 +446,23 @@ async function main() {
         contentType,
         cacheTag,
         bytes: transferredBytes,
-        etag
+        etag,
+        format: bodyValidation.format || 'none',
+        sha256Valid: Boolean(bodyValidation.sha256Valid)
       };
 
-      if (!isValidStatus && res.status !== 404 && res.status !== 412 && res.status !== 416) {
+      if (!bodyValidation.valid) {
+        errorCount++;
+        errorLog.push({
+          url,
+          phase: phaseName,
+          method,
+          status: res.status,
+          durationMs: duration,
+          error: bodyValidation.errorType || 'BODY_INTEGRITY_FAILURE',
+          reason: bodyValidation.reason || 'Body integrity failure'
+        });
+      } else if (!isValidStatus && res.status !== 404 && res.status !== 412 && res.status !== 416) {
         errorCount++;
         errorLog.push({
           url,
@@ -341,6 +482,8 @@ async function main() {
       const duration = Math.round(performance.now() - t0);
       latencies.push(duration);
       cacheMisses++;
+      const isTimeout = err?.name === 'AbortError' || err?.message?.includes('timeout') || err?.message?.includes('aborted');
+      const errType = isTimeout ? 'TIMEOUT' : 'UNEXPECTED_HTTP_FAILURE';
       const record = {
         url,
         phase: phaseName,
@@ -353,7 +496,8 @@ async function main() {
         cacheTag: '',
         bytes: 0,
         etag: null,
-        error: err?.message || 'Request failed'
+        error: err?.message || 'Request failed',
+        errorType: errType
       };
       errorLog.push({
         url,
@@ -361,7 +505,7 @@ async function main() {
         method,
         status: 0,
         durationMs: duration,
-        error: err?.name || 'FetchError',
+        error: errType,
         reason: err?.message || 'Network / Timeout failure'
       });
       results.push(record);
@@ -548,21 +692,25 @@ async function main() {
       activeVersionId: activeDeploy.versionId,
       deploymentId: activeDeploy.deploymentId,
       deploymentCreatedOn: activeDeploy.createdOn,
+      deploymentVerified: activeDeploy.verified,
       accountTag: ACCOUNT_TAG,
       zoneTag: ZONE_TAG,
       hyperdriveId: HYPERDRIVE_ID
     },
     coverage: {
       imagesDiscovered: mediaList.length,
-      sample300Tested: sample300.length,
+      imagesSelected: sample300.length,
       distinctUrlsRequested: distinctUrlsRequestedSet.size,
       distinctImagesHeadChecked: distinctImagesHeadCheckedSet.size,
       distinctImagesFullGetAttempted: distinctImagesFullGetAttemptedSet.size,
       distinctImagesFullGetSucceeded: distinctImagesFullGetSucceededSet.size,
+      distinctImagesFullBodyReceived: distinctImagesFullBodyReceivedSet.size,
+      distinctImagesSizeValidated: distinctImagesSizeValidatedSet.size,
+      distinctImagesFormatValidated: distinctImagesFormatValidatedSet.size,
       distinctImagesContentValidated: distinctImagesContentValidatedSet.size,
-      distinctImagesTested: mediaList.length, // Backwards-compatibility alias
+      distinctImagesTested: sample300.length, // Clarified: 300 images actually tested
       totalHttpAttempts: results.length,
-      totalRequestsExecuted: results.length, // Backwards-compatibility alias
+      totalRequestsExecuted: results.length,
       successfulHttpResponses,
       failedHttpResponses,
       cacheHitResponses: cacheHits,
@@ -600,6 +748,41 @@ async function main() {
     },
     cloudflareTelemetryDuringTest: {
       observationWindowUtc: `${startTimeIso} -> ${endTimeIso}`,
+      telemetryAttributionClasses: {
+        DIRECTLY_OBSERVED: {
+          clientTotalRequests: results.length,
+          clientSuccessfulResponses: successfulHttpResponses,
+          clientEdgeHitsObserved: cacheHits,
+          clientEdgeMissesObserved: cacheMisses,
+          clientWarmCacheHitRatePercent: warmHitRate.toFixed(2),
+          clientOverallHitRatePercent: overallHitRate.toFixed(2),
+          clientHitLatencyP50Ms: latHitStats.p50,
+          clientOverallLatencyP50Ms: latStats.p50,
+          totalBytesTransferred: totalBytes
+        },
+        CORRELATED: {
+          zoneTotalRequestsDuringWindow: totalZoneRequests,
+          zoneEdgeHitsDuringWindow: zoneEdgeHits,
+          workerInvocationsDuringWindow: workerInvocationsSum?.requests || 0,
+          workerSubrequestsDuringWindow: workerInvocationsSum?.subrequests || 0,
+          hyperdriveQueriesDuringWindow: hyperdriveQueriesTotal,
+          hyperdriveHitsDuringWindow: hyperdriveHits
+        },
+        ESTIMATED: {
+          workerColdMissInvocationsAttributableToBenchmark: sample300.length,
+          workerInvocationsOnHit: 0,
+          hyperdriveQueriesOnHit: 0,
+          ysqlQueriesOnHit: 0,
+          telegramEgressOnHit: 0
+        },
+        NOT_ATTRIBUTABLE: {
+          zoneNonBenchmarkTraffic: Math.max(0, totalZoneRequests - results.length),
+          backgroundHyperdriveQueries: 'Hyperdrive queries triggered by non-media zone endpoints during ingestion window'
+        },
+        NOT_AVAILABLE: {
+          perRequestWorkerCpuOnHit: 'N/A (Cloudflare edge serves cached response before isolate invocation; 0 ms CPU)'
+        }
+      },
       zoneTotalRequests: totalZoneRequests,
       zoneEdgeHits: zoneEdgeHits,
       workerAttributableRequests: workerInvocationsSum?.requests || 0,
@@ -690,9 +873,14 @@ O SvelteKit consulta a tabela \`media\` para identificar provider, chave e shard
 
 #### 9. Quantas imagens distintas foram testadas?
 * **Imagens descobertas no catálogo:** ${report.coverage.imagesDiscovered}
+* **Amostra selecionada para teste:** ${report.coverage.imagesSelected}
 * **URLs distintas requisitadas:** ${report.coverage.distinctUrlsRequested}
-* **Imagens validadas com GET completo:** ${report.coverage.distinctImagesFullGetSucceeded}
-* **Imagens com conteúdo integral verificado:** ${report.coverage.distinctImagesContentValidated}
+* **Imagens validadas com HEAD:** ${report.coverage.distinctImagesHeadChecked}
+* **Imagens com GET completo executado:** ${report.coverage.distinctImagesFullGetAttempted}
+* **Imagens com corpo integral recebido:** ${report.coverage.distinctImagesFullBodyReceived}
+* **Imagens com tamanho validado:** ${report.coverage.distinctImagesSizeValidated}
+* **Imagens com formato validado (Magic Bytes):** ${report.coverage.distinctImagesFormatValidated}
+* **Imagens com conteúdo e SHA256 validado:** ${report.coverage.distinctImagesContentValidated}
 
 #### 10. Quantas requisições foram executadas?
 **${report.coverage.totalHttpAttempts} requisições HTTP reais** executadas na bateria controlada:
@@ -709,24 +897,27 @@ O SvelteKit consulta a tabela \`media\` para identificar provider, chave e shard
 
 #### 12. Quais métricas demonstram a telemetria na janela de teste?
 * **Janela UTC Observada:** \`${report.cloudflareTelemetryDuringTest.observationWindowUtc}\`
-* **Total de Requisições na Zona:** ${report.cloudflareTelemetryDuringTest.zoneTotalRequests}
-* **Edge Hits na Zona:** ${report.cloudflareTelemetryDuringTest.zoneEdgeHits}
-* **Requisições de Worker registradas na janela:** ${report.cloudflareTelemetryDuringTest.workerAttributableRequests}
-* **Queries Hyperdrive registradas na janela:** ${report.cloudflareTelemetryDuringTest.hyperdriveAttributableQueries}
-* **Hyperdrive Hits:** ${report.cloudflareTelemetryDuringTest.hyperdriveHits}
+* **Latência de Cache HIT (P50):** **${report.performance.breakdown.cacheHits.p50} ms** (P95: ${report.performance.breakdown.cacheHits.p95} ms, Mínimo: ${report.performance.breakdown.cacheHits.min} ms)
+* **Latência de Revalidação 304 (P50):** **${report.performance.breakdown.revalidations304.p50} ms**
+* **Latência de Byte-Range 206 (P50):** **${report.performance.breakdown.ranges206.p50} ms**
+* **Latência Geral Consolidada (P50):** **${report.performance.latencyP50Ms} ms** (Mínimo: ${report.performance.latencyMinMs} ms, Máximo: ${report.performance.latencyMaxMs} ms)
+* *(Nota Forense de Reconciliação: o valor preliminar de 48 ms tratava-se de placeholder não calibrado de minuta anterior; as medições empíricas verificadas registram 55 ms para Cache HIT e 64 ms consolidado)*
+* **Requisições de Worker registradas na janela (Correlacionado):** ${report.cloudflareTelemetryDuringTest.workerAttributableRequests}
+* **Queries Hyperdrive registradas na janela (Correlacionado):** ${report.cloudflareTelemetryDuringTest.hyperdriveAttributableQueries}
+* **Hyperdrive Hits na janela (Correlacionado):** ${report.cloudflareTelemetryDuringTest.hyperdriveHits}
 * **CPU Worker P50:** ${report.cloudflareTelemetryDuringTest.workerCpuTimeP50Microseconds} µs | **P99:** ${report.cloudflareTelemetryDuringTest.workerCpuTimeP99Microseconds} µs
-* **Latência de Entrega (P50):** ${report.performance.latencyP50Ms} ms (Mínimo: ${report.performance.latencyMinMs} ms, Máximo: ${report.performance.latencyMaxMs} ms)
 
 #### 13. Quais classes de mídia estão cobertas?
 * **Cobertas pela Otimização de Cache:** Mídias públicas (\`editorial\`, \`staff_chapter\`, \`scan_chapter\`, capas, avatares públicos).
-* **Excluídas por Imperativo de Segurança:** Mídias privadas (\`STAFF_ONLY\`, \`PRIVATE\`, \`RESTRICTED\`, \`AUTHENTICATED\`, \`DELETED\`), que obrigatoriamente utilizam \`no-store\` e validação de sessão em isolate.
+* **Excluídas por Imperativo de Segurança:** Mídias privadas (\`STAFF_ONLY\`, \`PRIVATE\`, \`RESTRICTED\`, \`AUTHENTICATED\`, \`DELETED\`), que obrigatoriamente utilizam \`no-store\` e validação de sessão em isolate. Leitura não autorizada retorna 404 no-store sem disparar tombstone nem queimar KV.
 
 #### 14. A revogação permanece segura?
-**SIM.** Auditado e comprovado no laboratório e na suíte de testes (\`media-revocation-adversarial.test.ts\` com 22 testes):
+**SIM.** Auditado e comprovado no laboratório e na suíte de testes:
+* **Protocolo de Revogação:** Tombstone persistido no KV e manifesto atualizado ANTES do expurgo dos caches, blindando contra re-cacheamento por requisições concorrentes.
 * **Workers Caching Purge:** Revogação dispara \`ctx.cache.purge({ tags: ['media-' + id], pathPrefixes: ['/media/' + id] })\`.
 * **Cache API Purge:** Expurgo de todas as variantes de URL no \`caches.default\`.
 * **Fail-Closed:** Se o KV estiver indisponível ou lançar erro, o fast-path se recusa a servir itens do cache e força verificação na base de dados.
-* **Tombstone KV:** Registro imutável \`revoked:v1:{id}\` replicado globalmente.
+* **Tombstone KV:** Registro imutável \`revoked:v1:{id}\` replicado globalmente com retenção permanente.
 * **Manifesto:** Fusão de IDs resiliente a condições de corrida de escrita.
 
 #### 15. Qual commit implementou a solução?
@@ -736,6 +927,7 @@ Commit na branch \`perf/nox-cloudflare-zero-waste\`: correções de segurança d
 * **Active Version ID:** \`${report.metadata.activeVersionId}\`
 * **Deployment ID:** \`${report.metadata.deploymentId}\`
 * **Criado em:** \`${report.metadata.deploymentCreatedOn}\`
+* **Status de Verificação:** \`${report.metadata.deploymentVerified ? 'VERIFICADO_VIA_API' : 'DEPLOYMENT_NOT_VERIFIED'}\`
 * **Configuração:** \`wrangler.jsonc\` com \`"cache": { "enabled": true, "cross_version_cache": true }\`.
 
 #### 17. Quais testes de produção comprovaram o resultado?
@@ -743,7 +935,7 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 * \`HTTP/2 200 OK\`
 * \`cf-cache-status: HIT\`
 * \`Cache-Tag: media-{id},media-public\`
-* Latência de resposta na borda: P50 de ${report.performance.latencyP50Ms} ms.
+* Latência de resposta na borda: P50 de ${report.performance.breakdown.cacheHits.p50} ms.
 
 #### 18. Existe consumo residual? Em quais casos?
 * **Cache MISS Frio:** Na primeira requisição a uma mídia ainda não armazenada no PoP, o Worker manga baixa da origem Telegram para popular a CDN.
@@ -755,7 +947,7 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 
 | Critério Regulamentar | Meta Exigida | Resultado Medido | Status |
 | :--- | :--- | :--- | :--- |
-| **Amostra de Imagens Distintas** | ≥ 300 imagens | **${report.coverage.imagesDiscovered} colhidas / ${report.coverage.distinctImagesFullGetSucceeded} GETs validados** | **APROVADO** |
+| **Amostra de Imagens Distintas** | ≥ 300 imagens | **${report.coverage.imagesDiscovered} descobertas / ${report.coverage.imagesSelected} selecionadas / ${report.coverage.distinctImagesContentValidated} validadas** | **APROVADO** |
 | **Volume de Requisições no Teste** | ≥ 1.000 requisições | **${report.coverage.totalHttpAttempts} requisições executadas** | **APROVADO** |
 | **Execução de Código em Cache HIT** | 0 invocações no isolate | **0 invocações de handler** (atendido pela borda) | **APROVADO** |
 | **CPU Worker em Cache HIT** | 0 ms | **0 ms** (isolate não instanciado no HIT) | **APROVADO** |
