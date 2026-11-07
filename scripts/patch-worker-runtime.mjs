@@ -194,15 +194,21 @@ async function syncWorkerManifest(kv) {
         workerManifestUpdatedAt = manifestUpdatedAt;
 
         // 1. Add all currently revoked IDs from manifest unless superseded by newer known restoration
+        const workerRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
         for (const id of workerManifestRevokedSet) {
+          const perIdRevocationTs = Number(workerRevocationsMap[id]) || 0;
           const restoration = workerKnownRestorations.get(id);
-          if (restoration && (manifestUpdatedAt < restoration.timestamp || (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version))) {
+          const effectiveRevocationTs = perIdRevocationTs || workerKnownRevocations.get(id)?.timestamp || manifestUpdatedAt;
+
+          if (restoration && (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
             continue;
           }
           workerRevokedMediaSet.add(id);
           const existing = workerKnownRevocations.get(id);
-          if (!existing || manifestUpdatedAt > existing.timestamp || (manifestUpdatedAt === existing.timestamp && manifestVersion >= existing.version)) {
-            workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          if (!existing) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion });
+          } else if (perIdRevocationTs > existing.timestamp) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion });
           }
           workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
           workerKnownRestorations.delete(id);
@@ -250,7 +256,10 @@ async function syncWorkerManifest(kv) {
                     // Compare against per-ID restoration timestamp instead of manifestUpdatedAt
                     if (tombstoneTs >= perIdRestorationTs) {
                       workerRevokedMediaSet.add(restoredId);
-                      workerKnownRevocations.set(restoredId, { timestamp: tombstoneTs, version: manifestVersion });
+                      const existing = workerKnownRevocations.get(restoredId);
+                      if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && manifestVersion >= existing.version)) {
+                        workerKnownRevocations.set(restoredId, { timestamp: tombstoneTs, version: manifestVersion });
+                      }
                       workerPerIdRevocationSeq.set(restoredId, ++workerGlobalRevocationSeq);
                       workerKnownRestorations.delete(restoredId);
                       return;
@@ -314,7 +323,10 @@ async function syncWorkerManifest(kv) {
                     const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
                     if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
                   } catch {}
-                  workerKnownRevocations.set(knownId, { timestamp: tombstoneTs, version: workerManifestVersion });
+                  const existing = workerKnownRevocations.get(knownId);
+                  if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
+                    workerKnownRevocations.set(knownId, { timestamp: tombstoneTs, version: workerManifestVersion });
+                  }
                   workerRevokedMediaSet.add(knownId);
                   workerPerIdRevocationSeq.set(knownId, ++workerGlobalRevocationSeq);
                   return;
@@ -376,16 +388,21 @@ async function syncWorkerManifest(kv) {
         }
       } else {
         // Manifest is older than known version/timestamp - only merge IDs not superseded by known restorations
+        const olderRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
         for (const id of manifest.revokedIds) {
+          const perIdRevocationTs = Number(olderRevocationsMap[id]) || 0;
+          const existing = workerKnownRevocations.get(id);
+          const effectiveRevocationTs = perIdRevocationTs || existing?.timestamp || manifestUpdatedAt;
           const restoration = workerKnownRestorations.get(id);
-          if (restoration && (manifestUpdatedAt < restoration.timestamp || (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version))) {
+          if (restoration && (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
             continue; // Skip! ID was restored after this older manifest was written
           }
           workerRevokedMediaSet.add(id);
           workerManifestRevokedSet.add(id);
-          const existing = workerKnownRevocations.get(id);
-          if (!existing || manifestUpdatedAt > existing.timestamp || (manifestUpdatedAt === existing.timestamp && manifestVersion >= existing.version)) {
-            workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          if (!existing) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion });
+          } else if (perIdRevocationTs > existing.timestamp) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion });
           }
         }
       }
@@ -450,7 +467,10 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
         } catch {}
-        workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
+        const existing = workerKnownRevocations.get(mediaId);
+        if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
+          workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
+        }
         workerPerIdRevocationSeq.set(mediaId, ++workerGlobalRevocationSeq);
         workerKnownRestorations.delete(mediaId);
         return true;

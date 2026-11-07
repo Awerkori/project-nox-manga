@@ -2897,6 +2897,106 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRevAfterRestoration, 'Restauração remota confirmada com evidência positiva deve desbloquear isolate com revogação parcial').toBe(false);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
     });
+
+    // REVISÃO CODEX POST (RODADA 14): Preservação de Metadados na Reconciliação de Tombstones e Rastreio Per-ID
+    it('Codex Rodada 14 - Item 1: reconciliação de tombstones não substitui timestamp mais recente por tombstone de réplica defasada', async () => {
+      const mediaId = 'f0000005-ffff-4005-8005-000000000005';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate observou tombstone autoritativo com t=5000
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 5000,
+        status: 'REVOKED'
+      }));
+      await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+
+      // 2. Novo manifesto v2 (updatedAt=6000) omite mediaId -> entra na reconciliação de missingIds
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 6000,
+        revokedIds: []
+      }));
+
+      // 3. Durante a reconciliação, uma réplica KV defasada retorna um tombstone antigo com t=3000
+      const laggingKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return JSON.stringify({ mediaId, revokedAt: 3000 });
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // Executa sincronização que dispara reconciliação de missingIds
+      await isMediaRevoked(mediaId, laggingKv, { forceFresh: true });
+
+      // 4. Agora existe um registro de restauração defasado com t=4000 (3000 < 4000 < 5000)
+      // Se a reconciliação tivesse rebaixado o timestamp para 3000, a restauração de 4000 passaria!
+      // Como 5000 foi preservado, a restauração de 4000 DEVE ser rejeitada e a mídia continuar bloqueada.
+      await rawKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        restoredAt: 4000,
+        version: 1
+      }));
+
+      const isRev = await isMediaRevoked(mediaId, rawKv, { forceFresh: true, checkTombstone: true });
+      expect(isRev, 'Restauração anterior à revogação real de 5000 não pode passar após leitura de réplica defasada com 3000').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 14 - Item 2: manifestos posteriores com atualizações não relacionadas não inflam timestamps de revogação de outros IDs', async () => {
+      const mediaA = 'f0000006-aaaa-4006-8006-000000000006';
+      const mediaB = 'f0000006-bbbb-4006-8006-000000000007';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. mediaA foi revogada em t=1000
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaA],
+        revocations: { [mediaA]: 1000 }
+      }));
+      await isMediaRevoked(mediaA, rawKv, { forceFresh: true });
+
+      // 2. mediaA é legitimamente restaurada em t=2000
+      await rawKv.delete(`${REVOCATION_KEY_PREFIX}${mediaA}`);
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaA}`, JSON.stringify({
+        restoredAt: 2000,
+        version: 2
+      }));
+
+      // 3. Um escritor concorrente publica um manifesto v3 em t=3000 que adiciona mediaB,
+      // mas partiu de um snapshot onde mediaA ainda constava. O per-ID timestamp de mediaA é 1000.
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 3,
+        updatedAt: 3000,
+        revokedIds: [mediaA, mediaB],
+        revocations: { [mediaA]: 1000, [mediaB]: 3000 }
+      }));
+      await isMediaRevoked(mediaB, rawKv, { forceFresh: true });
+
+      // 4. Um manifesto v4 em t=4000 inclui a restauração legítima de mediaA (com per-ID timestamp 2000)
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 4,
+        updatedAt: 4000,
+        revokedIds: [mediaB],
+        restoredIds: [mediaA],
+        restorations: { [mediaA]: 2000 },
+        revocations: { [mediaB]: 3000 }
+      }));
+
+      // 5. Ao sincronizar o manifesto v4, a restauração com t=2000 DEVE ser aceita porque a revogação real era t=1000
+      // (e não foi inflada para t=3000 pela atualização não relacionada do v3)
+      const isRevA = await isMediaRevoked(mediaA, rawKv, { forceFresh: true, checkTombstone: true });
+      expect(isRevA, 'Restauração em t=2000 deve superar revogação real em t=1000 mesmo após v3 com updatedAt=3000').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaA)).toBe(false);
+    });
   });
 });
 
