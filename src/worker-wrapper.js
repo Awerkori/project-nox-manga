@@ -224,7 +224,16 @@ async function syncWorkerManifest(kv) {
           const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
 
           if (restoration) {
+            const isManifestOlderThanRestoration = manifestUpdatedAt < restoration.timestamp ||
+              (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version);
+
             if (isLegacy) {
+              if (isManifestOlderThanRestoration) {
+                workerManifestRevokedSet.delete(id);
+                continue;
+              }
+
+              workerRevokedMediaSet.add(id);
               let tombstoneFound = false;
               let tombstoneTs = 0;
               try {
@@ -241,20 +250,16 @@ async function syncWorkerManifest(kv) {
                 }
               } catch {}
 
-              if (tombstoneFound && tombstoneTs > 0 && tombstoneTs < restoration.timestamp) {
-                workerManifestRevokedSet.delete(id);
-                continue;
-              }
-
-              workerRevokedMediaSet.add(id);
-              const effectiveTs = (tombstoneFound && tombstoneTs) ? tombstoneTs : (existing?.timestamp || manifestUpdatedAt);
+              const effectiveTs = (tombstoneFound && tombstoneTs >= restoration.timestamp)
+                ? tombstoneTs
+                : (existing?.timestamp || manifestUpdatedAt);
               if (!existing || effectiveTs > existing.timestamp) {
                 workerKnownRevocations.set(id, { timestamp: effectiveTs, version: manifestVersion, isLegacy: !tombstoneFound });
               }
               workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
               workerKnownRestorations.delete(id);
               continue;
-            } else if (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+            } else if (perIdRevocationTs < restoration.timestamp || (perIdRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
               workerManifestRevokedSet.delete(id);
               continue;
             }

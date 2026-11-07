@@ -236,13 +236,21 @@ async function syncManifest(kv: any): Promise<boolean> {
           const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
 
           if (restoration) {
+            const isManifestOlderThanRestoration = manifestUpdatedAt < restoration.timestamp ||
+              (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version);
+
             if (isLegacy) {
-              // Ambiguous legacy revocation: verify tombstone before discarding!
-              // During a rolling deployment, an older worker can revoke a previously restored ID
-              // and publish a legacy manifest entry without per-ID timestamps.
-              // Note: A negative eventually consistent KV read is NOT sufficient evidence that
-              // the legacy entry predates the restoration. Only discard if a tombstone is found
-              // AND explicitly predates the restoration timestamp.
+              // Ambiguous legacy revocation:
+              // Only discard if there is positive evidence that the manifest entry itself predates the restoration.
+              // If the manifest was updated after the restoration, preserve the revocation (fail-closed)
+              // even if an eventually consistent KV replica still returns an old tombstone from before the restoration.
+              if (isManifestOlderThanRestoration) {
+                lastManifestRevokedSet.delete(id);
+                continue;
+              }
+
+              // Manifest was updated at or after restoration: preserve the revocation!
+              memoryRevokedSet.add(id);
               let tombstoneFound = false;
               let tombstoneTs = 0;
               try {
@@ -257,27 +265,18 @@ async function syncManifest(kv: any): Promise<boolean> {
                     else if (typeof parsed === 'number') tombstoneTs = parsed;
                   } catch {}
                 }
-              } catch {
-                // Fail closed on error: preserve revocation
-              }
+              } catch {}
 
-              if (tombstoneFound && tombstoneTs > 0 && tombstoneTs < restoration.timestamp) {
-                // Positive evidence that tombstone predated restoration: genuinely stale entry!
-                lastManifestRevokedSet.delete(id);
-                continue;
-              }
-
-              // Otherwise (negative tombstone read or tombstoneTs >= restoration.timestamp):
-              // Preserve the manifest revocation!
-              memoryRevokedSet.add(id);
-              const effectiveTs = (tombstoneFound && tombstoneTs) ? tombstoneTs : (existing?.timestamp || manifestUpdatedAt);
+              const effectiveTs = (tombstoneFound && tombstoneTs >= restoration.timestamp)
+                ? tombstoneTs
+                : (existing?.timestamp || manifestUpdatedAt);
               if (!existing || effectiveTs > existing.timestamp) {
                 knownRevocations.set(id, { timestamp: effectiveTs, version: manifestVersion, isLegacy: !tombstoneFound });
               }
               perIdRevocationSeq.set(id, ++globalRevocationSeq);
               knownRestorations.delete(id);
               continue;
-            } else if (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+            } else if (perIdRevocationTs < restoration.timestamp || (perIdRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
               lastManifestRevokedSet.delete(id);
               continue; // ID was restored; skip
             }
@@ -1223,10 +1222,21 @@ export async function unrevokeMedia(
       errors.push(`TOMBSTONE_DELETE_FAILED: ${err?.message || err}`);
     }
 
-    // Strict rule: Only publish restoration to manifest and local memory if tombstone was successfully deleted!
     if (tombstoneDeleted) {
+      let priorRevTs = 0;
+      if (priorTombstoneContent) {
+        try {
+          const parsed = typeof priorTombstoneContent === 'string' ? JSON.parse(priorTombstoneContent) : priorTombstoneContent;
+          if (parsed?.revokedAt) priorRevTs = Number(parsed.revokedAt) || 0;
+          else if (parsed?.timestamp) priorRevTs = Number(parsed.timestamp) || 0;
+        } catch {}
+      }
+      if (!priorRevTs) {
+        priorRevTs = Number(knownRevocations.get(mediaId)?.timestamp) || 0;
+      }
       // Check for intervening revocations before recording or publishing restoration:
-      // A concurrent revocation completing during or after the deletion will have revokedAt > restorationTimestamp.
+      // A concurrent revocation completing during or after the deletion will have a newly created tombstone
+      // or a manifest revocation timestamp greater than priorRevTs and >= restorationTimestamp.
       let interveningRevocationTs = 0;
       let currentManifest: any = null;
       try {
@@ -1244,8 +1254,10 @@ export async function unrevokeMedia(
         }
       } catch {}
 
-      const effectiveRevTs = Math.max(interveningRevocationTs, interveningTombstoneTs);
-      const hasInterveningRevocation = effectiveRevTs >= restorationTimestamp && effectiveRevTs > 0;
+      const isNewManifestRevocation = interveningRevocationTs > priorRevTs && interveningRevocationTs >= restorationTimestamp;
+      const isNewTombstone = interveningTombstoneTs >= restorationTimestamp && interveningTombstoneTs > 0;
+      const hasInterveningRevocation = isNewManifestRevocation || isNewTombstone;
+      const effectiveRevTs = Math.max(isNewManifestRevocation ? interveningRevocationTs : 0, isNewTombstone ? interveningTombstoneTs : 0);
 
       if (hasInterveningRevocation) {
         // A newer revocation completed concurrently! Refuse to restore, preserve in manifest/KV, and keep fail-closed.
@@ -1318,8 +1330,10 @@ export async function unrevokeMedia(
               }
             } catch {}
             const raceRevocationTs = Number(currentManifest.revocations?.[mediaId]) || 0;
-            const effectiveRaceRevTs = Math.max(raceRevocationTs, raceTombstoneTs);
-            if (effectiveRaceRevTs >= restorationTimestamp && effectiveRaceRevTs > 0) {
+            const isRaceManifestRevocation = raceRevocationTs > priorRevTs && raceRevocationTs >= restorationTimestamp;
+            const isRaceTombstone = raceTombstoneTs >= restorationTimestamp && raceTombstoneTs > 0;
+            if (isRaceManifestRevocation || isRaceTombstone) {
+              const effectiveRaceRevTs = Math.max(isRaceManifestRevocation ? raceRevocationTs : 0, isRaceTombstone ? raceTombstoneTs : 0);
               await options.kv.delete(REVOCATION_RESTORATION_KEY_PREFIX + mediaId).catch(() => {});
               try {
                 await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify({

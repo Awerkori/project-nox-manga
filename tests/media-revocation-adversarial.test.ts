@@ -3300,8 +3300,8 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const isRev = await isMediaRevoked(mediaId, rawKv);
       expect(isRev, 'Mídia re-revogada por worker legado deve permanecer revogada').toBe(true);
 
-      // 5. Caso contrário: somente se um tombstone for positivamente encontrado e seu timestamp for anterior à restauração,
-      // a entrada legada é descartada como comprovadamente superada
+      // 5. Caso a réplica sirva um snapshot de manifesto anterior à restauração (t=1500 < t=2000),
+      // a entrada legada é descartada como comprovadamente superada pela restauração
       const staleMediaId = 'e0000018-ffff-4018-8018-000000000019';
       await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${staleMediaId}`, JSON.stringify({
         mediaId: staleMediaId,
@@ -3310,21 +3310,21 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       }));
       await isMediaRevoked(staleMediaId, rawKv, { checkTombstone: true });
 
-      // Tombstone comprovadamente anterior (t=1000 < 2000)
+      // Tombstone anterior (t=1000 < 2000)
       await rawKv.put(`${REVOCATION_KEY_PREFIX}${staleMediaId}`, JSON.stringify({
         mediaId: staleMediaId,
         revokedAt: 1000
       }));
 
-      // Manifesto legado lista staleMediaId
+      // Manifesto legado anterior à restauração lista staleMediaId (v4, updatedAt 1500 < restoredAt 2000)
       await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
-        version: 7,
-        updatedAt: 3500,
+        version: 4,
+        updatedAt: 1500,
         revokedIds: [staleMediaId],
         restoredIds: []
       }));
       await isMediaRevoked(staleMediaId, rawKv, { forceFresh: true });
-      expect(getMemoryRevocationSet().has(staleMediaId), 'Entrada legada com tombstone comprovadamente anterior deve ser descartada').toBe(false);
+      expect(getMemoryRevocationSet().has(staleMediaId), 'Entrada legada de manifesto anterior à restauração deve ser descartada').toBe(false);
     });
 
     it('Codex Rodada 19 - Item 1: trata tombstones com timestamp idêntico ao da restauração como revogações ativas (fail-closed)', async () => {
@@ -3633,5 +3633,43 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(res.errors[0]).toBe('CONCURRENT_REVOCATION_INTERVENED');
       expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve continuar revogada em memória').toBe(true);
     });
+
+    it('Codex Rodada 23 - Item 1: preserva revogação legada de novo manifesto mesmo sob leitura de tombstone defasado pré-restauração', async () => {
+      const mediaId = 'e0000023-ffff-4023-8023-000000000001';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // 1. Isolate registra restauração em t=2000, versão 5
+      await mockKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        restoredAt: 2000,
+        version: 5
+      }));
+      await isMediaRevoked(mediaId, mockKv, { checkTombstone: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+
+      // 2. Um worker legado re-revoga a mídia em t=3000 e publica manifesto v6 (updatedAt 3000)
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 6,
+        updatedAt: 3000,
+        revokedIds: [mediaId],
+        restoredIds: []
+        // entrada legada sem timestamp por-ID
+      }));
+
+      // 3. Réplica KV defasada ainda retorna o tombstone antigo de t=1000 (de antes da restauração t=2000)
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 1000
+      }));
+
+      // 4. Sincronização do manifesto v6: o isolate NÃO pode descartar a revogação do manifesto v6
+      // só porque o tombstone lido é antigo (t=1000 < t=2000). O manifesto é de t=3000 > t=2000!
+      await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId), 'Revogação legada do novo manifesto deve ser preservada').toBe(true);
+      const isRev = await isMediaRevoked(mediaId, mockKv);
+      expect(isRev, 'Mídia deve permanecer revogada (fail-closed)').toBe(true);
+    });
   });
 });
+
