@@ -529,9 +529,13 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         } catch {}
 
         let isStaleTombstone = false;
+        let restorationTs = 0;
+        let restorationVer = 0;
         const knownRest = workerKnownRestorations.get(mediaId);
         if (knownRest && knownRest.timestamp > tombstoneTs) {
           isStaleTombstone = true;
+          restorationTs = knownRest.timestamp;
+          restorationVer = knownRest.version;
         } else {
           try {
             const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
@@ -540,6 +544,8 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
               const recVer = Number(resRecord.version) || 0;
               if (recTs > tombstoneTs) {
                 isStaleTombstone = true;
+                restorationTs = recTs;
+                restorationVer = recVer;
                 workerKnownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
               }
             }
@@ -557,6 +563,15 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           return true;
         } else {
           const known = workerKnownRevocations.get(mediaId);
+          const knownRevTs = Number(known?.timestamp) || 0;
+          const knownRevVer = Number(known?.version) || 0;
+          if (
+            knownRevTs > 0 &&
+            (restorationTs < knownRevTs || (restorationTs === knownRevTs && restorationVer < knownRevVer))
+          ) {
+            workerRevokedMediaSet.add(mediaId);
+            return true;
+          }
           const isLegacy = Boolean(known?.isLegacy || (!known?.timestamp && !workerKnownRevocations.has(mediaId)));
           if (!workerManifestRevokedSet.has(mediaId) || isLegacy) {
             workerRevokedMediaSet.delete(mediaId);

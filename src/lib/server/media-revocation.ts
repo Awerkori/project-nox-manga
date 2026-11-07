@@ -583,9 +583,13 @@ export async function isMediaRevoked(
         } catch {}
 
         let isStaleTombstone = false;
+        let restorationTs = 0;
+        let restorationVer = 0;
         const knownRest = knownRestorations.get(mediaId);
         if (knownRest && knownRest.timestamp > tombstoneTs) {
           isStaleTombstone = true;
+          restorationTs = knownRest.timestamp;
+          restorationVer = knownRest.version;
         } else {
           try {
             const resRecord = await kv.get(REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
@@ -594,6 +598,8 @@ export async function isMediaRevoked(
               const recVer = Number(resRecord.version) || 0;
               if (recTs > tombstoneTs) {
                 isStaleTombstone = true;
+                restorationTs = recTs;
+                restorationVer = recVer;
                 knownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
               }
             }
@@ -611,8 +617,18 @@ export async function isMediaRevoked(
           return true;
         } else {
           // If the tombstone is explicitly stale (predates a confirmed restoration record),
-          // unrevoke from memory if manifest omits mediaId OR if manifest entry is legacy (derived from that stale tombstone)
+          // preserve newer known revocations if this isolate observed a revocation after this restoration
           const known = knownRevocations.get(mediaId);
+          const knownRevTs = Number(known?.timestamp) || 0;
+          const knownRevVer = Number(known?.version) || 0;
+          const isLocallyInitiated = locallyInitiatedRevocations.has(mediaId);
+          if (
+            isLocallyInitiated ||
+            (knownRevTs > 0 && (restorationTs < knownRevTs || (restorationTs === knownRevTs && restorationVer < knownRevVer)))
+          ) {
+            memoryRevokedSet.add(mediaId);
+            return true;
+          }
           const isLegacy = Boolean(known?.isLegacy || (!known?.timestamp && !knownRevocations.has(mediaId)));
           if (!lastManifestRevokedSet.has(mediaId) || isLegacy) {
             locallyInitiatedRevocations.delete(mediaId);
@@ -1229,7 +1245,7 @@ export async function unrevokeMedia(
       } catch {}
 
       const effectiveRevTs = Math.max(interveningRevocationTs, interveningTombstoneTs);
-      const hasInterveningRevocation = effectiveRevTs > restorationTimestamp;
+      const hasInterveningRevocation = effectiveRevTs >= restorationTimestamp && effectiveRevTs > 0;
 
       if (hasInterveningRevocation) {
         // A newer revocation completed concurrently! Refuse to restore, preserve in manifest/KV, and keep fail-closed.
@@ -1291,23 +1307,29 @@ export async function unrevokeMedia(
 
       if (restorationRecordWritten) {
         try {
-          if (!currentManifest) {
-            currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-          }
+          // Codex P1: Re-read the manifest before publishing restoration to ensure intervening revocations are detected
+          currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
           if (currentManifest && Array.isArray(currentManifest.revokedIds)) {
-            // Re-check manifest one last time in case another concurrent revocation wrote after our first read
+            let raceTombstoneTs = 0;
+            try {
+              const checkRaceTomb = await options.kv.get(REVOCATION_KEY_PREFIX + mediaId, { type: 'json' });
+              if (checkRaceTomb && checkRaceTomb.revokedAt) {
+                raceTombstoneTs = Number(checkRaceTomb.revokedAt) || 0;
+              }
+            } catch {}
             const raceRevocationTs = Number(currentManifest.revocations?.[mediaId]) || 0;
-            if (raceRevocationTs > restorationTimestamp) {
+            const effectiveRaceRevTs = Math.max(raceRevocationTs, raceTombstoneTs);
+            if (effectiveRaceRevTs >= restorationTimestamp && effectiveRaceRevTs > 0) {
               await options.kv.delete(REVOCATION_RESTORATION_KEY_PREFIX + mediaId).catch(() => {});
               try {
                 await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify({
                   mediaId,
-                  revokedAt: raceRevocationTs,
+                  revokedAt: effectiveRaceRevTs,
                   reason: 'CONCURRENT_REVOCATION_PRESERVED'
                 }));
               } catch {}
               memoryRevokedSet.add(mediaId);
-              knownRevocations.set(mediaId, { timestamp: raceRevocationTs, version: nextVersion, isLegacy: false });
+              knownRevocations.set(mediaId, { timestamp: effectiveRaceRevTs, version: nextVersion, isLegacy: false });
               errors.push('CONCURRENT_REVOCATION_INTERVENED');
               return { success: false, errors };
             }

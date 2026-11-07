@@ -3500,5 +3500,138 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
       expect(isRev, 'Mídia deve continuar revogada pois tombstone nunca foi deletado').toBe(true);
     });
+
+    it('Codex Rodada 22 - Item 1: unrevokeMedia re-lê o manifesto antes de publicar e detecta revogação interveniente concorrente', async () => {
+      const mediaId = 'e0000022-ffff-4022-8022-000000000001';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // Mídia inicialmente revogada em t=1000
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId],
+        revocations: { [mediaId]: 1000 }
+      }));
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 1000
+      }));
+
+      // Simulamos um KV onde a primeira leitura do manifesto (em t_restoration) retorna o manifesto com t=1000,
+      // mas enquanto o registro durável de restauração é gravado, um escritor concorrente grava nova revogação
+      // com t=2500 no manifesto e no tombstone!
+      let manifestReadCount = 0;
+      const racingKv = {
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            manifestReadCount++;
+            if (manifestReadCount >= 2) {
+              // Re-read antes de publicar: retorna revogação concorrente!
+              return {
+                version: 3,
+                updatedAt: 9999999999999,
+                revokedIds: [mediaId],
+                revocations: { [mediaId]: 9999999999999 }
+              };
+            }
+            return {
+              version: 1,
+              updatedAt: 1000,
+              revokedIds: [mediaId],
+              revocations: { [mediaId]: 1000 }
+            };
+          }
+          return mockKv.get(key, opts);
+        }),
+        put: vi.fn(async (key: string, val: any) => mockKv.put(key, val)),
+        delete: vi.fn(async (key: string) => mockKv.delete(key))
+      };
+
+      const res = await unrevokeMedia(mediaId, { kv: racingKv });
+      expect(res.success, 'unrevokeMedia deve abortar ao detectar revogação interveniente no re-read do manifesto').toBe(false);
+      expect(res.errors[0]).toBe('CONCURRENT_REVOCATION_INTERVENED');
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve continuar revogada').toBe(true);
+    });
+
+    it('Codex Rodada 22 - Item 2: preserva revogação local recente contra réplica KV com tombstone e restauração defasados', async () => {
+      const mediaId = 'e0000022-ffff-4022-8022-000000000002';
+      clearMemoryRevocationCache();
+
+      // 1. Isolate tem revogação recente local em t=5000 (ex: revokeMedia local com falha de escrita no manifesto)
+      const mockKv = createMockKv();
+      const failingKv = {
+        get: vi.fn(async () => null),
+        put: vi.fn(async () => { throw new Error('KV_FAIL'); }),
+        delete: vi.fn()
+      };
+      await revokeMedia(mediaId, { kv: failingKv });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // 2. Réplica KV defasada retorna tombstone antigo em t=1000 e registro de restauração em t=2000
+      // enquanto o manifesto desta réplica omite mediaId
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 1000
+      }));
+      await mockKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        restoredAt: 2000,
+        version: 5
+      }));
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 6,
+        updatedAt: 2500,
+        revokedIds: ['other-id'],
+        restoredIds: []
+      }));
+
+      // 3. Verificação com tombstone (que é stale em relação à restauração t=2000 do KV)
+      // NÃO pode apagar a revogação local de t=5000!
+      const isRev = await isMediaRevoked(mediaId, mockKv, { checkTombstone: true });
+      expect(isRev, 'Revogação local recente não pode ser apagada por restauração defasada do KV').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve permanecer revogada em memória').toBe(true);
+    });
+
+    it('Codex Rodada 22 - Item 3: unrevokeMedia trata revogação concorrente de timestamp idêntico como interveniente (fail-closed)', async () => {
+      const mediaId = 'e0000022-ffff-4022-8022-000000000003';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // Mock de KV onde o tombstone após delete é imediatamente recriado com timestamp idêntico ao de restauração
+      let tombstoneDeleted = false;
+      let targetTs = 0;
+      const racingEqualTsKv = {
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            return {
+              version: 2,
+              updatedAt: 1000,
+              revokedIds: [mediaId],
+              revocations: { [mediaId]: 1000 }
+            };
+          }
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}` && tombstoneDeleted) {
+            // Concorrente gravou tombstone no mesmo timestamp!
+            return {
+              mediaId,
+              revokedAt: targetTs
+            };
+          }
+          return mockKv.get(key, opts);
+        }),
+        put: vi.fn(async (key: string, val: any) => mockKv.put(key, val)),
+        delete: vi.fn(async (key: string) => {
+          tombstoneDeleted = true;
+          targetTs = Date.now();
+          return mockKv.delete(key);
+        })
+      };
+
+      const res = await unrevokeMedia(mediaId, { kv: racingEqualTsKv });
+      expect(res.success, 'unrevokeMedia deve falhar fechado ao detectar revogação de timestamp idêntico').toBe(false);
+      expect(res.errors[0]).toBe('CONCURRENT_REVOCATION_INTERVENED');
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve continuar revogada em memória').toBe(true);
+    });
   });
 });
