@@ -153,20 +153,7 @@ export const load = async ({
   const cached = snapshots.get(key);
   if (cached) {
     const age = now - cached.timestamp;
-    if (age < ADMIN_CACHE_TTL_MS) return cached.payload;
-    if (age < ADMIN_STALE_TTL_MS) {
-      if (!inFlight.has(key)) {
-        const bg = loadProductionSnapshot(locals, platform)
-          .then((payload) => {
-            snapshots.set(key, { timestamp: Date.now(), payload });
-            return payload;
-          })
-          .finally(() => inFlight.delete(key));
-        inFlight.set(key, bg);
-        platform?.context?.waitUntil?.(bg.catch(() => {}));
-      }
-      return cached.payload;
-    }
+    if (age < ADMIN_STALE_TTL_MS) return cached.payload;
   }
 
   const existing = inFlight.get(key);

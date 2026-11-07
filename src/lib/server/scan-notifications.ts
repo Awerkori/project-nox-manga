@@ -121,12 +121,10 @@ export async function createScanNotification(params: ScanNotificationParams) {
       );
       outboxId = queued.rows[0]?.id;
       emailQueued = !!outboxId;
-      if (emailQueued) {
-        const dispatch = processPendingEmailOutbox(10, outboxId, platformEnv).catch((error) => {
+      if (emailQueued && !params.platform) {
+        await processPendingEmailOutbox(10, outboxId, platformEnv).catch((error) => {
           console.error('[SCAN_OUTBOX] dispatch failed', { message: String(error?.message || error).slice(0, 200) });
         });
-        if (params.platform?.context?.waitUntil) params.platform.context.waitUntil(dispatch);
-        else await dispatch;
       }
     }
   }

@@ -60,17 +60,7 @@ export const load = async ({ locals, platform }: { locals: App.Locals; platform?
   const now = Date.now();
   if (cached) {
     const age = now - cached.at;
-    if (age < HEALTH_FRESH_TTL_MS) return cached.payload;
-    if (age < HEALTH_STALE_TTL_MS) {
-      if (!flight) {
-        const bg = buildHealthPayload(locals, platform).finally(() => {
-          flight = null;
-        });
-        flight = bg;
-        platform?.context?.waitUntil?.(bg.catch(() => {}));
-      }
-      return cached.payload;
-    }
+    if (age < HEALTH_STALE_TTL_MS) return cached.payload;
   }
   if (flight) return flight;
 
