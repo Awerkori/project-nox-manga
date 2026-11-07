@@ -78,6 +78,7 @@ it('binds the configured comment limiter in the Cloudflare runtime', async (ctx)
       other = await runtime.dispatchFetch('http://localhost/reader-b');
     } catch (err: any) {
       if (err?.code === 'EPERM' || err?.message?.includes('EPERM') || err?.message?.includes('listen')) {
+        ctx.skip();
         return;
       }
       throw err;

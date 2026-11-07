@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { purgeMediaFromClientCache } from '$lib/client/sw-purge';
   let {
     page,
     onSeen,
@@ -67,6 +68,7 @@
       } else {
         loaded = false;
         broken = true;
+        purgeMediaFromClientCache(page.media_id);
         onSeen(page.position, false);
       }
     };

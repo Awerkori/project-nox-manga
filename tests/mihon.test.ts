@@ -146,19 +146,86 @@ describe('Mihon API & Security Helpers', () => {
       })
     };
 
-    // Simulate an active token previously authenticated and cached in memory
+    // 1. Warm memory cache with a previously authenticated session
     invalidateMihonTokenCache();
-
-    // Now write a KV tombstone from "another isolate"
-    await mockKv.put(`${MIHON_REVOKED_KV_PREFIX}${tokenHash}`, JSON.stringify({ revokedAt: Date.now() }));
-
     const req = new Request('https://projectnox.org/api/mihon/chapter/123/pages', {
       headers: { Authorization: `Bearer ${rawToken}` }
     });
 
-    const result = await verifyMihonAuth(req, { COVER_THUMBNAILS: mockKv });
+    // Mock YSQL returning valid active member for initial warm-up
+    const yugabyte = await import('../src/lib/server/yugabyte');
+    const spy = vi.spyOn(yugabyte, 'executeYugabyteSql').mockResolvedValue({
+      rows: [
+        {
+          id: 't-123',
+          user_id: 'u-123',
+          member_id: 'u-123',
+          username: 'reader_user',
+          age_status: 'ADULT',
+          xp: 500,
+          is_test: false,
+          revoked: false,
+          expires_at: new Date(Date.now() + 86400000).toISOString()
+        }
+      ]
+    } as any);
 
-    expect(result.authenticated).toBe(false);
-    expect(result.error).toBe('Token revogado');
+    try {
+      // Warm the cache
+      const initialAuth = await verifyMihonAuth(req, { COVER_THUMBNAILS: mockKv });
+      expect(initialAuth.authenticated).toBe(true);
+      expect(initialAuth.user?.username).toBe('reader_user');
+
+      // 2. Now write a KV tombstone from "another isolate"
+      await mockKv.put(`${MIHON_REVOKED_KV_PREFIX}${tokenHash}`, JSON.stringify({ revokedAt: Date.now() }));
+
+      // 3. Second request to this isolate must detect KV tombstone, evict memory cache and reject
+      const result = await verifyMihonAuth(req, { COVER_THUMBNAILS: mockKv });
+
+      expect(result.authenticated).toBe(false);
+      expect(result.error).toBe('Token revogado');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('fails closed on KV error: evicts in-memory cache and revalidates authoritatively against database', async () => {
+    const rawToken = 'nox_mh_fail_closed_token';
+    const tokenHash = await hashToken(rawToken);
+
+    invalidateMihonTokenCache();
+    const req = new Request('https://projectnox.org/api/mihon/chapter/123/pages', {
+      headers: { Authorization: `Bearer ${rawToken}` }
+    });
+
+    const yugabyte = await import('../src/lib/server/yugabyte');
+    const spy = vi.spyOn(yugabyte, 'executeYugabyteSql').mockResolvedValueOnce({
+      rows: [{ id: 't-1', user_id: 'u-1', member_id: 'u-1', username: 'fail_closed_tester', age_status: 'ADULT', xp: 100, is_test: false }]
+    } as any);
+
+    const mockWorkingKv = {
+      get: vi.fn().mockResolvedValue(null)
+    };
+
+    try {
+      // Warm cache
+      const first = await verifyMihonAuth(req, { COVER_THUMBNAILS: mockWorkingKv });
+      expect(first.authenticated).toBe(true);
+
+      // KV throws error on second check
+      const mockFaultyKv = {
+        get: vi.fn().mockRejectedValue(new Error('KV connection timeout'))
+      };
+
+      // Database returns empty (e.g. token revoked in DB)
+      spy.mockResolvedValueOnce({ rows: [] } as any);
+
+      const second = await verifyMihonAuth(req, { COVER_THUMBNAILS: mockFaultyKv });
+      // Must NOT return stale cached auth! Must fail closed and return unauthenticated
+      expect(second.authenticated).toBe(false);
+      expect(second.error).toContain('Token inválido ou expirado');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

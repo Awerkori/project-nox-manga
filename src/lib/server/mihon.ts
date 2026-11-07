@@ -39,15 +39,12 @@ export function invalidateMihonTokenCache(tokenHash?: string) {
 export async function recordMihonTokenRevocation(tokenHash: string, kv?: any): Promise<void> {
   invalidateMihonTokenCache(tokenHash);
   if (kv && typeof kv.put === 'function') {
-    try {
-      await kv.put(
-        `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
-        JSON.stringify({ revokedAt: Date.now() }),
-        { expirationTtl: 300 }
-      );
-    } catch (err) {
-      console.error('[mihon] Failed to write KV revocation tombstone:', err);
-    }
+    // Write KV tombstone with 300s TTL (exceeds 60s memory TTL)
+    await kv.put(
+      `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
+      JSON.stringify({ revokedAt: Date.now() }),
+      { expirationTtl: 300 }
+    );
   }
 }
 
@@ -73,11 +70,15 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
           mihonAuthCache.delete(hash);
           return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token revogado' };
         }
-      } catch {
-        // Fail-safe: if KV read errors, proceed with verified memory cache
+      } catch (kvErr) {
+        // Fail-closed on KV error: evict from memory and verify authoritatively via YSQL
+        mihonAuthCache.delete(hash);
       }
     }
-    return cached.result;
+    // Only return cached result if KV tombstone check did not fail-closed
+    if (mihonAuthCache.has(hash)) {
+      return cached.result;
+    }
   }
 
   // 2. Pre-YSQL KV tombstone check (saves Hyperdrive query if already known revoked globally)
