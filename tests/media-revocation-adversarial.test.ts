@@ -3319,6 +3319,73 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       await isMediaRevoked(staleMediaId, rawKv, { forceFresh: true });
       expect(getMemoryRevocationSet().has(staleMediaId), 'Entrada legada sem tombstone deve ser descartada como defasada').toBe(false);
     });
+
+    it('Codex Rodada 19 - Item 1: trata tombstones com timestamp idêntico ao da restauração como revogações ativas (fail-closed)', async () => {
+      const mediaId = 'e0000019-ffff-4019-8019-000000000001';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate possui restauração confirmada em t=2000 com manifest version 5
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        restoredAt: 2000,
+        version: 5
+      }));
+      await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+
+      // 2. Mídia é re-revogada no mesmo milissegundo (t=2000) e tombstone é escrito em KV
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 2000,
+        reason: 'RE_REVOKED_SAME_MS'
+      }));
+
+      // 3. Verificação com tombstone (checkTombstone) não pode considerar o tombstone obsoleto
+      // mesmo que recTs === tombstoneTs e recVer >= currentManifestVersion.
+      // O tombstone representa operação ativa ou fail-closed.
+      const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(isRev, 'Tombstone com timestamp idêntico ao da restauração deve ser tratado como ativo').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 19 - Item 2: preserva e restaura tombstone quando gravação do registro durável de restauração falha', async () => {
+      const mediaId = 'e0000019-ffff-4019-8019-000000000002';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Mídia revogada que persistiu apenas o tombstone (sem manifesto)
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 1000,
+        reason: 'PARTIAL_PERSISTENCE_TOMBSTONE_ONLY'
+      }));
+
+      // 2. Chamador tenta unrevokeMedia, mas a gravação do registro durável falha após a deleção do tombstone
+      const failingRestorationKv = {
+        ...rawKv,
+        get: rawKv.get.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv),
+        put: vi.fn(async (key: string, val: string, opts?: any) => {
+          if (key === `${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`) {
+            throw new Error('KV_PUT_RESTORATION_RECORD_TIMEOUT');
+          }
+          return rawKv.put(key, val, opts);
+        })
+      };
+
+      const result = await unrevokeMedia(mediaId, { kv: failingRestorationKv });
+      expect(result.success, 'unrevokeMedia deve reportar falha quando registro durável falha').toBe(false);
+
+      // 3. O tombstone em KV deve ter sido restaurado/preservado via rollback
+      const restoredTombstone = await rawKv.get(`${REVOCATION_KEY_PREFIX}${mediaId}`);
+      expect(restoredTombstone, 'Tombstone deve ser restaurado em KV após falha do registro durável').toBeTruthy();
+
+      // 4. Um isolate limpo e independente verifica o status da mídia
+      clearMemoryRevocationCache();
+      const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(isRev, 'Isolate limpo deve identificar a mídia como revogada via tombstone restaurado').toBe(true);
+    });
   });
 });
 

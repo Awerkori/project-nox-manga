@@ -544,7 +544,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
 
         let isStaleTombstone = false;
         const knownRest = workerKnownRestorations.get(mediaId);
-        if (knownRest && (knownRest.timestamp > tombstoneTs || (knownRest.timestamp === tombstoneTs && knownRest.version >= workerManifestVersion))) {
+        if (knownRest && knownRest.timestamp > tombstoneTs) {
           isStaleTombstone = true;
         } else {
           try {
@@ -552,7 +552,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
             if (resRecord) {
               const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
               const recVer = Number(resRecord.version) || 0;
-              if (recTs > tombstoneTs || (recTs === tombstoneTs && recVer >= workerManifestVersion)) {
+              if (recTs > tombstoneTs) {
                 isStaleTombstone = true;
                 workerKnownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
               }

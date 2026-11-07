@@ -611,7 +611,7 @@ export async function isMediaRevoked(
 
         let isStaleTombstone = false;
         const knownRest = knownRestorations.get(mediaId);
-        if (knownRest && (knownRest.timestamp > tombstoneTs || (knownRest.timestamp === tombstoneTs && knownRest.version >= currentManifestVersion))) {
+        if (knownRest && knownRest.timestamp > tombstoneTs) {
           isStaleTombstone = true;
         } else {
           try {
@@ -619,7 +619,7 @@ export async function isMediaRevoked(
             if (resRecord) {
               const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
               const recVer = Number(resRecord.version) || 0;
-              if (recTs > tombstoneTs || (recTs === tombstoneTs && recVer >= currentManifestVersion)) {
+              if (recTs > tombstoneTs) {
                 isStaleTombstone = true;
                 knownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
               }
@@ -1181,8 +1181,12 @@ export async function unrevokeMedia(
   let nextVersion = currentManifestVersion + 1;
 
   let tombstoneDeleted = false;
+  let priorTombstoneContent: any = null;
   if (options.kv && typeof options.kv.delete === 'function') {
     try {
+      if (typeof options.kv.get === 'function') {
+        priorTombstoneContent = await options.kv.get(REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+      }
       await options.kv.delete(REVOCATION_KEY_PREFIX + mediaId);
       tombstoneDeleted = true;
     } catch (err: any) {
@@ -1256,6 +1260,21 @@ export async function unrevokeMedia(
         errors.push(`RESTORATION_RECORD_WRITE_FAILED: ${err?.message || err}`);
       }
 
+      if (!restorationRecordWritten) {
+        // Rollback: restore the tombstone in KV so shared revocation evidence is preserved!
+        try {
+          const contentToRestore = typeof priorTombstoneContent === 'string'
+            ? priorTombstoneContent
+            : (priorTombstoneContent ? JSON.stringify(priorTombstoneContent) : JSON.stringify({
+                mediaId,
+                revokedAt: knownRevocations.get(mediaId)?.timestamp || restorationTimestamp,
+                reason: 'RESTORATION_FAILED_TOMBSTONE_RESTORED'
+              }));
+          await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, contentToRestore);
+        } catch {}
+        return { success: false, errors };
+      }
+
       if (restorationRecordWritten) {
         try {
           if (!currentManifest) {
@@ -1266,6 +1285,13 @@ export async function unrevokeMedia(
             const raceRevocationTs = Number(currentManifest.revocations?.[mediaId]) || 0;
             if (raceRevocationTs > restorationTimestamp) {
               await options.kv.delete(REVOCATION_RESTORATION_KEY_PREFIX + mediaId).catch(() => {});
+              try {
+                await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify({
+                  mediaId,
+                  revokedAt: raceRevocationTs,
+                  reason: 'CONCURRENT_REVOCATION_PRESERVED'
+                }));
+              } catch {}
               memoryRevokedSet.add(mediaId);
               knownRevocations.set(mediaId, { timestamp: raceRevocationTs, version: nextVersion, isLegacy: false });
               errors.push('CONCURRENT_REVOCATION_INTERVENED');
