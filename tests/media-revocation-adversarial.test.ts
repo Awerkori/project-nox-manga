@@ -2192,6 +2192,123 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         expect(getMemoryRevocationSet().has(ids[i]), `ID ${ids[i]} além dos 10 primeiros deve ser reconciliado sem inanição`).toBe(false);
       }
     });
+
+    it('Codex Rodada 7 - Item 1: preserva revogações conhecidas contra réplica KV defasada com leitura negativa', async () => {
+      const mediaId = 'a0000001-aaaa-4001-8001-000000000001';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // 1. Isolate aprende que mediaId foi revogado via tombstone recente
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 5000,
+        version: 2
+      }));
+      const isRevInitial = await isMediaRevoked(mediaId, mockKv, { forceFresh: true, checkTombstone: true });
+      expect(isRevInitial).toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // 2. Réplica KV defasada serve um manifesto antigo (updatedAt: 1000) e leitura negativa de tombstone
+      const staleReplicaKv = {
+        get: vi.fn(async (key: string) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            return {
+              version: 1,
+              updatedAt: 1000,
+              revokedIds: ['other-media']
+            };
+          }
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return null; // leitura negativa defasada
+          }
+          return null;
+        }),
+        put: vi.fn(),
+        delete: vi.fn()
+      };
+
+      // 3. Consulta /media/[id] com checkTombstone: true contra réplica defasada
+      const isRevStale = await isMediaRevoked(mediaId, staleReplicaKv, { checkTombstone: true });
+      expect(isRevStale, 'Leitura negativa defasada e manifesto antigo não podem anular revogação conhecida').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve permanecer revogada em memória').toBe(true);
+    });
+
+    it('Codex Rodada 7 - Item 2: não descarta guarda local após sucesso apenas na escrita do manifesto', async () => {
+      const mediaId = 'a0000002-aaaa-4002-8002-000000000002';
+      clearMemoryRevocationCache();
+
+      // KV onde escrita do tombstone falha, mas manifest tem sucesso
+      const partialKv = createMockKv();
+      const failingTombstoneKv = {
+        get: partialKv.get.bind(partialKv),
+        delete: partialKv.delete.bind(partialKv),
+        put: vi.fn(async (key: string, val: any) => {
+          if (key.startsWith(REVOCATION_KEY_PREFIX)) {
+            throw new Error('TOMBSTONE_KV_PUT_TIMEOUT');
+          }
+          return partialKv.put(key, val);
+        })
+      };
+
+      const res = await revokeMedia(mediaId, { kv: failingTombstoneKv });
+      expect(res.state, 'Deve reportar REVOCATION_PARTIAL quando tombstone falha').toBe('REVOCATION_PARTIAL');
+      expect(res.tombstoneWritten).toBe(false);
+      expect(res.manifestUpdated).toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // Simula sincronização subsequente do manifesto (ID aparece no manifesto)
+      await isMediaRevoked(mediaId, partialKv, { forceFresh: true });
+
+      // Agora uma réplica defasada serve um manifesto sem mediaId e tombstone nulo
+      const staleNegativeKv = {
+        get: vi.fn(async (key: string) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            return { version: 10, updatedAt: 2000, revokedIds: ['unrelated-media'] };
+          }
+          return null; // tombstone nulo pois escrita original falhou
+        }),
+        put: vi.fn(),
+        delete: vi.fn()
+      };
+
+      // A guarda local iniciada nesta instância deve proteger a mídia e não permitir descarte
+      const isRevProtected = await isMediaRevoked(mediaId, staleNegativeKv, { checkTombstone: true });
+      expect(isRevProtected, 'Guarda local não pode ser descartada após escrita parcial apenas de manifesto').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 7 - Item 3: reconcilia restauração mesmo quando versão do manifesto é menor mas timestamp é mais recente', async () => {
+      const mediaId = 'a0000003-aaaa-4003-8003-000000000003';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // 1. Isolate observa manifesto v5 gravado em t=1000 com mediaId revogado
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 5,
+        updatedAt: 1000,
+        revokedIds: [mediaId]
+      }));
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 1000
+      }));
+
+      await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // 2. PoP concorrente em outro local restaurou mediaId gerando manifesto v4 (concorrente não-coordenado) em t=2000
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 4,
+        updatedAt: 2000,
+        revokedIds: [] // mediaId restaurado
+      }));
+      await mockKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
+
+      // 3. Sync no isolate deve reconhecer t=2000 > t=1000 e reconciliar a restauração sem ficar preso por v4 < v5
+      const isRevAfter = await isMediaRevoked(mediaId, mockKv, { forceFresh: true, checkTombstone: true });
+      expect(isRevAfter, 'Manifesto mais recente por timestamp deve reconciliar restauração mesmo com versão menor').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+    });
   });
 });
 

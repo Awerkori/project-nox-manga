@@ -162,11 +162,13 @@ const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
 const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
+let workerKnownRevocations = new Map();
 let workerManifestRevokedSet = new Set();
 let workerLastRevocationSync = 0;
 let workerManifestLoaded = false;
 let workerManifestKeyPresent = false;
 let workerManifestVersion = 0;
+let workerManifestUpdatedAt = 0;
 let workerReconciliationCursor = 0;
 let workerSyncGeneration = 0;
 
@@ -177,15 +179,37 @@ async function syncWorkerManifest(kv) {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
       const manifestVersion = Number(manifest.version) || 0;
-      if (manifestVersion >= workerManifestVersion) {
+      const manifestUpdatedAt = Number(manifest.updatedAt) || 0;
+
+      const isNewer = manifestUpdatedAt > workerManifestUpdatedAt ||
+        (manifestUpdatedAt === workerManifestUpdatedAt && manifestVersion >= workerManifestVersion);
+
+      if (isNewer) {
         workerManifestRevokedSet = new Set(manifest.revokedIds);
-        workerManifestVersion = manifestVersion;
+        workerManifestVersion = Math.max(workerManifestVersion, manifestVersion);
+        workerManifestUpdatedAt = Math.max(workerManifestUpdatedAt, manifestUpdatedAt);
 
         for (const id of workerManifestRevokedSet) {
           workerRevokedMediaSet.add(id);
+          workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
         }
 
-        const missing = Array.from(workerRevokedMediaSet).filter((id) => !workerManifestRevokedSet.has(id));
+        if (Array.isArray(manifest.restoredIds)) {
+          for (const restoredId of manifest.restoredIds) {
+            workerRevokedMediaSet.delete(restoredId);
+            workerKnownRevocations.delete(restoredId);
+          }
+        }
+
+        const missing = Array.from(workerRevokedMediaSet).filter((id) => {
+          if (workerManifestRevokedSet.has(id)) return false;
+          const known = workerKnownRevocations.get(id);
+          if (known && (manifestUpdatedAt < known.timestamp || (manifestUpdatedAt === known.timestamp && manifestVersion <= known.version))) {
+            return false;
+          }
+          return true;
+        });
+
         if (missing.length > 0) {
           if (workerReconciliationCursor >= missing.length) {
             workerReconciliationCursor = 0;
@@ -204,6 +228,7 @@ async function syncWorkerManifest(kv) {
                 if (!tombstone) {
                   if (workerSyncGeneration === currentSyncGen && !workerManifestRevokedSet.has(knownId)) {
                     workerRevokedMediaSet.delete(knownId);
+                    workerKnownRevocations.delete(knownId);
                   }
                 }
               } catch {
@@ -276,6 +301,12 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
       const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
         workerRevokedMediaSet.add(mediaId);
+        let tombstoneTs = Date.now();
+        try {
+          const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+          if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+        } catch {}
+        workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
         return true;
       } else {
         if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
@@ -283,11 +314,18 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           return true;
         }
         if (workerManifestLoaded && workerManifestKeyPresent && !workerManifestRevokedSet.has(mediaId)) {
+          const known = workerKnownRevocations.get(mediaId);
+          if (known && (workerManifestUpdatedAt < known.timestamp || (workerManifestUpdatedAt === known.timestamp && workerManifestVersion <= known.version))) {
+            return true;
+          }
           workerRevokedMediaSet.delete(mediaId);
+          workerKnownRevocations.delete(mediaId);
           return false;
         }
         if (workerManifestLoaded && !workerManifestKeyPresent) {
-          workerRevokedMediaSet.delete(mediaId);
+          if (workerRevokedMediaSet.has(mediaId)) {
+            return true;
+          }
           return false;
         }
         if (workerRevokedMediaSet.has(mediaId)) {
