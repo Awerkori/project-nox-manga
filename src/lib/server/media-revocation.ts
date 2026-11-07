@@ -158,16 +158,19 @@ const isVitest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
 export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 
 let memoryRevokedSet = new Set<string>();
+let lastManifestRevokedSet = new Set<string>();
 let lastManifestSync = 0;
 let manifestSuccessfullyLoaded = false;
-
-let manifestSyncPromise: Promise<boolean> | null = null;
+let manifestKeyPresent = false;
+let currentManifestVersion = 0;
 
 export function clearMemoryRevocationCache(): void {
   memoryRevokedSet.clear();
+  lastManifestRevokedSet.clear();
   lastManifestSync = 0;
   manifestSuccessfullyLoaded = false;
-  manifestSyncPromise = null;
+  manifestKeyPresent = false;
+  currentManifestVersion = 0;
 }
 
 export function populateMemoryRevocationCache(ids: string[]): void {
@@ -181,37 +184,55 @@ export function getMemoryRevocationSet(): Set<string> {
 }
 
 async function syncManifest(kv: any): Promise<boolean> {
-  if (manifestSyncPromise) {
-    return manifestSyncPromise;
-  }
+  lastManifestSync = Date.now();
+  try {
+    const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+    if (manifest && Array.isArray(manifest.revokedIds)) {
+      const manifestVersion = Number(manifest.version) || 0;
+      lastManifestRevokedSet = new Set<string>(manifest.revokedIds);
 
-  manifestSyncPromise = (async () => {
-    lastManifestSync = Date.now();
-    try {
-      const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
-      if (manifest && Array.isArray(manifest.revokedIds)) {
-        for (const id of manifest.revokedIds) {
-          memoryRevokedSet.add(id);
-        }
-        manifestSuccessfullyLoaded = true;
-        return true;
-      } else if (manifest === null || manifest === undefined) {
-        // Manifest does not exist yet (clean slate) - no I/O error, but tombstone check needed if key exists
-        manifestSuccessfullyLoaded = false;
-        return true;
-      } else {
-        manifestSuccessfullyLoaded = false;
-        return false;
+      // 1. Add all currently revoked IDs from manifest to isolate memory
+      for (const id of lastManifestRevokedSet) {
+        memoryRevokedSet.add(id);
       }
-    } catch {
+
+      // 2. Reconcile IDs: if manifest is >= our known version, check missing IDs against individual tombstones
+      // This allows legitimately restored media to leave memory without trusting a single stale negative read
+      if (manifestVersion >= currentManifestVersion) {
+        for (const knownId of Array.from(memoryRevokedSet)) {
+          if (!lastManifestRevokedSet.has(knownId)) {
+            try {
+              const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
+              if (!tombstone) {
+                // Both manifest and authoritative tombstone confirm absence -> media was restored
+                memoryRevokedSet.delete(knownId);
+              }
+            } catch {
+              // Fail closed: preserve known revocation on KV error
+            }
+          }
+        }
+        currentManifestVersion = manifestVersion;
+      }
+
+      manifestSuccessfullyLoaded = true;
+      manifestKeyPresent = true;
+      return true;
+    } else if (manifest === null || manifest === undefined) {
+      lastManifestRevokedSet = new Set<string>();
+      manifestSuccessfullyLoaded = true;
+      manifestKeyPresent = false;
+      return true;
+    } else {
       manifestSuccessfullyLoaded = false;
+      manifestKeyPresent = false;
       return false;
     }
-  })().finally(() => {
-    manifestSyncPromise = null;
-  });
-
-  return manifestSyncPromise;
+  } catch {
+    manifestSuccessfullyLoaded = false;
+    manifestKeyPresent = false;
+    return false;
+  }
 }
 
 /**
@@ -251,10 +272,11 @@ export async function isMediaRevoked(
     }
   }
 
-  // 3. Authoritative tombstone check: if explicitly requested, forced fresh, or manifest not loaded
+  // 3. Authoritative tombstone check: if explicitly requested, forced fresh, manifest absent, or manifest failed to load
   const shouldCheckTombstone =
     Boolean(options?.forceFresh) ||
     Boolean(options?.checkTombstone) ||
+    !manifestKeyPresent ||
     !manifestSuccessfullyLoaded;
 
   if (shouldCheckTombstone) {
@@ -264,9 +286,30 @@ export async function isMediaRevoked(
         memoryRevokedSet.add(mediaId);
         return true;
       } else {
-        // A stale negative tombstone read from an eventually-consistent KV replica
-        // cannot override a positive revocation already verified by manifest/in-memory
+        // Authoritative tombstone returned null.
+        // A. If manifest is present and contains mediaId, manifest confirms revocation:
+        if (manifestSuccessfullyLoaded && manifestKeyPresent && lastManifestRevokedSet.has(mediaId)) {
+          memoryRevokedSet.add(mediaId);
+          return true;
+        }
+
+        // B. If manifest is present and omits mediaId, both sources confirm absence -> restore:
+        if (manifestSuccessfullyLoaded && manifestKeyPresent && !lastManifestRevokedSet.has(mediaId)) {
+          memoryRevokedSet.delete(mediaId);
+          return false;
+        }
+
+        // C. Clean slate: manifest key does not exist and tombstone is null -> media is not revoked
+        if (manifestSuccessfullyLoaded && !manifestKeyPresent) {
+          memoryRevokedSet.delete(mediaId);
+          return false;
+        }
+
+        // D. Manifest failed to load: do not trust negative tombstone alone; fail-closed
         if (memoryRevokedSet.has(mediaId)) {
+          return true;
+        }
+        if (options?.failClosed) {
           return true;
         }
         return false;
@@ -511,6 +554,8 @@ export async function revokeMedia(
         const verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
         if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
           manifestUpdated = true;
+          lastManifestRevokedSet = new Set(verified.revokedIds);
+          currentManifestVersion = Math.max(currentManifestVersion, nextVersion);
           for (const id of verified.revokedIds) {
             memoryRevokedSet.add(id);
           }
@@ -613,6 +658,7 @@ export async function unrevokeMedia(
 ): Promise<{ success: boolean; errors: string[] }> {
   const errors: string[] = [];
   memoryRevokedSet.delete(mediaId);
+  lastManifestRevokedSet.delete(mediaId);
   if (options.kv && typeof options.kv.delete === 'function') {
     try {
       await options.kv.delete(REVOCATION_KEY_PREFIX + mediaId);
@@ -626,6 +672,8 @@ export async function unrevokeMedia(
         currentManifest.updatedAt = Date.now();
         currentManifest.version = (Number(currentManifest.version) || 1) + 1;
         await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
+        lastManifestRevokedSet = new Set(currentManifest.revokedIds);
+        currentManifestVersion = currentManifest.version;
       }
     } catch (manifestErr: any) {
       errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);

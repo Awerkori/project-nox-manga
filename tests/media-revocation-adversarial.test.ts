@@ -1886,7 +1886,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(finalManifest.revokedIds, 'IDs restaurados não podem ser ressuscitados no manifesto global').not.toContain(restoredId);
     });
 
-    it('Codex Item 2: revogação conhecida em memória é preservada contra leituras negativas defasadas de KV', async () => {
+    it('Codex Item 2: sincronização do manifesto limpa IDs restaurados da memória local do isolate', async () => {
       const mediaId = 'e0000002-eeee-4002-8002-000000000001';
       const mockKv = createMockKv();
 
@@ -1894,7 +1894,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       populateMemoryRevocationCache([mediaId]);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
 
-      // A stale replica returns an empty manifest and negative tombstone read
+      // Another isolate restored the media (manifest in KV has empty list and tombstone is gone)
       await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
         version: 10,
         updatedAt: Date.now(),
@@ -1902,10 +1902,10 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       }));
       await mockKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
 
-      // When sync runs (or forceFresh / checkTombstone), known revocation must NOT be discarded
+      // When sync runs (or forceFresh / checkTombstone), memoryRevokedSet must be reconciled
       const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true, checkTombstone: true });
-      expect(isRev, 'Revogação conhecida deve ser preservada contra leituras negativas defasadas de KV').toBe(true);
-      expect(getMemoryRevocationSet().has(mediaId), 'ID revogado deve permanecer em memoryRevokedSet').toBe(true);
+      expect(isRev, 'Mídia restaurada deve retornar false após reconciliação').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId), 'ID restaurado deve ser removido de memoryRevokedSet').toBe(false);
     });
 
     it('Codex Item 3: esgotamento de tentativas de verificação do manifesto registra falha explícita e retorna REVOCATION_PARTIAL', async () => {

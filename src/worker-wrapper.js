@@ -182,28 +182,53 @@ const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
 const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
+let workerManifestRevokedSet = new Set();
 let workerLastRevocationSync = 0;
 let workerManifestLoaded = false;
+let workerManifestKeyPresent = false;
+let workerManifestVersion = 0;
 
 async function syncWorkerManifest(kv) {
   workerLastRevocationSync = Date.now();
   try {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
-      for (const id of manifest.revokedIds) {
+      const manifestVersion = Number(manifest.version) || 0;
+      workerManifestRevokedSet = new Set(manifest.revokedIds);
+      for (const id of workerManifestRevokedSet) {
         workerRevokedMediaSet.add(id);
       }
+      if (manifestVersion >= workerManifestVersion) {
+        for (const knownId of Array.from(workerRevokedMediaSet)) {
+          if (!workerManifestRevokedSet.has(knownId)) {
+            try {
+              const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
+              if (!tombstone) {
+                workerRevokedMediaSet.delete(knownId);
+              }
+            } catch {
+              // Fail closed on error
+            }
+          }
+        }
+        workerManifestVersion = manifestVersion;
+      }
       workerManifestLoaded = true;
+      workerManifestKeyPresent = true;
       return true;
     } else if (manifest === null || manifest === undefined) {
-      workerManifestLoaded = false;
+      workerManifestRevokedSet = new Set();
+      workerManifestLoaded = true;
+      workerManifestKeyPresent = false;
       return true;
     } else {
       workerManifestLoaded = false;
+      workerManifestKeyPresent = false;
       return false;
     }
   } catch {
     workerManifestLoaded = false;
+    workerManifestKeyPresent = false;
     return false;
   }
 }
@@ -232,10 +257,11 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     }
   }
 
-  // 4. Authoritative tombstone check: if explicitly requested, forced fresh, or manifest not loaded
+  // 4. Authoritative tombstone check: if explicitly requested, forced fresh, manifest absent, or manifest failed to load
   const shouldCheckTombstone =
     Boolean(options?.forceFresh) ||
     Boolean(options?.checkTombstone) ||
+    !workerManifestKeyPresent ||
     !workerManifestLoaded;
 
   if (shouldCheckTombstone) {
@@ -245,7 +271,22 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         workerRevokedMediaSet.add(mediaId);
         return true;
       } else {
+        if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
+          workerRevokedMediaSet.add(mediaId);
+          return true;
+        }
+        if (workerManifestLoaded && workerManifestKeyPresent && !workerManifestRevokedSet.has(mediaId)) {
+          workerRevokedMediaSet.delete(mediaId);
+          return false;
+        }
+        if (workerManifestLoaded && !workerManifestKeyPresent) {
+          workerRevokedMediaSet.delete(mediaId);
+          return false;
+        }
         if (workerRevokedMediaSet.has(mediaId)) {
+          return true;
+        }
+        if (options?.failClosed) {
           return true;
         }
         return false;
