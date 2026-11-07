@@ -524,19 +524,40 @@ export async function isMediaRevoked(
     try {
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
-        memoryRevokedSet.add(mediaId);
         let tombstoneTs = Date.now();
         try {
           const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
         } catch {}
-        const existing = knownRevocations.get(mediaId);
-        if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && currentManifestVersion >= existing.version)) {
-          knownRevocations.set(mediaId, { timestamp: tombstoneTs, version: currentManifestVersion });
+
+        let isStaleTombstone = false;
+        const knownRest = knownRestorations.get(mediaId);
+        if (knownRest && (knownRest.timestamp > tombstoneTs || (knownRest.timestamp === tombstoneTs && knownRest.version >= currentManifestVersion))) {
+          isStaleTombstone = true;
+        } else {
+          try {
+            const resRecord = await kv.get(REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+            if (resRecord) {
+              const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+              const recVer = Number(resRecord.version) || 0;
+              if (recTs > tombstoneTs || (recTs === tombstoneTs && recVer >= currentManifestVersion)) {
+                isStaleTombstone = true;
+                knownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
+              }
+            }
+          } catch {}
         }
-        perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
-        knownRestorations.delete(mediaId);
-        return true;
+
+        if (!isStaleTombstone) {
+          memoryRevokedSet.add(mediaId);
+          const existing = knownRevocations.get(mediaId);
+          if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && currentManifestVersion >= existing.version)) {
+            knownRevocations.set(mediaId, { timestamp: tombstoneTs, version: currentManifestVersion });
+          }
+          perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
+          knownRestorations.delete(mediaId);
+          return true;
+        }
       } else {
         if (inFlightRevocations.has(mediaId)) {
           return true;
@@ -1064,26 +1085,29 @@ export async function unrevokeMedia(
 
     // Strict rule: Only publish restoration to manifest and local memory if tombstone was successfully deleted!
     if (tombstoneDeleted) {
-      locallyInitiatedRevocations.delete(mediaId);
-      memoryRevokedSet.delete(mediaId);
-      knownRevocations.delete(mediaId);
-      lastManifestRevokedSet.delete(mediaId);
-
       const nextUpdatedAt = Date.now();
       let nextVersion = currentManifestVersion + 1;
 
-      // Write explicit restoration record to KV to establish positive ordering against stale reads
+      // Write explicit restoration record to KV to establish durable positive ordering against stale reads
+      let restorationRecordWritten = false;
       try {
         await options.kv.put(REVOCATION_RESTORATION_KEY_PREFIX + mediaId, JSON.stringify({
           mediaId,
           restoredAt: nextUpdatedAt,
           version: nextVersion
         }));
-      } catch {
-        // Non-fatal if KV put of restoration record fails, manifest update follows
+        restorationRecordWritten = true;
+      } catch (err: any) {
+        errors.push(`RESTORATION_RECORD_WRITE_FAILED: ${err?.message || err}`);
       }
 
-      try {
+      if (restorationRecordWritten) {
+        locallyInitiatedRevocations.delete(mediaId);
+        memoryRevokedSet.delete(mediaId);
+        knownRevocations.delete(mediaId);
+        lastManifestRevokedSet.delete(mediaId);
+
+        try {
         const currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
         if (currentManifest && Array.isArray(currentManifest.revokedIds)) {
           currentManifest.revokedIds = currentManifest.revokedIds.filter((id: string) => id !== mediaId);
@@ -1110,6 +1134,7 @@ export async function unrevokeMedia(
       } catch (manifestErr: any) {
         errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);
       }
+    }
     }
   } else {
     locallyInitiatedRevocations.delete(mediaId);

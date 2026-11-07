@@ -461,19 +461,40 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     try {
       const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
-        workerRevokedMediaSet.add(mediaId);
         let tombstoneTs = Date.now();
         try {
           const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
         } catch {}
-        const existing = workerKnownRevocations.get(mediaId);
-        if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
-          workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
+
+        let isStaleTombstone = false;
+        const knownRest = workerKnownRestorations.get(mediaId);
+        if (knownRest && (knownRest.timestamp > tombstoneTs || (knownRest.timestamp === tombstoneTs && knownRest.version >= workerManifestVersion))) {
+          isStaleTombstone = true;
+        } else {
+          try {
+            const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+            if (resRecord) {
+              const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+              const recVer = Number(resRecord.version) || 0;
+              if (recTs > tombstoneTs || (recTs === tombstoneTs && recVer >= workerManifestVersion)) {
+                isStaleTombstone = true;
+                workerKnownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
+              }
+            }
+          } catch {}
         }
-        workerPerIdRevocationSeq.set(mediaId, ++workerGlobalRevocationSeq);
-        workerKnownRestorations.delete(mediaId);
-        return true;
+
+        if (!isStaleTombstone) {
+          workerRevokedMediaSet.add(mediaId);
+          const existing = workerKnownRevocations.get(mediaId);
+          if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
+            workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
+          }
+          workerPerIdRevocationSeq.set(mediaId, ++workerGlobalRevocationSeq);
+          workerKnownRestorations.delete(mediaId);
+          return true;
+        }
       } else {
         if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
           workerRevokedMediaSet.add(mediaId);

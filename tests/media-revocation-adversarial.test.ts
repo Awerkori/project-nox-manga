@@ -2997,6 +2997,79 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRevA, 'Restauração em t=2000 deve superar revogação real em t=1000 mesmo após v3 com updatedAt=3000').toBe(false);
       expect(getMemoryRevocationSet().has(mediaA)).toBe(false);
     });
+
+    // REVISÃO CODEX POST (RODADA 15): Obrigatoriedade de Registro de Restauração e Resiliência a Tombstone Defasado
+    it('Codex Rodada 15 - Item 1: unrevokeMedia requer sucesso na escrita do registro durável de restauração antes de publicar manifest', async () => {
+      const mediaId = 'f0000007-ffff-4007-8007-000000000007';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Mídia inicialmente revogada
+      await revokeMedia(mediaId, { kv: rawKv });
+      expect(await isMediaRevoked(mediaId, rawKv)).toBe(true);
+
+      // 2. KV onde deleção do tombstone tem sucesso, mas put do registro de restauração falha
+      const failingRestorationKv = {
+        ...rawKv,
+        put: vi.fn(async (key: string, val: string) => {
+          if (key.startsWith(REVOCATION_RESTORATION_KEY_PREFIX)) {
+            throw new Error('KV write timeout on restoration record');
+          }
+          return rawKv.put(key, val);
+        }),
+        get: rawKv.get.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // 3. Executa unrevokeMedia: deve falhar fechado e reportar erro explícito
+      const res = await unrevokeMedia(mediaId, { kv: failingRestorationKv });
+      expect(res.success).toBe(false);
+      expect(res.errors.some((e: string) => e.includes('RESTORATION_RECORD_WRITE_FAILED'))).toBe(true);
+
+      // A mídia não pode ter sido publicada como restaurada na memória local do isolate
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 15 - Item 2: tombstone defasado de réplica KV não re-bloqueia mídia com restauração confirmada mais recente', async () => {
+      const mediaId = 'f0000008-ffff-4008-8008-000000000008';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Mídia revogada e posteriormente restaurada em t=5000 com registro durável
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 5000,
+        revokedIds: [],
+        restoredIds: [mediaId],
+        restorations: { [mediaId]: 5000 }
+      }));
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        restoredAt: 5000,
+        version: 2
+      }));
+
+      // Sincroniza estado de restauração
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 2. Réplica defasada retorna tombstone antigo com revokedAt=3000 (< 5000)
+      const staleReplicaKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return JSON.stringify({ mediaId, revokedAt: 3000 });
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // 3. Consulta de mídia com checkTombstone contra a réplica defasada
+      // Deve ignorar o tombstone defasado e manter a mídia disponível (não re-bloquear!)
+      const isRev = await isMediaRevoked(mediaId, staleReplicaKv, { checkTombstone: true });
+      expect(isRev, 'Tombstone defasado que precede restauração confirmada não pode re-bloquear mídia').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+    });
   });
 });
 
