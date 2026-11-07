@@ -1695,6 +1695,26 @@ export async function fetchMediaMetadataFromYugabyte(
                      JOIN public.works w ON w.id = c.work_id
                      WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
                    )
+                 ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
+                   EXISTS (
+                     SELECT 1 FROM public.works w_cov
+                     WHERE w_cov.cover_id = m.id AND w_cov.published = true
+                   )
+                 ) ELSE true END
+               ) AS has_published_association,
+               (
+                 CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
+                   EXISTS (
+                     SELECT 1 FROM public.pages p
+                     JOIN public.chapters c ON c.id = p.chapter_id
+                     JOIN public.works w ON w.id = c.work_id
+                     WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
+                   )
+                 ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
+                   EXISTS (
+                     SELECT 1 FROM public.works w_cov
+                     WHERE w_cov.cover_id = m.id AND w_cov.published = true
+                    )
                  ) ELSE true END
                ) AS has_published_chapter
         FROM public.media m

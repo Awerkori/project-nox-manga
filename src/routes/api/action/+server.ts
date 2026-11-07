@@ -514,12 +514,14 @@ export const POST = async ({ request, locals, platform }: any) => {
       }
 
       if (xpDatabaseError) {
-        xpAward = {
-          ok: false,
-          awarded: false,
-          reason: 'database_error',
-          total_xp: locals.sessionCache?.profile?.xp || 0
-        };
+        return json(
+          {
+            ok: false,
+            error: 'database_error',
+            details: 'Falha no banco de dados ao processar recompensa atômica de XP'
+          },
+          { status: 500 }
+        );
       } else {
         const wasNewlyAwarded = (atomicXpRes?.rows?.length || 0) > 0;
         if (wasNewlyAwarded) {

@@ -22,18 +22,14 @@ export interface MihonAuthResult {
   error?: string;
 }
 
-const MIHON_AUTH_CACHE_TTL_MS = 60_000;
-const MAX_MIHON_AUTH_CACHE = 500;
-const mihonAuthCache = new Map<string, { timestamp: number; result: MihonAuthResult }>();
-
 export const MIHON_REVOKED_KV_PREFIX = 'mihon:revoked:';
 
-export function invalidateMihonTokenCache(tokenHash?: string) {
-  if (tokenHash) {
-    mihonAuthCache.delete(tokenHash);
-  } else {
-    mihonAuthCache.clear();
-  }
+/**
+ * Invalidate local token cache if any isolate-level state exists.
+ * Authoritative auth checks bypass in-memory caching to guarantee global revocation freshness.
+ */
+export function invalidateMihonTokenCache(_tokenHash?: string) {
+  // Bypassed: token verification is authoritatively checked against YSQL with KV tombstone fast-path
 }
 
 export async function recordMihonTokenRevocation(tokenHash: string, kv?: any): Promise<void> {
@@ -83,7 +79,7 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
        JOIN public.members m ON m.id = t.user_id
        WHERE t.token_hash = $1
          AND t.revoked = false
-         AND t.expires_at > now()
+         AND (t.expires_at IS NULL OR t.expires_at > now())
        LIMIT 1;`,
       [hash],
       platformEnv

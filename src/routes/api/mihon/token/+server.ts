@@ -64,10 +64,11 @@ export const DELETE = async ({ request, locals, platform }) => {
       platform?.env
     );
     const tokenHash = res.rows?.[0]?.token_hash;
-    invalidateMihonTokenCache();
-    if (tokenHash) {
-      await recordMihonTokenRevocation(tokenHash, platform?.env?.COVER_THUMBNAILS);
+    if (!tokenHash) {
+      return json({ error: 'Token não encontrado ou não autorizado' }, { status: 404 });
     }
+    invalidateMihonTokenCache();
+    await recordMihonTokenRevocation(tokenHash, platform?.env?.COVER_THUMBNAILS);
     return json({ ok: true });
   } catch (err: any) {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });
