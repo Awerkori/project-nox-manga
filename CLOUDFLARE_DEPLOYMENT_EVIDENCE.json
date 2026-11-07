@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-11-07T10:00:47.254Z",
+  "gitCommit": "8fa2f6a",
+  "branch": "perf/nox-cloudflare-zero-waste",
+  "activeDeployment": {
+    "deploymentId": "3af87a32-74cd-47f7-a890-5a9b88e023b3",
+    "createdOn": "2026-11-07T10:00:23.13264Z",
+    "versionId": "510f76fc-9e01-45a8-976e-9cdb0ac66b6b",
+    "percentage": 100,
+    "verified": true
+  }
+}

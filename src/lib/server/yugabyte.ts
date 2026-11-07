@@ -1610,6 +1610,73 @@ export async function fetchWorkTagsFromYugabyte(
   );
 }
 
+const MEDIA_METADATA_CACHE_TTL_MS = 600_000; // 10 minutes
+const MAX_MEDIA_METADATA_ENTRIES = 20_000;
+const mediaMetadataCache = new Map<string, { data: any; timestamp: number }>();
+
+export function getCachedMediaMetadata(mediaId: string): any | null {
+  const entry = mediaMetadataCache.get(mediaId);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > MEDIA_METADATA_CACHE_TTL_MS) {
+    mediaMetadataCache.delete(mediaId);
+    return null;
+  }
+  return entry.data;
+}
+
+export function setCachedMediaMetadata(mediaId: string, data: any): void {
+  if (!mediaId || !data) return;
+  if (mediaMetadataCache.size >= MAX_MEDIA_METADATA_ENTRIES) {
+    const oldest = mediaMetadataCache.keys().next().value;
+    if (oldest) mediaMetadataCache.delete(oldest);
+  }
+  mediaMetadataCache.set(mediaId, { data, timestamp: Date.now() });
+  setLkg(`media_${mediaId}`, data);
+}
+
+export function invalidateMediaMetadataCache(mediaId: string): void {
+  mediaMetadataCache.delete(mediaId);
+  invalidateYugabyteLkgPrefix(`media_${mediaId}`);
+}
+
+export async function batchWarmMediaMetadata(mediaIds: string[], platformEnv?: any): Promise<void> {
+  if (!Array.isArray(mediaIds) || mediaIds.length === 0) return;
+  const now = Date.now();
+  const missingIds: string[] = [];
+
+  for (const id of mediaIds) {
+    if (!id || typeof id !== 'string') continue;
+    const entry = mediaMetadataCache.get(id);
+    if (!entry || now - entry.timestamp > MEDIA_METADATA_CACHE_TTL_MS) {
+      missingIds.push(id);
+    }
+  }
+
+  if (missingIds.length === 0) return;
+
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < missingIds.length; i += CHUNK_SIZE) {
+    const chunk = missingIds.slice(i, i + CHUNK_SIZE);
+    try {
+      const sql = `
+        SELECT id, provider, provider_key, bot_reference, storage_shard_id,
+               mime, sha256, bytes, width, height, access_class, purpose,
+               storage_ready, status, created_by
+        FROM media
+        WHERE id = ANY($1::uuid[]);
+      `;
+      const res = await executeYugabyteSql(sql, [chunk], platformEnv);
+      if (Array.isArray(res?.rows)) {
+        for (const row of res.rows) {
+          setCachedMediaMetadata(row.id, row);
+        }
+      }
+    } catch (err: any) {
+      console.warn('[BATCH_WARM_MEDIA_METADATA_WARN]', err?.message || err);
+    }
+  }
+}
+
 /**
  * Fetch media metadata for media delivery from Yugabyte.
  */
@@ -1617,6 +1684,9 @@ export async function fetchMediaMetadataFromYugabyte(
   mediaId: string,
   platformEnv?: any
 ): Promise<any | null> {
+  const cached = getCachedMediaMetadata(mediaId);
+  if (cached) return cached;
+
   return withYugabyteLkg(
     `media_${mediaId}`,
     async () => {
@@ -1629,9 +1699,14 @@ export async function fetchMediaMetadataFromYugabyte(
         LIMIT 1;
       `;
       const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
-      return res.rows[0] || null;
+      const row = res.rows[0] || null;
+      if (row) {
+        setCachedMediaMetadata(mediaId, row);
+      }
+      return row;
     },
     null,
     300_000
   );
 }
+

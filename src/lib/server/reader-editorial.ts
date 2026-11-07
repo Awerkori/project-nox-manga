@@ -1,4 +1,5 @@
-import { executeYugabyteSql } from './yugabyte';
+import { executeYugabyteSql, batchWarmMediaMetadata } from './yugabyte';
+
 
 const EDITORIAL_CACHE_TTL_MS = 60_000;
 const MAX_FLIGHT_AGE_MS = 4_000;
@@ -64,7 +65,14 @@ export async function readerContent(chapterId: string, workId: string, platformE
     return { data: result.rows[0] || { pages: [], siblings: [] } };
   };
   if (isTestRuntime()) {
-    return query();
+    const res = await query();
+    if (res.data?.pages?.length > 0) {
+      const mediaIds = res.data.pages.map((p: any) => p.media_id).filter((id: any) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id));
+      if (mediaIds.length > 0) {
+        void batchWarmMediaMetadata(mediaIds, platformEnv);
+      }
+    }
+    return res;
   }
   const cached = contentMemCache.get(chapterId);
   if (cached && Date.now() - cached.at < EDITORIAL_CACHE_TTL_MS) {
@@ -80,6 +88,10 @@ export async function readerContent(chapterId: string, workId: string, platformE
           if (oldest) contentMemCache.delete(oldest);
         }
         contentMemCache.set(chapterId, { at: Date.now(), value: res });
+        const mediaIds = res.data.pages.map((p: any) => p.media_id).filter((id: any) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id));
+        if (mediaIds.length > 0) {
+          void batchWarmMediaMetadata(mediaIds, platformEnv);
+        }
       }
       return res;
     })
