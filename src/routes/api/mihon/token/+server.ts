@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { member } from '$lib/server/db';
-import { generateMihonToken } from '$lib/server/mihon';
+import { generateMihonToken, invalidateMihonTokenCache } from '$lib/server/mihon';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 export const GET = async ({ locals, platform }) => {
@@ -63,6 +63,7 @@ export const DELETE = async ({ request, locals, platform }) => {
       [tokenId, userId],
       platform?.env
     );
+    invalidateMihonTokenCache();
     return json({ ok: true });
   } catch (err: any) {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });

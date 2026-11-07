@@ -507,4 +507,10 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(readerPageSource).not.toContain('&_t=');
     expect(readerPageSource).toContain('page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`');
   });
+
+  it('invalidates in-memory Mihon authentication cache upon token revocation in /api/mihon/token', () => {
+    const tokenSource = readFileSync('src/routes/api/mihon/token/+server.ts', 'utf8');
+    expect(tokenSource).toContain('invalidateMihonTokenCache');
+    expect(tokenSource).toMatch(/UPDATE public\.mihon_tokens SET revoked = true[\s\S]*?invalidateMihonTokenCache\(\)/);
+  });
 });
