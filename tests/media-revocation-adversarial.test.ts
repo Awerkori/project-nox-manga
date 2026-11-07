@@ -9,7 +9,8 @@ import {
   populateMemoryRevocationCache,
   getMemoryRevocationSet,
   REVOCATION_KEY_PREFIX,
-  REVOCATION_MANIFEST_KEY
+  REVOCATION_MANIFEST_KEY,
+  REVOCATION_RESTORATION_KEY_PREFIX
 } from '../src/lib/server/media-revocation';
 import {
   readCoverThumbnail,
@@ -2627,6 +2628,75 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
 
       // O sync antigo não pode ter apagado a revogação local concorrente mais nova
       expect(getMemoryRevocationSet().has(mediaId), 'Sync defasado não pode apagar revogação concorrente registrada durante await').toBe(true);
+    });
+
+    // REVISÃO CODEX POST (RODADA 11): Proteção contra Corrida Durante Lookup de Registro de Restauração
+    it('Codex Rodada 11 - Item 1: nova revogação concorrente durante lookup de registro de restauração não é apagada', async () => {
+      const mediaId = 'e0000001-eeee-4001-8001-000000000001';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate já observou revogação anterior em t=1000
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId]
+      }));
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // 2. Novo manifesto em t=2000 omite mediaId
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 2000,
+        revokedIds: ['other-media-xyz']
+      }));
+
+      // 3. Simula consulta de restauração com pausa controlada
+      let restorationLookupStarted = false;
+      let resumeRestorationLookup: (() => void) | null = null;
+      const pausedLookup = new Promise<void>((resolve) => {
+        resumeRestorationLookup = resolve;
+      });
+
+      const racingKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return null; // tombstone nulo
+          }
+          if (key === `${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`) {
+            restorationLookupStarted = true;
+            await pausedLookup;
+            return {
+              restoredAt: 1500,
+              version: 2
+            };
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // Inicia verificação de revogação que consultará tombstone nulo e buscará registro de restauração
+      const checkPromise = isMediaRevoked(mediaId, racingKv, { forceFresh: true, checkTombstone: true });
+
+      while (!restorationLookupStarted) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      // Durante o await do lookup de restauração, uma nova revogação é disparada localmente
+      const revokePromise = revokeMedia(mediaId, { kv: rawKv });
+
+      // Libera o lookup de restauração
+      resumeRestorationLookup!();
+
+      const [isRevokedResult] = await Promise.all([checkPromise, revokePromise]);
+
+      // A requisição de mídia em voo DEVE ter retornado true (bloqueada) e não ter apagado a revogação
+      expect(isRevokedResult, 'Mídia não pode ser liberada se revogação concorrente iniciou durante await').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'Revogação em voo não pode ser apagada da memória local').toBe(true);
     });
   });
 });

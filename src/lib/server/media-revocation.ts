@@ -514,7 +514,7 @@ export async function isMediaRevoked(
 
         // B. If manifest is present and omits mediaId:
         if (manifestSuccessfullyLoaded && manifestKeyPresent && !lastManifestRevokedSet.has(mediaId)) {
-          if (locallyInitiatedRevocations.has(mediaId)) {
+          if (locallyInitiatedRevocations.has(mediaId) || inFlightRevocations.has(mediaId)) {
             return true;
           }
           const known = knownRevocations.get(mediaId);
@@ -526,6 +526,7 @@ export async function isMediaRevoked(
           // Codex P1: If an isolate has already observed a revocation, a newer manifest can omit that ID
           // due to concurrent writers while a lagging KV replica returns null. Preserve known revocation
           // until there is positive evidence of a later restoration.
+          const startSeq = perIdRevocationSeq.get(mediaId) || 0;
           if (known && known.timestamp > 0) {
             let hasRestorationEvidence = false;
             const knownRest = knownRestorations.get(mediaId);
@@ -547,6 +548,16 @@ export async function isMediaRevoked(
             if (!hasRestorationEvidence) {
               return true;
             }
+          }
+
+          // Race Condition Guard (P1): Revalidate in-flight and sequence after any KV await
+          if (
+            inFlightRevocations.has(mediaId) ||
+            locallyInitiatedRevocations.has(mediaId) ||
+            lastManifestRevokedSet.has(mediaId) ||
+            (perIdRevocationSeq.get(mediaId) || 0) !== startSeq
+          ) {
+            return true;
           }
 
           locallyInitiatedRevocations.delete(mediaId);

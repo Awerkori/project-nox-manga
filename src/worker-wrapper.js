@@ -470,6 +470,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           if (known && (workerManifestUpdatedAt < known.timestamp || (workerManifestUpdatedAt === known.timestamp && workerManifestVersion <= known.version))) {
             return true;
           }
+          const startSeq = workerPerIdRevocationSeq.get(mediaId) || 0;
           if (known && known.timestamp > 0) {
             let hasRestorationEvidence = false;
             const knownRest = workerKnownRestorations.get(mediaId);
@@ -491,6 +492,15 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
               return true;
             }
           }
+
+          // Race Condition Guard (P1): Revalidate state and sequence after KV read
+          if (
+            workerManifestRevokedSet.has(mediaId) ||
+            (workerPerIdRevocationSeq.get(mediaId) || 0) !== startSeq
+          ) {
+            return true;
+          }
+
           workerRevokedMediaSet.delete(mediaId);
           workerKnownRevocations.delete(mediaId);
           workerKnownRestorations.set(mediaId, { timestamp: workerManifestUpdatedAt, version: workerManifestVersion });
