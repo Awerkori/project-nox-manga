@@ -309,7 +309,10 @@ async function syncManifest(kv: any): Promise<boolean> {
             // Optimization (P2): if this isolate has never seen this ID in memory or known revocations,
             // avoid serial KV reads on cache hits; simply record restoration metadata directly.
             if (!memoryRevokedSet.has(restoredId) && !knownRevocations.has(restoredId)) {
-              knownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+              const existingRest = knownRestorations.get(restoredId);
+              if (!existingRest || perIdRestorationTs > existingRest.timestamp || (perIdRestorationTs === existingRest.timestamp && manifestVersion >= existingRest.version)) {
+                knownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+              }
               continue;
             }
 
@@ -368,7 +371,10 @@ async function syncManifest(kv: any): Promise<boolean> {
                 locallyInitiatedRevocations.delete(restoredId);
                 memoryRevokedSet.delete(restoredId);
                 knownRevocations.delete(restoredId);
-                knownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+                const existingRest = knownRestorations.get(restoredId);
+                if (!existingRest || perIdRestorationTs > existingRest.timestamp || (perIdRestorationTs === existingRest.timestamp && manifestVersion >= existingRest.version)) {
+                  knownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+                }
               })
             );
           }
@@ -1303,17 +1309,15 @@ export async function unrevokeMedia(
       }
 
       if (!restorationRecordWritten) {
-        // Rollback: restore the tombstone in KV so shared revocation evidence is preserved!
-        try {
-          const contentToRestore = typeof priorTombstoneContent === 'string'
-            ? priorTombstoneContent
-            : (priorTombstoneContent ? JSON.stringify(priorTombstoneContent) : JSON.stringify({
-                mediaId,
-                revokedAt: knownRevocations.get(mediaId)?.timestamp || restorationTimestamp,
-                reason: 'RESTORATION_FAILED_TOMBSTONE_RESTORED'
-              }));
-          await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, contentToRestore);
-        } catch {}
+        // Rollback: restore the tombstone in KV ONLY if one existed prior to deletion!
+        if (priorTombstoneContent) {
+          try {
+            const contentToRestore = typeof priorTombstoneContent === 'string'
+              ? priorTombstoneContent
+              : JSON.stringify(priorTombstoneContent);
+            await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, contentToRestore);
+          } catch {}
+        }
         return { success: false, errors };
       }
 
@@ -1358,9 +1362,17 @@ export async function unrevokeMedia(
             currentManifest.updatedAt = manifestUpdatedAt;
             currentManifest.version = nextVersion;
             const existingRestored = Array.isArray(currentManifest.restoredIds) ? currentManifest.restoredIds : [];
-            currentManifest.restoredIds = [mediaId, ...existingRestored.filter((id: string) => id !== mediaId)].slice(0, 100);
+            const retainedRestoredIds = [mediaId, ...existingRestored.filter((id: string) => id !== mediaId)].slice(0, 100);
+            currentManifest.restoredIds = retainedRestoredIds;
             const existingRestorations = currentManifest.restorations && typeof currentManifest.restorations === 'object' ? { ...currentManifest.restorations } : {};
             existingRestorations[mediaId] = restorationTimestamp;
+            // Prune restorations map to only retain entries present in retainedRestoredIds (max 100)
+            const retainedRestoredSet = new Set(retainedRestoredIds);
+            for (const rId of Object.keys(existingRestorations)) {
+              if (!retainedRestoredSet.has(rId)) {
+                delete existingRestorations[rId];
+              }
+            }
             currentManifest.restorations = existingRestorations;
 
             await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));

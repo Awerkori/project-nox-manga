@@ -269,7 +269,10 @@ async function syncWorkerManifest(kv) {
 
             // Optimization (P2): if this isolate has never seen this ID, avoid serial KV reads on cache hits
             if (!workerRevokedMediaSet.has(restoredId) && !workerKnownRevocations.has(restoredId)) {
-              workerKnownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+              const existingRest = workerKnownRestorations.get(restoredId);
+              if (!existingRest || perIdRestorationTs > existingRest.timestamp || (perIdRestorationTs === existingRest.timestamp && manifestVersion >= existingRest.version)) {
+                workerKnownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+              }
               continue;
             }
 
@@ -324,7 +327,10 @@ async function syncWorkerManifest(kv) {
 
                 workerRevokedMediaSet.delete(restoredId);
                 workerKnownRevocations.delete(restoredId);
-                workerKnownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+                const existingRest = workerKnownRestorations.get(restoredId);
+                if (!existingRest || perIdRestorationTs > existingRest.timestamp || (perIdRestorationTs === existingRest.timestamp && manifestVersion >= existingRest.version)) {
+                  workerKnownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+                }
               })
             );
           }
