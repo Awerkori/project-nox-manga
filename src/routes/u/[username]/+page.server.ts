@@ -4,7 +4,19 @@ import { formatScanRoleTitle, formatScanBadgeText, getScanPreposition } from '$l
 import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
-export const load = async ({ locals, params, platform }: any) => {
+export const load = async ({ locals, params, platform, setHeaders }: any) => {
+  if (setHeaders) {
+    if (!locals.user) {
+      setHeaders({
+        'cache-control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120'
+      });
+    } else {
+      setHeaders({
+        'cache-control': 'private, no-cache, no-store, must-revalidate'
+      });
+    }
+  }
+
   let member: any = null;
   try {
     const mRes = await executeYugabyteSql(

@@ -1,6 +1,10 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
+const REACTION_COUNTS_TTL_MS = 30_000;
+const MAX_REACTION_CACHE_ENTRIES = 500;
+const reactionCountsCache = new Map<string, { counts: Record<string, number>; timestamp: number }>();
+
 export const GET: RequestHandler = async ({ url, locals, cookies, platform }: any) => {
   const chapterId = url.searchParams.get('chapterId');
   if (!chapterId) {
@@ -24,26 +28,43 @@ export const GET: RequestHandler = async ({ url, locals, cookies, platform }: an
   const platformEnv = platform?.env;
 
   try {
-    const [countsRes, userRes] = await Promise.all([
-      executeYugabyteSql(
-        `SELECT emoji, count(*)::int AS cnt FROM public.chapter_reactions WHERE chapter_id = $1 GROUP BY emoji;`,
-        [chapterId],
-        platformEnv
-      ),
-      executeYugabyteSql(
-        `SELECT emoji FROM public.chapter_reactions WHERE chapter_id = $1 AND visitor_id = $2;`,
-        [chapterId, visitorId],
-        platformEnv
-      )
-    ]);
+    const now = Date.now();
+    let counts: Record<string, number> | null = null;
+    const cachedEntry = reactionCountsCache.get(chapterId);
+    if (cachedEntry && now - cachedEntry.timestamp < REACTION_COUNTS_TTL_MS) {
+      counts = cachedEntry.counts;
+    }
 
-    const counts: Record<string, number> = {};
-    for (const row of countsRes.rows) {
-      counts[row.emoji] = row.cnt;
+    const countsPromise = counts
+      ? Promise.resolve(null)
+      : executeYugabyteSql(
+          `SELECT emoji, count(*)::int AS cnt FROM public.chapter_reactions WHERE chapter_id = $1 GROUP BY emoji;`,
+          [chapterId],
+          platformEnv
+        );
+
+    const userPromise = executeYugabyteSql(
+      `SELECT emoji FROM public.chapter_reactions WHERE chapter_id = $1 AND visitor_id = $2;`,
+      [chapterId, visitorId],
+      platformEnv
+    );
+
+    const [countsRes, userRes] = await Promise.all([countsPromise, userPromise]);
+
+    if (!counts && countsRes) {
+      counts = {};
+      for (const row of countsRes.rows) {
+        counts[row.emoji] = row.cnt;
+      }
+      if (reactionCountsCache.size >= MAX_REACTION_CACHE_ENTRIES) {
+        const oldest = reactionCountsCache.keys().next().value;
+        if (oldest) reactionCountsCache.delete(oldest);
+      }
+      reactionCountsCache.set(chapterId, { counts, timestamp: Date.now() });
     }
 
     const userReactions = userRes.rows.map((r: any) => r.emoji);
-    return json({ counts, userReactions });
+    return json({ counts: counts || {}, userReactions });
   } catch (err: any) {
     return json({ error: err?.message || 'Falha ao buscar reações' }, { status: 500 });
   }
@@ -100,6 +121,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies, platform 
       );
     }
 
+    // Invalidate cached counts for this chapter
+    reactionCountsCache.delete(chapterId);
+
     const [countsRes, userRes] = await Promise.all([
       executeYugabyteSql(
         `SELECT emoji, count(*)::int AS cnt FROM public.chapter_reactions WHERE chapter_id = $1 GROUP BY emoji;`,
@@ -117,6 +141,7 @@ export const POST: RequestHandler = async ({ request, locals, cookies, platform 
     for (const row of countsRes.rows) {
       counts[row.emoji] = row.cnt;
     }
+    reactionCountsCache.set(chapterId, { counts, timestamp: Date.now() });
 
     const userReactions = userRes.rows.map((r: any) => r.emoji);
     return json({ counts, userReactions });
