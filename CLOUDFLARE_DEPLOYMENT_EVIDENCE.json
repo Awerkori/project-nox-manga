@@ -1,14 +1,14 @@
 {
-  "activeVersionId": "fead8fe2-bff0-4e4a-9f11-aa9ca88c44ff",
-  "created": "2026-11-07T20:28:52.239Z",
+  "activeVersionId": "41eb3084-5364-4223-b226-6e5330553424",
+  "created": "2026-11-07T20:38:52.000Z",
   "trafficAllocation": "100%",
   "routes": [
     "projectnox.org/*",
     "www.projectnox.org/*"
   ],
-  "commit": "639b2a5",
-  "fullCommit": "639b2a5b14195cdd748d6368c8e26c6a090c16a8",
-  "entrypoint": "./_app/immutable/entry/start.DK-LI8Xt.js",
+  "commit": "86c9d24",
+  "fullCommit": "86c9d24b61efc04f9829aa7c88b77aa15fec325e",
+  "entrypoint": "./_app/immutable/entry/start.pnmSEvqy.js",
   "author": "awerkori@gmail.com",
   "bindings": {
     "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
@@ -28,6 +28,8 @@
     "readOnlySandboxCompatible": true,
     "ysqlSessionLifecyclePreserved": true,
     "mihonGlobalKvRevocationTombstone": true,
-    "serviceWorkerLocalMediaEviction": true
+    "serviceWorkerLocalMediaEviction": true,
+    "orphanCoverFailClosed": true,
+    "xpActionDatabaseErrorHttp500": true
   }
 }
