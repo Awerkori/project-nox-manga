@@ -1,3 +1,5 @@
+import { invalidateMediaMetadataCache } from './yugabyte';
+
 export type RevocationPurgeState =
   | 'PURGE_REQUESTED'
   | 'PURGE_ACCEPTED'
@@ -1022,6 +1024,9 @@ export async function revokeMedia(
     memoryRevokedSet.add(mediaId);
     knownRevocations.set(mediaId, { timestamp: revokedAt, version: currentManifestVersion + 1 });
     perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
+    try {
+      invalidateMediaMetadataCache(mediaId);
+    } catch {}
 
   // 2. Write authoritative tombstone to KV BEFORE purge to ensure durable revocation
   const initialMetadata: RevocationMetadata = {
@@ -1426,12 +1431,14 @@ export async function unrevokeMedia(
             currentManifestVersion = nextVersion;
             currentManifestUpdatedAt = manifestUpdatedAt;
             knownRestorations.set(mediaId, { timestamp: restorationTimestamp, version: nextVersion });
+            try { invalidateMediaMetadataCache(mediaId); } catch {}
           } else {
             locallyInitiatedRevocations.delete(mediaId);
             memoryRevokedSet.delete(mediaId);
             knownRevocations.delete(mediaId);
             lastManifestRevokedSet.delete(mediaId);
             knownRestorations.set(mediaId, { timestamp: restorationTimestamp, version: nextVersion });
+            try { invalidateMediaMetadataCache(mediaId); } catch {}
           }
         } catch (manifestErr: any) {
           errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);

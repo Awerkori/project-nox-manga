@@ -440,17 +440,35 @@
       currentTab = normalizeTab(new URL(window.location.href).searchParams.get('tab'));
     };
     const poll = async () => {
-      if (document.visibilityState === 'visible') await refreshSnapshot();
-      if (!disposed) pollInterval = setTimeout(poll, 20_000);
+      if (disposed) return;
+      if (document.visibilityState === 'visible') {
+        await refreshSnapshot();
+        if (!disposed) pollInterval = setTimeout(poll, 20_000);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (disposed) return;
+      if (document.visibilityState === 'visible') {
+        if (pollInterval) clearTimeout(pollInterval);
+        void refreshSnapshot();
+        pollInterval = setTimeout(poll, 20_000);
+      } else if (pollInterval) {
+        clearTimeout(pollInterval);
+        pollInterval = null;
+      }
     };
     window.addEventListener('nox:importer-tab', onTabRequest);
     window.addEventListener('popstate', onHistoryChange);
-    pollInterval = setTimeout(poll, 20_000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    if (document.visibilityState === 'visible') {
+      pollInterval = setTimeout(poll, 20_000);
+    }
 
     return () => {
       window.removeEventListener('click', handleGlobalClick);
       window.removeEventListener('nox:importer-tab', onTabRequest);
       window.removeEventListener('popstate', onHistoryChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       disposed = true;
       if (pollInterval) clearTimeout(pollInterval);
     };

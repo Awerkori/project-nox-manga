@@ -17,7 +17,7 @@ type ReaderCacheEntry = {
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
 
-export function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>, mediaBaseUrl = ''): string | undefined {
+function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>, mediaBaseUrl = ''): string | undefined {
   const prefix = mediaBaseUrl ? mediaBaseUrl.replace(/\/+$/, '') : '';
   const links = pages
     .slice(0, 2)
