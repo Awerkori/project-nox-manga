@@ -361,6 +361,7 @@ async function syncManifest(kv: any): Promise<boolean> {
                 // Tombstone is null: negative KV read alone is NOT sufficient proof of restoration
                 const known = knownRevocations.get(knownId);
                 let canRestore = false;
+                let hasActualRestorationEvidence = false;
                 let restorationTs = manifestUpdatedAt;
                 let restorationVer = manifestVersion;
 
@@ -370,6 +371,7 @@ async function syncManifest(kv: any): Promise<boolean> {
                   const knownRest = knownRestorations.get(knownId);
                   if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
                     canRestore = true;
+                    hasActualRestorationEvidence = true;
                     restorationTs = knownRest.timestamp;
                     restorationVer = knownRest.version;
                   } else {
@@ -380,6 +382,7 @@ async function syncManifest(kv: any): Promise<boolean> {
                         const recVer = Number(resRecord.version) || 0;
                         if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
                           canRestore = true;
+                          hasActualRestorationEvidence = true;
                           restorationTs = recTs;
                           restorationVer = recVer;
                         }
@@ -398,7 +401,9 @@ async function syncManifest(kv: any): Promise<boolean> {
                   locallyInitiatedRevocations.delete(knownId);
                   memoryRevokedSet.delete(knownId);
                   knownRevocations.delete(knownId);
-                  knownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
+                  if (hasActualRestorationEvidence) {
+                    knownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
+                  }
                 }
               } catch {
                 // Fail closed: preserve known revocation on KV error
@@ -500,6 +505,8 @@ export async function isMediaRevoked(
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
         } catch {}
         knownRevocations.set(mediaId, { timestamp: tombstoneTs, version: currentManifestVersion });
+        perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
+        knownRestorations.delete(mediaId);
         return true;
       } else {
         if (inFlightRevocations.has(mediaId)) {
@@ -527,11 +534,16 @@ export async function isMediaRevoked(
           // due to concurrent writers while a lagging KV replica returns null. Preserve known revocation
           // until there is positive evidence of a later restoration.
           const startSeq = perIdRevocationSeq.get(mediaId) || 0;
+          let hasRestorationEvidence = false;
+          let restorationTs = currentManifestUpdatedAt;
+          let restorationVer = currentManifestVersion;
+
           if (known && known.timestamp > 0) {
-            let hasRestorationEvidence = false;
             const knownRest = knownRestorations.get(mediaId);
             if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
               hasRestorationEvidence = true;
+              restorationTs = knownRest.timestamp;
+              restorationVer = knownRest.version;
             } else {
               try {
                 const resRecord = await kv.get(REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
@@ -540,6 +552,8 @@ export async function isMediaRevoked(
                   const recVer = Number(resRecord.version) || 0;
                   if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
                     hasRestorationEvidence = true;
+                    restorationTs = recTs;
+                    restorationVer = recVer;
                   }
                 }
               } catch {}
@@ -563,7 +577,9 @@ export async function isMediaRevoked(
           locallyInitiatedRevocations.delete(mediaId);
           memoryRevokedSet.delete(mediaId);
           knownRevocations.delete(mediaId);
-          knownRestorations.set(mediaId, { timestamp: currentManifestUpdatedAt, version: currentManifestVersion });
+          if (hasRestorationEvidence) {
+            knownRestorations.set(mediaId, { timestamp: restorationTs, version: restorationVer });
+          }
           return false;
         }
 

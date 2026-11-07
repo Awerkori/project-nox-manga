@@ -2698,6 +2698,112 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRevokedResult, 'Mídia não pode ser liberada se revogação concorrente iniciou durante await').toBe(true);
       expect(getMemoryRevocationSet().has(mediaId), 'Revogação em voo não pode ser apagada da memória local').toBe(true);
     });
+
+    // REVISÃO CODEX POST (RODADA 12): Avanço de Sequência em Tombstones e Isolamento de Leituras Negativas
+    it('Codex Rodada 12 - Item 1: lookup de tombstone avança sequência de revogação e invalida lookups concorrentes de restauração', async () => {
+      const mediaId = 'f0000001-ffff-4001-8001-000000000001';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate observou revogação anterior
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId]
+      }));
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 2. Novo manifesto omite mediaId
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 2000,
+        revokedIds: []
+      }));
+
+      let restorationLookupStarted = false;
+      let resumeRestorationLookup: (() => void) | null = null;
+      const pausedLookup = new Promise<void>((resolve) => {
+        resumeRestorationLookup = resolve;
+      });
+
+      const racingKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return null; // A primeira requisição vê tombstone nulo
+          }
+          if (key === `${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`) {
+            restorationLookupStarted = true;
+            await pausedLookup;
+            return { restoredAt: 1500, version: 2 };
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // Inicia verificação A que pausa no lookup de restauração
+      const checkAPromise = isMediaRevoked(mediaId, racingKv, { forceFresh: true, checkTombstone: true });
+
+      while (!restorationLookupStarted) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      // Concorrentemente, uma nova gravação de tombstone ocorre no KV e uma requisição B a observa
+      const tombstoneKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return JSON.stringify({ mediaId, revokedAt: 3000 });
+          }
+          return rawKv.get(key, opts);
+        })
+      };
+
+      // Requisição B observa o tombstone recém-gravado
+      const checkBPromise = isMediaRevoked(mediaId, tombstoneKv, { checkTombstone: true });
+      await checkBPromise;
+
+      // Agora a requisição A termina seu lookup de restauração
+      resumeRestorationLookup!();
+      const checkAResult = await checkAPromise;
+
+      // Requisição A deve falhar fechada (true) e não pode apagar a revogação atualizada pela requisição B
+      expect(checkAResult, 'Requisição com restauração defasada não pode sobrescrever tombstone concorrente').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve permanecer revogada na memória do isolate').toBe(true);
+    });
+
+    it('Codex Rodada 12 - Item 2: leitura negativa de tombstone em mídia não-revogada não fabrica registro em knownRestorations', async () => {
+      const mediaId = 'f0000002-ffff-4002-8002-000000000002';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Manifesto atual (v2) omite mediaId e tombstone é nulo (mídia comum nunca revogada)
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 2000,
+        revokedIds: ['unrelated-cover']
+      }));
+
+      // Consulta de mídia com verificação de tombstone em mídia não-revogada
+      const isRevInitial = await isMediaRevoked(mediaId, rawKv, { forceFresh: true, checkTombstone: true });
+      expect(isRevInitial, 'Mídia normal deve retornar false').toBe(false);
+
+      // 2. Um snapshot anterior (v1, t=1000) continha uma revogação legítima para mediaId.
+      // Uma réplica defasada entrega esse snapshot v1.
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId]
+      }));
+
+      // 3. Ao sincronizar o manifesto da réplica defasada, como a mídia NÃO sofreu restauração real,
+      // ela DEVE ser mesclada no set de revogações e bloqueada (fail-closed contra réplicas defasadas)
+      const isRevFromStaleReplica = await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+      expect(isRevFromStaleReplica, 'Leitura negativa anterior não pode fabricar restauração que impeça revogação do manifesto').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
   });
 });
 

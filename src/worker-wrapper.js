@@ -340,6 +340,7 @@ async function syncWorkerManifest(kv) {
                 // Tombstone is null: negative KV read alone is NOT sufficient proof of restoration
                 const known = workerKnownRevocations.get(knownId);
                 let canRestore = false;
+                let hasActualRestorationEvidence = false;
                 let restorationTs = manifestUpdatedAt;
                 let restorationVer = manifestVersion;
 
@@ -349,6 +350,7 @@ async function syncWorkerManifest(kv) {
                   const knownRest = workerKnownRestorations.get(knownId);
                   if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
                     canRestore = true;
+                    hasActualRestorationEvidence = true;
                     restorationTs = knownRest.timestamp;
                     restorationVer = knownRest.version;
                   } else {
@@ -359,6 +361,7 @@ async function syncWorkerManifest(kv) {
                         const recVer = Number(resRecord.version) || 0;
                         if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
                           canRestore = true;
+                          hasActualRestorationEvidence = true;
                           restorationTs = recTs;
                           restorationVer = recVer;
                         }
@@ -375,7 +378,9 @@ async function syncWorkerManifest(kv) {
                   ) {
                     workerRevokedMediaSet.delete(knownId);
                     workerKnownRevocations.delete(knownId);
-                    workerKnownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
+                    if (hasActualRestorationEvidence) {
+                      workerKnownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
+                    }
                   }
                 }
               } catch {
@@ -459,6 +464,8 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
         } catch {}
         workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
+        workerPerIdRevocationSeq.set(mediaId, ++workerGlobalRevocationSeq);
+        workerKnownRestorations.delete(mediaId);
         return true;
       } else {
         if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
@@ -471,11 +478,16 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
             return true;
           }
           const startSeq = workerPerIdRevocationSeq.get(mediaId) || 0;
+          let hasRestorationEvidence = false;
+          let restorationTs = workerManifestUpdatedAt;
+          let restorationVer = workerManifestVersion;
+
           if (known && known.timestamp > 0) {
-            let hasRestorationEvidence = false;
             const knownRest = workerKnownRestorations.get(mediaId);
             if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
               hasRestorationEvidence = true;
+              restorationTs = knownRest.timestamp;
+              restorationVer = knownRest.version;
             } else {
               try {
                 const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
@@ -484,6 +496,8 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
                   const recVer = Number(resRecord.version) || 0;
                   if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
                     hasRestorationEvidence = true;
+                    restorationTs = recTs;
+                    restorationVer = recVer;
                   }
                 }
               } catch {}
@@ -503,7 +517,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
 
           workerRevokedMediaSet.delete(mediaId);
           workerKnownRevocations.delete(mediaId);
-          workerKnownRestorations.set(mediaId, { timestamp: workerManifestUpdatedAt, version: workerManifestVersion });
+          if (hasRestorationEvidence) {
+            workerKnownRestorations.set(mediaId, { timestamp: restorationTs, version: restorationVer });
+          }
           return false;
         }
         if (workerManifestLoaded && !workerManifestKeyPresent) {
