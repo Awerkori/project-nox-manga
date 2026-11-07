@@ -466,6 +466,21 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(unpubAssocChapCls.category).toBe('PRIVATE');
     expect(unpubAssocChapCls.reason).toBe('UNPUBLISHED_CHAPTER');
 
+    // Orphan cover (purpose: 'cover', has_published_association: false) guard
+    const orphanCoverMedia = {
+      id: 'orphan-cover-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      has_published_association: false
+    };
+    const orphanCoverCls = classifyMediaAccess(orphanCoverMedia);
+    expect(orphanCoverCls.isPublic).toBe(false);
+    expect(orphanCoverCls.isExplicitlyPrivate).toBe(true);
+    expect(orphanCoverCls.category).toBe('PRIVATE');
+    expect(orphanCoverCls.reason).toBe('ORPHAN_OR_UNPUBLISHED_COVER');
+
     // Orphan chapter page (has_published_chapter: false) fail closed guard
     const orphanChapPageMedia = {
       id: 'orphan-chap-p-1',

@@ -102,6 +102,15 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
   if (media.work_published === false || media.all_works_published === false) {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_WORK', category: 'PRIVATE' };
   }
+
+  // 1.1.0 Orphan cover guard: covers must be associated with at least one published work
+  if (
+    (media.purpose === 'cover' || media.purpose === 'work_cover') &&
+    (media.has_published_association === false || media.has_published_cover === false)
+  ) {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'ORPHAN_OR_UNPUBLISHED_COVER', category: 'PRIVATE' };
+  }
+
   if (
     media.chapter_published === false ||
     media.all_chapters_published === false ||
@@ -110,14 +119,6 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
     (media.chapter_published_at === null && (media.purpose === 'chapter_page' || media.purpose === 'staff_chapter' || media.purpose === 'scan_chapter'))
   ) {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_CHAPTER', category: 'PRIVATE' };
-  }
-
-  // 1.1.1 Orphan cover guard: covers must be associated with at least one published work
-  if (
-    (media.purpose === 'cover' || media.purpose === 'work_cover') &&
-    (media.has_published_association === false || media.has_published_cover === false)
-  ) {
-    return { isPublic: false, isExplicitlyPrivate: true, reason: 'ORPHAN_OR_UNPUBLISHED_COVER', category: 'PRIVATE' };
   }
 
   // 1.2 Content Rating guards (Adult +18 content is strictly restricted and never public)
