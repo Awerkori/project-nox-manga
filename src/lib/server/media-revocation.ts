@@ -481,7 +481,7 @@ async function syncManifest(kv: any): Promise<boolean> {
       } else {
         // Manifest is older than our known version/timestamp - only merge IDs that have NOT been superseded by known restorations
         const olderRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
-        for (const id of Array.from(manifest.revokedIds)) {
+        for (const id of (Array.from(manifest.revokedIds) as string[])) {
           const hasPerIdTs = Object.prototype.hasOwnProperty.call(olderRevocationsMap, id);
           const perIdRevocationTs = hasPerIdTs ? Number(olderRevocationsMap[id]) || 0 : 0;
           const isLegacy = !hasPerIdTs;
@@ -646,11 +646,15 @@ export async function isMediaRevoked(
           }
 
           const revTs = known?.isLegacy ? 0 : (known?.timestamp || currentManifestUpdatedAt);
-          const isManifestOlderThanRestoration = currentManifestUpdatedAt < knownRest.timestamp || (currentManifestUpdatedAt === knownRest.timestamp && currentManifestVersion <= knownRest.version);
-          // If authoritative tombstone check was explicitly requested: negative tombstone read combined with
-          // durable restoration record establishes restoration for ambiguous legacy manifest entries.
-          // Otherwise (manifest sync / cache hit path): preserve legacy revocation (fail-closed).
-          if (knownRest && (isManifestOlderThanRestoration || (options?.checkTombstone && isLegacy) || (!isLegacy && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= currentManifestVersion))))) {
+          const isManifestOlderThanRestoration = Boolean(
+            knownRest &&
+            (currentManifestUpdatedAt < knownRest.timestamp ||
+              (currentManifestUpdatedAt === knownRest.timestamp && currentManifestVersion <= knownRest.version))
+          );
+          // Positive evidence of supersedence ONLY if manifest is genuinely older than restoration,
+          // or entry has per-ID timestamp and restoration is newer than revTs.
+          // Negative tombstone read on a newer manifest does NOT establish supersedence; preserve legacy revocation (fail-closed).
+          if (knownRest && (isManifestOlderThanRestoration || (!isLegacy && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= currentManifestVersion))))) {
             lastManifestRevokedSet.delete(mediaId);
             locallyInitiatedRevocations.delete(mediaId);
             memoryRevokedSet.delete(mediaId);
@@ -799,6 +803,7 @@ export async function purgeMediaVariants(
       purgePromise = cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
     } else {
       // Attempt dynamic import in runtime environments supporting cloudflare:workers
+      // @ts-ignore - optional cloudflare module available in Workers runtime
       const cw = await import('cloudflare:workers').catch(() => null);
       if (cw?.cache && typeof cw.cache.purge === 'function') {
         purgePromise = cw.cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
@@ -1034,7 +1039,15 @@ export async function revokeMedia(
         let verified: any = null;
         for (let readAttempt = 0; readAttempt < MAX_VERIFY_READS; readAttempt++) {
           verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-          if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
+          const verifiedPerIdTs = Number(verified?.revocations?.[mediaId]) || 0;
+          const verifiedVersion = Number(verified?.version) || 0;
+          const verifiedUpdatedAt = Number(verified?.updatedAt) || 0;
+          if (
+            verified?.revokedIds &&
+            Array.isArray(verified.revokedIds) &&
+            verified.revokedIds.includes(mediaId) &&
+            (verifiedPerIdTs >= revokedAt || verifiedVersion >= nextVersion || verifiedUpdatedAt >= nextUpdatedAt)
+          ) {
             manifestUpdated = true;
             break;
           }
@@ -1116,7 +1129,7 @@ export async function revokeMedia(
   if (persistenceGuaranteed) {
     locallyInitiatedRevocations.delete(mediaId);
   }
-  const purgeGuaranteed = (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED' || purgeState === 'PURGE_LOCAL_VERIFIED');
+  const purgeGuaranteed = (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED');
 
   if (persistenceGuaranteed && purgeGuaranteed && errors.length === 0) {
     if (options.requireGlobalPurge && !globalPurgeVerified) {

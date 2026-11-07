@@ -3236,15 +3236,15 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       clearMemoryRevocationCache();
       const rawKv = createMockKv();
 
-      // 1. Mídia foi restaurada em t=2000 com registro durável em KV
+      // 1. Mídia foi restaurada em t=6000 com registro durável em KV (versão 15)
       await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
         mediaId,
-        restoredAt: 2000,
-        version: 5
+        restoredAt: 6000,
+        version: 15
       }));
       // Tombstone de KV foi deletado (está nulo)
 
-      // 2. Um escritor publica um snapshot de manifesto atualizado em t=5000 (ex: versão 10)
+      // 2. Réplica defasada serve snapshot de manifesto anterior atualizado em t=5000 (versão 10)
       // contendo mediaId em revokedIds como entrada legada (sem revocations[mediaId])
       await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
         version: 10,

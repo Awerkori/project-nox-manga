@@ -584,8 +584,12 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           }
 
           const revTs = known?.isLegacy ? 0 : (known?.timestamp || workerManifestUpdatedAt);
-          const isManifestOlderThanRestoration = workerManifestUpdatedAt < knownRest.timestamp || (workerManifestUpdatedAt === knownRest.timestamp && workerManifestVersion <= knownRest.version);
-          if (knownRest && (isManifestOlderThanRestoration || (options?.checkTombstone && isLegacy) || (!isLegacy && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= workerManifestVersion))))) {
+          const isManifestOlderThanRestoration = Boolean(
+            knownRest &&
+            (workerManifestUpdatedAt < knownRest.timestamp ||
+              (workerManifestUpdatedAt === knownRest.timestamp && workerManifestVersion <= knownRest.version))
+          );
+          if (knownRest && (isManifestOlderThanRestoration || (!isLegacy && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= workerManifestVersion))))) {
             workerManifestRevokedSet.delete(mediaId);
             workerRevokedMediaSet.delete(mediaId);
             workerKnownRevocations.delete(mediaId);
