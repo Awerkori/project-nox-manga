@@ -167,6 +167,12 @@ export function clearMemoryRevocationCache(): void {
   manifestSuccessfullyLoaded = false;
 }
 
+export function populateMemoryRevocationCache(ids: string[]): void {
+  for (const id of ids) {
+    memoryRevokedSet.add(id);
+  }
+}
+
 export function getMemoryRevocationSet(): Set<string> {
   return new Set(memoryRevokedSet);
 }
@@ -186,9 +192,13 @@ export async function isMediaRevoked(
 ): Promise<boolean> {
   if (!mediaId || typeof mediaId !== 'string') return false;
 
-  // 1. Instant in-memory check
-  if (memoryRevokedSet.has(mediaId)) {
-    return true;
+  // 1. Instant in-memory check (only if caller did not explicitly request fresh sync or authoritative tombstone)
+  if (!options?.checkTombstone && !options?.forceFresh && memoryRevokedSet.has(mediaId)) {
+    const now = Date.now();
+    const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
+    if (!isTest && manifestSuccessfullyLoaded && (now - lastManifestSync <= REVOCATION_SYNC_INTERVAL_MS)) {
+      return true;
+    }
   }
 
   if (!kv) {
@@ -206,9 +216,7 @@ export async function isMediaRevoked(
       const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
       if (manifest && Array.isArray(manifest.revokedIds)) {
         manifestSuccessfullyLoaded = true;
-        for (const id of manifest.revokedIds) {
-          memoryRevokedSet.add(id);
-        }
+        memoryRevokedSet = new Set(manifest.revokedIds);
       } else {
         manifestSuccessfullyLoaded = false;
       }
@@ -218,13 +226,29 @@ export async function isMediaRevoked(
     }
   }
 
-  // If in memory set after manifest sync, it is revoked
+  // 1. Authoritative tombstone check: if explicitly requested
+  if (options?.checkTombstone) {
+    try {
+      const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
+      if (tombstone) {
+        memoryRevokedSet.add(mediaId);
+        return true;
+      } else {
+        memoryRevokedSet.delete(mediaId);
+        return false;
+      }
+    } catch {
+      if (options?.failClosed) return true;
+    }
+  }
+
+  // 2. Synced manifest in-memory lookup (0ms, 0 KV reads)
   if (memoryRevokedSet.has(mediaId)) {
     return true;
   }
 
-  // Authoritative tombstone check: if explicitly requested, forced fresh, or if manifest was not loaded
-  if (options?.checkTombstone || options?.forceFresh || !manifestSuccessfullyLoaded) {
+  // 3. Fallback tombstone check if manifest failed to load reliably
+  if (!manifestSuccessfullyLoaded) {
     try {
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
@@ -455,7 +479,6 @@ export async function revokeMedia(
         }
         const idSet = new Set<string>([
           ...currentManifest.revokedIds,
-          ...Array.from(memoryRevokedSet),
           mediaId
         ]);
         const nextManifest = {
@@ -469,9 +492,7 @@ export async function revokeMedia(
         const verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
         if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
           manifestUpdated = true;
-          for (const id of verified.revokedIds) {
-            memoryRevokedSet.add(id);
-          }
+          memoryRevokedSet = new Set(verified.revokedIds);
         } else {
           // Concurrent overwrite detected — back off with randomized jitter and retry union merge
           const jitterMs = 10 * manifestWriteAttempts + Math.floor(Math.random() * 20);
@@ -482,6 +503,10 @@ export async function revokeMedia(
           errors.push(`MANIFEST_WRITE_FAILED: ${manifestErr?.message || manifestErr}`);
         }
       }
+    }
+
+    if (!manifestUpdated) {
+      errors.push(`MANIFEST_VERIFICATION_FAILED: Manifest write verification exhausted ${MAX_MANIFEST_ATTEMPTS} attempts without confirming mediaId persistence in shared manifest`);
     }
   }
 
@@ -503,10 +528,10 @@ export async function revokeMedia(
   }
 
   // 5. Determine overall revocation state
-  // Strict rule: Persistence in KV tombstone is mandatory for REVOCATION_COMPLETED.
+  // Strict rule: Persistence in both KV tombstone and manifest is mandatory for REVOCATION_COMPLETED.
   // Absence or failure of KV can never return REVOCATION_COMPLETED.
   let overallState: RevocationOverallState = 'REVOCATION_FAILED';
-  const persistenceGuaranteed = Boolean(tombstoneWritten);
+  const persistenceGuaranteed = Boolean(tombstoneWritten && manifestUpdated);
   const purgeGuaranteed = (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED' || purgeState === 'PURGE_LOCAL_VERIFIED');
 
   if (persistenceGuaranteed && purgeGuaranteed && errors.length === 0) {

@@ -6,6 +6,8 @@ import {
   purgeMediaVariants,
   classifyMediaAccess,
   clearMemoryRevocationCache,
+  populateMemoryRevocationCache,
+  getMemoryRevocationSet,
   REVOCATION_KEY_PREFIX,
   REVOCATION_MANIFEST_KEY
 } from '../src/lib/server/media-revocation';
@@ -1852,6 +1854,85 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         tags: [`media-${mediaId}`],
         pathPrefixes: [`/media/${mediaId}`]
       });
+    });
+
+    // REVISÃO CODEX POST: Sanitização de Memória & Concorrência de Restauração
+    it('Codex Item 1: revogação em um isolate não reintroduz IDs restaurados no manifesto a partir da memória local', async () => {
+      const restoredId = 'e0000001-eeee-4001-8001-000000000001';
+      const newRevokeId = 'e0000001-eeee-4001-8001-000000000002';
+      const mockKv = createMockKv();
+
+      // 1. Initially both IDs are revoked
+      await revokeMedia(restoredId, { kv: mockKv });
+      let manifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(manifest.revokedIds).toContain(restoredId);
+
+      // 2. In Isolate A: restoredId is unrevoked
+      await unrevokeMedia(restoredId, { kv: mockKv });
+      manifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(manifest.revokedIds).not.toContain(restoredId);
+
+      // 3. In Isolate B: memory still happens to have restoredId in local set
+      // When Isolate B revokes newRevokeId, it must NOT inject restoredId back into the manifest
+      populateMemoryRevocationCache([restoredId]); // Simulate dirty isolate memory
+      expect(getMemoryRevocationSet().has(restoredId)).toBe(true);
+
+      const res = await revokeMedia(newRevokeId, { kv: mockKv });
+      expect(res.tombstoneWritten).toBe(true);
+      expect(res.manifestUpdated).toBe(true);
+
+      const finalManifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(finalManifest.revokedIds).toContain(newRevokeId);
+      expect(finalManifest.revokedIds, 'IDs restaurados não podem ser ressuscitados no manifesto global').not.toContain(restoredId);
+    });
+
+    it('Codex Item 2: sincronização do manifesto limpa IDs restaurados da memória local do isolate', async () => {
+      const mediaId = 'e0000002-eeee-4002-8002-000000000001';
+      const mockKv = createMockKv();
+
+      // Isolate currently has mediaId in local memory
+      populateMemoryRevocationCache([mediaId]);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // Another isolate restored the media (manifest in KV has empty list and tombstone is gone)
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: Date.now(),
+        revokedIds: []
+      }));
+      await mockKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
+
+      // When sync runs (or forceFresh / checkTombstone), memoryRevokedSet must be reconciled
+      const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true, checkTombstone: true });
+      expect(isRev, 'Mídia restaurada deve retornar false após reconciliação').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId), 'ID restaurado deve ser removido de memoryRevokedSet').toBe(false);
+    });
+
+    it('Codex Item 3: esgotamento de tentativas de verificação do manifesto registra falha explícita e retorna REVOCATION_PARTIAL', async () => {
+      const mediaId = 'e0000003-eeee-4003-8003-000000000001';
+      const rawKv = createMockKv();
+
+      // KV whose manifest get always simulates an overwritten state omitting mediaId
+      const brokenManifestKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            return { version: 1, updatedAt: Date.now(), revokedIds: ['other-id'] };
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      const res = await revokeMedia(mediaId, { kv: brokenManifestKv });
+
+      // Must NOT return REVOCATION_COMPLETED
+      expect(res.state).toBe('REVOCATION_PARTIAL');
+      expect(res.success).toBe(false);
+      expect(res.manifestUpdated).toBe(false);
+      expect(res.tombstoneWritten).toBe(true);
+      expect(res.errors.some(e => e.includes('MANIFEST_VERIFICATION_FAILED'))).toBe(true);
     });
   });
 });
