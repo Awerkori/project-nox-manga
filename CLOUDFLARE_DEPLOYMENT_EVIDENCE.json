@@ -1,12 +1,28 @@
 {
-  "timestamp": "2026-11-07T10:00:47.254Z",
-  "gitCommit": "8fa2f6a",
-  "branch": "perf/nox-cloudflare-zero-waste",
-  "activeDeployment": {
-    "deploymentId": "3af87a32-74cd-47f7-a890-5a9b88e023b3",
-    "createdOn": "2026-11-07T10:00:23.13264Z",
-    "versionId": "510f76fc-9e01-45a8-976e-9cdb0ac66b6b",
-    "percentage": 100,
-    "verified": true
+  "activeVersionId": "19901175-6279-4dd3-abcc-f2ad2f39bfa4",
+  "created": "2026-11-07T10:03:57.883Z",
+  "trafficAllocation": "100%",
+  "routes": [
+    "projectnox.org/*",
+    "www.projectnox.org/*"
+  ],
+  "commit": "67f8124",
+  "author": "awerkori@gmail.com",
+  "bindings": {
+    "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
+    "HYPERDRIVE": "Hyperdrive Config (83726ad935554261813c4bb12094c7f3)",
+    "AUTH_ORIGIN_RATE_LIMIT": "Rate Limit (40 req/60s)",
+    "AUTH_IDENTITY_RATE_LIMIT": "Rate Limit (6 req/60s)",
+    "COMMENT_POST_RATE_LIMITER": "Rate Limit (2 req/60s)",
+    "ASSETS": "Assets"
+  },
+  "deploymentStatus": "ACTIVE_100_PERCENT",
+  "verification": {
+    "liveHttpsStatus": 200,
+    "securityHeadersPresent": true,
+    "mediaRevocationEnforced": true,
+    "failClosedWorkersCachePurge": true,
+    "edgeDeclarativeWorkersCaching": true,
+    "readOnlySandboxCompatible": true
   }
 }

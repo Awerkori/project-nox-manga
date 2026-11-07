@@ -2,7 +2,8 @@ import { error } from '@sveltejs/kit';
 import { safeDbQuery } from '$lib/server/resilience';
 import { readerChapter, readerContent, readerPreviewTarget, readerPreviewWork } from '$lib/server/reader-editorial';
 import { sanitizeComments } from '$lib/comments';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, batchWarmMediaMetadata } from '$lib/server/yugabyte';
+
 
 type ReaderCacheEntry = {
   timestamp: number;
@@ -282,8 +283,17 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       scans,
       comments: sanitizedComments
     });
+
+    const mediaIds = pagesData.map((p) => p.media_id).filter((id): id is string => Boolean(id && /^[0-9a-f-]{36}$/i.test(id)));
+    if (mediaIds.length > 0) {
+      const warmPromise = batchWarmMediaMetadata(mediaIds, platform?.env);
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(warmPromise);
+      }
+    }
   }
 
+  const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
   const link = firstPagePreloadHeader(pagesData);
   const isAdultChapter = (chapter.works as any)?.content_rating === 'ADULT_18';
   if (!locals.user && !preview) {
@@ -308,6 +318,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     scans,
     preview,
     user: locals.user ? { id: locals.user.id } : null,
-    profile: locals.sessionCache?.profile || null
+    profile: locals.sessionCache?.profile || null,
+    mediaBaseUrl
   };
 };

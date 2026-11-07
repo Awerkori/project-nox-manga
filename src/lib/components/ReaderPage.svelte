@@ -3,11 +3,13 @@
   let {
     page,
     onSeen,
-    eager = false
+    eager = false,
+    mediaBaseUrl = ''
   }: {
     page: { position: number; media_id: string; width: number; height: number; blobUrl?: string };
     onSeen: (page: number, visible: boolean) => void;
     eager?: boolean;
+    mediaBaseUrl?: string;
   } = $props();
   let root: HTMLDivElement;
   let loaded = false,
@@ -90,7 +92,7 @@
 >
   {#if (eager || near) && !broken}<img
       use:setupPageImg
-      src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
+      src={page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
       alt="Página {page.position}"
       width={page.width || 800}
       height={page.height || 1200}

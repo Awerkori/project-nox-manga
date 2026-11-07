@@ -12,8 +12,8 @@ const CACHE_MEDIA = 'nox-media-v1';
 const CACHE_DATA = `nox-data-v${version}`;
 const VALID_CACHES = new Set([CACHE_APP, CACHE_MEDIA, CACHE_DATA]);
 
-// Maximum cached media items (covers + chapter pages) to stay within device storage limits
-const MAX_MEDIA_ENTRIES = 300;
+// Maximum cached media items (covers + chapter pages) to stay within device storage limits while supporting 500-1000 page chapters
+const MAX_MEDIA_ENTRIES = 2500;
 
 // Precache essential application bundle and static brand assets
 const PRECACHE_ASSETS = [

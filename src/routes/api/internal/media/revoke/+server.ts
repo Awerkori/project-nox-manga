@@ -1,6 +1,8 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { revokeMedia, unrevokeMedia } from '$lib/server/media-revocation';
+import { invalidateMediaMetadataCache } from '$lib/server/yugabyte';
+
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
@@ -82,6 +84,7 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
     }
 
     processedIds.push(id);
+    invalidateMediaMetadataCache(id);
     try {
       const res = isUnrevoke
         ? await unrevokeMedia(id, {

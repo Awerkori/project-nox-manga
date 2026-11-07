@@ -89,6 +89,7 @@
   let turboFinished = $state(false);
   const preloadedUrls = new SvelteSet<string>();
   const inFlightDownloads = new Map<string, Promise<void>>();
+  const createdBlobUrls: string[] = [];
   let activePreloadWorkers = 0;
   let preloadAbortController: AbortController | null = null;
 
