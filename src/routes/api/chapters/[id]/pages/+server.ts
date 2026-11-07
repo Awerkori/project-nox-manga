@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { readerChapter, readerContent } from '$lib/server/reader-editorial';
-import { withYugabyteReadSession, executeYugabyteSql, batchWarmMediaMetadata } from '$lib/server/yugabyte';
+import { withYugabyteReadSession, executeYugabyteSql } from '$lib/server/yugabyte';
 
 // The public Reader already uses direct YSQL for canonical chapter identity.
 // Keep this API on the same authoritative path: PostgREST can otherwise hold
@@ -40,14 +40,6 @@ export const GET = async ({ params, locals, cookies, platform, request }: any) =
     const { data: content } = await readerContent(chapter.id, chapter.work_id, platformEnv);
     const mediaBaseUrl = (rawPlatformEnv?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
     const rawPages = content?.pages || [];
-
-    const mediaIds = rawPages.map((p: any) => p.media_id).filter((mid: any): mid is string => Boolean(mid && /^[0-9a-f-]{36}$/i.test(mid)));
-    if (mediaIds.length > 0) {
-      const warmPromise = batchWarmMediaMetadata(mediaIds, platformEnv);
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(warmPromise);
-      }
-    }
 
     const pages = rawPages.map((p: any) => ({
       ...p,
