@@ -837,10 +837,15 @@ export async function purgeMediaVariants(
 
     if (purgePromise) {
       const purgeRes = await purgePromise;
-      if (purgeRes && typeof purgeRes === 'object' && purgeRes.success === false) {
+      const isPurgeFailure = purgeRes && typeof purgeRes === 'object' && (
+        purgeRes.success === false ||
+        (Array.isArray(purgeRes.errors) && purgeRes.errors.length > 0) ||
+        Boolean(purgeRes.error)
+      );
+      if (isPurgeFailure) {
         const errorMsgs = Array.isArray(purgeRes.errors)
           ? purgeRes.errors.map((e: any) => e.message || String(e)).join('; ')
-          : 'Workers cache purge returned unsuccessful';
+          : (purgeRes.error?.message || purgeRes.error || 'Workers cache purge returned unsuccessful');
         errors.push(`WORKERS_CACHE_PURGE_ERROR: ${errorMsgs}`);
       } else {
         workersCachePurged++;

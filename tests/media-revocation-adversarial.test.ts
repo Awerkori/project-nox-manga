@@ -53,6 +53,7 @@ vi.mock('$lib/server/yugabyte', () => ({
 
 import { GET as getPublicMediaRoute } from '../src/routes/media/[id]/+server';
 import { POST as revokeMediaEndpoint } from '../src/routes/api/internal/media/revoke/+server';
+import { GET as getPrivateMediaRoute } from '../src/routes/api/media/[id]/+server';
 
 // Helper to create an isolated mock Cache API
 function createMockCache() {
@@ -3795,6 +3796,121 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const endpointDataSuccess = await endpointResSuccess.json();
       expect(endpointDataSuccess.success).toBe(true);
       expect(endpointDataSuccess.revokedIds).toContain(mediaId);
+    });
+
+    // Codex Homologação Final - Bloqueador 2: Fluxo automático de mídia DELETED e transição não-pública despacham expurgo obrigatório
+    it('Codex Homologação Final - Bloqueador 2: mídia DELETED e transições não-públicas despacham expurgo obrigatório com requirePurgeDispatch', async () => {
+      const deletedMediaId = 'eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeee';
+      const mockKv = createMockKv();
+      const mockCache = createMockCache();
+      const waitUntilTasks: Promise<any>[] = [];
+      const mockCtx = {
+        cache: {
+          purge: vi.fn().mockResolvedValue({ success: true })
+        },
+        waitUntil: vi.fn((promise: Promise<any>) => {
+          waitUntilTasks.push(promise);
+        })
+      };
+
+      mocks.fetchMediaMetadataFromYugabyte.mockResolvedValueOnce({
+        id: deletedMediaId,
+        status: 'DELETED',
+        storage_ready: false,
+        access_class: 'PUBLIC'
+      });
+
+      // 1. GET /media/[id] com mídia DELETED dispara revokeMedia com requirePurgeDispatch
+      const resDeleted = await getPublicMediaRoute({
+        locals: {},
+        params: { id: deletedMediaId },
+        request: new Request(`https://projectnox.org/media/${deletedMediaId}`),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(resDeleted.status).toBe(404);
+      await Promise.all(waitUntilTasks);
+      expect(mockCtx.cache.purge).toHaveBeenCalledWith({
+        tags: [`media-${deletedMediaId}`],
+        pathPrefixes: [`/media/${deletedMediaId}`]
+      });
+
+      // 2. GET /media/[id] com mídia privada purga cache residual com requirePurgeDispatch
+      const privateMediaId = 'bbbbbbbb-cccc-4bbb-8bbb-bbbbbbbbbbbb';
+      mocks.fetchMediaMetadataFromYugabyte.mockResolvedValueOnce({
+        id: privateMediaId,
+        status: 'ACTIVE',
+        storage_ready: true,
+        access_class: 'PRIVATE',
+        created_by: 'user-other'
+      });
+      mocks.extractFullAuthCookie.mockReturnValue(null);
+
+      const resPrivate = await getPublicMediaRoute({
+        locals: {},
+        params: { id: privateMediaId },
+        request: new Request(`https://projectnox.org/media/${privateMediaId}`),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(resPrivate.status).toBe(404);
+      await Promise.all(waitUntilTasks);
+      expect(mockCtx.cache.purge).toHaveBeenCalledWith({
+        tags: [`media-${privateMediaId}`],
+        pathPrefixes: [`/media/${privateMediaId}`]
+      });
+
+      // 3. GET /api/media/[id] com mídia DELETED dispara revokeMedia com requirePurgeDispatch
+      const deletedApiMediaId = 'aaaaaaaa-9999-4aaa-8aaa-aaaaaaaaaaaa';
+      mocks.fetchMediaMetadataFromYugabyte.mockResolvedValueOnce({
+        id: deletedApiMediaId,
+        status: 'DELETED',
+        storage_ready: false,
+        access_class: 'PUBLIC'
+      });
+
+      const resApiDeleted = await getPrivateMediaRoute({
+        locals: {},
+        params: { id: deletedApiMediaId },
+        request: new Request(`https://projectnox.org/api/media/${deletedApiMediaId}`),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(resApiDeleted.status).toBe(404);
+      await Promise.all(waitUntilTasks);
+      expect(mockCtx.cache.purge).toHaveBeenCalledWith({
+        tags: [`media-${deletedApiMediaId}`],
+        pathPrefixes: [`/media/${deletedApiMediaId}`]
+      });
+
+      // 4. purgeMediaVariants rejeita resposta de erro sem success: true
+      const errorPurgeCtx = {
+        cache: {
+          purge: vi.fn().mockResolvedValue({ error: { message: 'Cloudflare purge quota exceeded' } })
+        }
+      };
+      const purgeRes = await purgeMediaVariants('11112222-3333-4444-8888-555566667777', {
+        ctx: errorPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(purgeRes.errors.length).toBeGreaterThan(0);
+      expect(purgeRes.errors[0]).toContain('Cloudflare purge quota exceeded');
+      expect(purgeRes.globalPurgeDispatched).toBe(false);
     });
   });
 });

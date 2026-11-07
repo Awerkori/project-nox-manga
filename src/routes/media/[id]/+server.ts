@@ -172,7 +172,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
             ctx: platform?.context || platform?.ctx,
             origin: url.origin,
             kv: platform?.env?.COVER_THUMBNAILS,
-            currentUrl: request.url
+            currentUrl: request.url,
+            requirePurgeDispatch: true
           };
           if (platform?.context?.waitUntil) {
             platform.context.waitUntil(purgeMediaVariants(params.id, purgeOptions));
@@ -217,7 +218,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         ctx: platform?.context || platform?.ctx,
         origin: url.origin,
         kv: platform?.env?.COVER_THUMBNAILS,
-        currentUrl: request.url
+        currentUrl: request.url,
+        requirePurgeDispatch: true
       };
       if (platform?.context?.waitUntil) {
         platform.context.waitUntil(purgeMediaVariants(params.id, purgeOptions));
@@ -255,7 +257,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         ctx: platform?.context || platform?.ctx,
         origin: url.origin,
         reason: 'DELETED',
-        status: 'DELETED'
+        status: 'DELETED',
+        requirePurgeDispatch: true
       }).catch(() => {});
       if (platform?.context?.waitUntil) {
         platform.context.waitUntil(purgeTask);
@@ -312,9 +315,21 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
 
     if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
-      // NOTE: Leitura não autorizada NÃO é revogação administrativa!
-      // Não grava tombstone, não altera manifesto global, não queima KV writes.
-      // Rejeita a requisição sem cachear na borda nem no navegador.
+      // NOTE: Leitura não autorizada NÃO é revogação administrativa; não grava tombstone nem altera manifesto KV.
+      // Porém, purga qualquer cache público residual da borda para garantir fail-closed contra entradas antigas.
+      if (cache || platform?.context?.cache) {
+        const purgePromise = purgeMediaVariants(params.id, {
+          cache,
+          ctx: platform?.context || platform?.ctx,
+          origin: url.origin,
+          kv: platform?.env?.COVER_THUMBNAILS,
+          currentUrl: request.url,
+          requirePurgeDispatch: true
+        }).catch(() => {});
+        if (platform?.context?.waitUntil) {
+          platform.context.waitUntil(purgePromise);
+        }
+      }
       return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {

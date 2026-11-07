@@ -879,6 +879,8 @@ var worker_default = {
                   ];
                   if (ctx?.cache && typeof ctx.cache.purge === 'function') {
                     deleteTasks.push(ctx.cache.purge({ tags: [`media-${mediaId}`], pathPrefixes: [`/media/${mediaId}`] }).catch(() => {}));
+                  } else if (cache && typeof cache.purge === 'function') {
+                    deleteTasks.push(cache.purge({ tags: [`media-${mediaId}`], pathPrefixes: [`/media/${mediaId}`] }).catch(() => {}));
                   }
                   if (env2?.COVER_THUMBNAILS && typeof env2.COVER_THUMBNAILS.delete === 'function') {
                     deleteTasks.push(

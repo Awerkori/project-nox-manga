@@ -7,7 +7,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
-import { classifyMediaAccess } from '$lib/server/media-revocation';
+import { classifyMediaAccess, revokeMedia } from '$lib/server/media-revocation';
 
 const PRIVATE_MEDIA_IDLE_TIMEOUT_MS = 12_000;
 
@@ -37,6 +37,22 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
+    if (media && media.status === 'DELETED' && platform?.env?.COVER_THUMBNAILS) {
+      const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
+      const reqUrl = new URL(request.url);
+      const purgeTask = revokeMedia(params.id, {
+        kv: platform.env.COVER_THUMBNAILS,
+        cache,
+        ctx: platform?.context || platform?.ctx,
+        origin: reqUrl.origin,
+        reason: 'DELETED',
+        status: 'DELETED',
+        requirePurgeDispatch: true
+      }).catch(() => {});
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(purgeTask);
+      }
+    }
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,
       headers: {
