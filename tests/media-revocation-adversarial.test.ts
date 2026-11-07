@@ -3300,7 +3300,8 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const isRev = await isMediaRevoked(mediaId, rawKv);
       expect(isRev, 'Mídia re-revogada por worker legado deve permanecer revogada').toBe(true);
 
-      // 5. Caso contrário: se o tombstone estivesse ausente (deleção prévia), a entrada legada defasada é descartada
+      // 5. Caso contrário: somente se um tombstone for positivamente encontrado e seu timestamp for anterior à restauração,
+      // a entrada legada é descartada como comprovadamente superada
       const staleMediaId = 'e0000018-ffff-4018-8018-000000000019';
       await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${staleMediaId}`, JSON.stringify({
         mediaId: staleMediaId,
@@ -3309,7 +3310,13 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       }));
       await isMediaRevoked(staleMediaId, rawKv, { checkTombstone: true });
 
-      // Manifesto legado ainda lista staleMediaId, mas tombstone em KV está nulo
+      // Tombstone comprovadamente anterior (t=1000 < 2000)
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${staleMediaId}`, JSON.stringify({
+        mediaId: staleMediaId,
+        revokedAt: 1000
+      }));
+
+      // Manifesto legado lista staleMediaId
       await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
         version: 7,
         updatedAt: 3500,
@@ -3317,7 +3324,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         restoredIds: []
       }));
       await isMediaRevoked(staleMediaId, rawKv, { forceFresh: true });
-      expect(getMemoryRevocationSet().has(staleMediaId), 'Entrada legada sem tombstone deve ser descartada como defasada').toBe(false);
+      expect(getMemoryRevocationSet().has(staleMediaId), 'Entrada legada com tombstone comprovadamente anterior deve ser descartada').toBe(false);
     });
 
     it('Codex Rodada 19 - Item 1: trata tombstones com timestamp idêntico ao da restauração como revogações ativas (fail-closed)', async () => {
@@ -3385,6 +3392,40 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       clearMemoryRevocationCache();
       const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
       expect(isRev, 'Isolate limpo deve identificar a mídia como revogada via tombstone restaurado').toBe(true);
+    });
+
+    it('Codex Rodada 20 - Item 1: preserva revogação legada do manifesto sob leitura negativa de tombstone por atraso de propagação KV (fail-closed)', async () => {
+      const mediaId = 'e0000020-ffff-4020-8020-000000000001';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate lembra de restauração prévia em t=2000
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        restoredAt: 2000,
+        version: 5
+      }));
+      await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+
+      // 2. Durante rolling deployment, worker legado re-revoga a mídia em t=3000
+      // O manifesto chega à réplica local KV antes do tombstone (tombstone ainda nulo na réplica local)
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 12,
+        updatedAt: 3000,
+        revokedIds: [mediaId],
+        restoredIds: []
+        // sem per-ID timestamp (entrada legada)
+      }));
+      // Tombstone NÃO está presente nesta réplica (retorna null)
+
+      // 3. Sincronização do manifesto NÃO pode descartar a revogação baseada apenas na leitura negativa de tombstone
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 4. A mídia DEVE permanecer bloqueada em memória e no fast-path
+      expect(getMemoryRevocationSet().has(mediaId), 'Revogação legada deve ser preservada em memória sob leitura negativa de tombstone').toBe(true);
+      const isRev = await isMediaRevoked(mediaId, rawKv);
+      expect(isRev, 'Mídia deve permanecer revogada (fail-closed)').toBe(true);
     });
   });
 });
