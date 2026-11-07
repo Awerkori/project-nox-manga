@@ -52,7 +52,7 @@
     visibleObserver?.disconnect();
   });
 
-  function setupPageImg(node: HTMLImageElement) {
+  function setupPageImg(node: HTMLImageElement, currentRetry?: number) {
     const handleLoad = () => {
       loaded = true;
       broken = false;
@@ -76,6 +76,13 @@
     if (node.complete && node.naturalWidth > 0) handleLoad();
 
     return {
+      update(newRetry: number) {
+        if (!loaded && !broken && newRetry > 0) {
+          const canonical = page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`;
+          node.src = '';
+          node.src = canonical;
+        }
+      },
       destroy() {
         node.removeEventListener('load', handleLoad);
         node.removeEventListener('error', handleError);
@@ -91,7 +98,7 @@
   style="aspect-ratio:{page.width && page.height ? `${page.width}/${page.height}` : '2/3'}; min-height: 350px;"
 >
   {#if (eager || near) && !broken}<img
-      use:setupPageImg
+      use:setupPageImg={retry}
       src={page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`}
       alt="Página {page.position}"
       width={page.width || 800}

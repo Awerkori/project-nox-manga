@@ -483,7 +483,7 @@ export const POST = async ({ request, locals, platform }: any) => {
       const atomicXpRes = await executeYugabyteSql<{ xp: number }>(
         `WITH new_award AS (
            INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, $4, 'read_chapter', NOW())
+           VALUES (gen_random_uuid(), $1, $2, COALESCE(NULLIF($3, '')::uuid, (SELECT work_id FROM public.chapters WHERE id = $2 LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), $4, 'web', NOW())
            ON CONFLICT (user_id, chapter_id) DO NOTHING
            RETURNING user_id, amount
          )

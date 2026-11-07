@@ -105,6 +105,7 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
   if (
     media.chapter_published === false ||
     media.all_chapters_published === false ||
+    media.has_published_chapter === false ||
     (media.chapter_published_at === null && (media.purpose === 'chapter_page' || media.purpose === 'staff_chapter' || media.purpose === 'scan_chapter'))
   ) {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_CHAPTER', category: 'PRIVATE' };

@@ -465,6 +465,21 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(unpubAssocChapCls.isExplicitlyPrivate).toBe(true);
     expect(unpubAssocChapCls.category).toBe('PRIVATE');
     expect(unpubAssocChapCls.reason).toBe('UNPUBLISHED_CHAPTER');
+
+    // Orphan chapter page (has_published_chapter: false) fail closed guard
+    const orphanChapPageMedia = {
+      id: 'orphan-chap-p-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      has_published_chapter: false
+    };
+    const orphanChapPageCls = classifyMediaAccess(orphanChapPageMedia);
+    expect(orphanChapPageCls.isPublic).toBe(false);
+    expect(orphanChapPageCls.isExplicitlyPrivate).toBe(true);
+    expect(orphanChapPageCls.category).toBe('PRIVATE');
+    expect(orphanChapPageCls.reason).toBe('UNPUBLISHED_CHAPTER');
   });
 
   it('provides zero-SQL fast path for public non-adult 304 revalidation in Mihon chapter pages', () => {

@@ -1686,7 +1686,17 @@ export async function fetchMediaMetadataFromYugabyte(
                    JOIN public.chapters c ON c.id = p.chapter_id
                    WHERE p.media_id = m.id AND c.published_at IS NULL
                  )
-               ) AS all_chapters_published
+               ) AS all_chapters_published,
+               (
+                 CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
+                   EXISTS (
+                     SELECT 1 FROM public.pages p
+                     JOIN public.chapters c ON c.id = p.chapter_id
+                     JOIN public.works w ON w.id = c.work_id
+                     WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
+                   )
+                 ) ELSE true END
+               ) AS has_published_chapter
         FROM public.media m
         WHERE m.id = $1
         LIMIT 1;
