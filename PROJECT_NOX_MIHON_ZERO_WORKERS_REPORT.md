@@ -3,7 +3,7 @@
 
 **Data:** 2026-11-07  
 **Ambiente:** Cloudflare Production (Zone `projectnox.org`)  
-**Active Worker Version:** `63ec4ecd-474f-4442-86fe-2393e30abcf2` (Deployment: `199fea85-bc75-40a2-a500-d3e69b1476c6`)  
+**Active Worker Version:** `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` (Deployment: `2026-11-07T07:24:26.634Z`)  
 **Git Branch:** `perf/nox-cloudflare-zero-waste`  
 **Veredito Oficial:** `CACHE_HIT_ZERO_EXECUTION_ONLY`
 
@@ -109,9 +109,9 @@ O SvelteKit consulta a tabela `media` para identificar provider, chave e shard. 
 Commit na branch `perf/nox-cloudflare-zero-waste`: correções de segurança de revogação, emissão de Cache-Tag, purge de Workers Caching e reconciliação de métricas de telemetria.
 
 #### 16. Qual configuração e versão estão ativas em produção?
-* **Active Version ID:** `63ec4ecd-474f-4442-86fe-2393e30abcf2`
-* **Deployment ID:** `199fea85-bc75-40a2-a500-d3e69b1476c6`
-* **Criado em:** `2026-11-06T23:58:02.712647Z`
+* **Active Version ID:** `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a`
+* **Criado em:** `2026-11-07T07:24:26.634Z`
+* **Commit HEAD:** `77eb558` (branch `perf/nox-cloudflare-zero-waste`)
 * **Status de Verificação:** `VERIFICADO_VIA_API`
 * **Configuração:** `wrangler.jsonc` com `"cache": { "enabled": true, "cross_version_cache": true }`.
 
@@ -140,5 +140,5 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 | **YSQL em Cache HIT** | 0 queries | **0 queries** (100% isolado do banco) | **APROVADO** |
 | **Reaproveitamento Mihon / Web** | Mesma chave de cache | **100.00% HIT compartilhado** | **APROVADO** |
 | **Segurança de Revogação** | Sem vazamento de cache | **Workers Cache Purge + Fail-Closed mantido** | **APROVADO** |
-| **Deploy em Produção** | Versão ativa comprovada | **Version ID `63ec4ecd-474f-4442-86fe-2393e30abcf2`** | **APROVADO** |
+| **Deploy em Produção** | Versão ativa comprovada | **Version ID `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a`** | **APROVADO** |
 | **Veredito Oficial** | Distinção exata de cotas | `CACHE_HIT_ZERO_EXECUTION_ONLY` | **HOMOLOGADO** |
