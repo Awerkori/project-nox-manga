@@ -653,7 +653,12 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
           COVER_THUMBNAILS: mockKv,
           NOX_STORAGE_BRIDGE_TOKEN: token
         },
-        caches: { default: mockCache }
+        caches: { default: mockCache },
+        context: {
+          cache: {
+            purge: vi.fn().mockResolvedValue({ success: true })
+          }
+        }
       },
       cookies: { getAll: () => [] }
     } as any);
@@ -3702,6 +3707,94 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(getMemoryRevocationSet().has(mediaId), 'Revogação legada do novo manifesto deve ser preservada').toBe(true);
       const isRev = await isMediaRevoked(mediaId, mockKv);
       expect(isRev, 'Mídia deve permanecer revogada (fail-closed)').toBe(true);
+    });
+
+    it('Codex Homologação Final - Bloqueador 1: revokeMedia recusa REVOCATION_COMPLETED e reporta GLOBAL_PURGE_NOT_DISPATCHED quando Workers Caching purge não é despachado', async () => {
+      const mediaId = 'b0000004-ffff-4004-8004-000000000004';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+      const unpurgableCache = {
+        store: new Map<string, Response>(),
+        match: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(true)
+      };
+
+      // 1. revokeMedia com requirePurgeDispatch: true sem ctx/cache purge
+      const resStrict = await revokeMedia(mediaId, {
+        kv: mockKv,
+        cache: unpurgableCache,
+        requirePurgeDispatch: true
+      });
+      expect(resStrict.success).toBe(false);
+      expect(resStrict.state).toBe('REVOCATION_PARTIAL');
+      expect(resStrict.globalPurgeDispatched).toBe(false);
+      expect(resStrict.errors.some(e => e.includes('GLOBAL_PURGE_NOT_DISPATCHED') || e.includes('WORKERS_CACHE_PURGE_UNAVAILABLE'))).toBe(true);
+
+      // 2. revokeMedia com requirePurgeDispatch: true COM ctx.cache.purge funcional
+      const mockCtx = {
+        cache: {
+          purge: vi.fn().mockResolvedValue({ success: true })
+        }
+      };
+      const resWithPurge = await revokeMedia(mediaId, {
+        kv: mockKv,
+        cache: unpurgableCache,
+        ctx: mockCtx,
+        requirePurgeDispatch: true
+      });
+      expect(resWithPurge.success).toBe(true);
+      expect(resWithPurge.state).toBe('REVOCATION_COMPLETED');
+      expect(resWithPurge.globalPurgeDispatched).toBe(true);
+      expect(mockCtx.cache.purge).toHaveBeenCalledWith({
+        tags: [`media-${mediaId}`],
+        pathPrefixes: [`/media/${mediaId}`]
+      });
+
+      // 3. endpoint /api/internal/media/revoke falha fechado (HTTP 207) se context.cache.purge não estiver disponível
+      const token = 'test-token-blocker1';
+      const endpointResFail = await revokeMediaEndpoint({
+        request: new Request('https://projectnox.org/api/internal/media/revoke', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaIds: [mediaId] })
+        }),
+        url: new URL('https://projectnox.org/api/internal/media/revoke'),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv, NOX_STORAGE_BRIDGE_TOKEN: token },
+          caches: { default: unpurgableCache }
+          // context omitido: ctx.cache.purge indisponível
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(endpointResFail.status).toBe(207);
+      const endpointDataFail = await endpointResFail.json();
+      expect(endpointDataFail.success).toBe(false);
+      expect(endpointDataFail.retryRequired).toBe(true);
+      expect(endpointDataFail.pendingIds).toContain(mediaId);
+      expect(endpointDataFail.errors[0].error).toMatch(/GLOBAL_PURGE_NOT_DISPATCHED|WORKERS_CACHE_PURGE_UNAVAILABLE/);
+
+      // 4. endpoint /api/internal/media/revoke sucede (HTTP 200) quando context.cache.purge é despachado com sucesso
+      const endpointResSuccess = await revokeMediaEndpoint({
+        request: new Request('https://projectnox.org/api/internal/media/revoke', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaIds: [mediaId] })
+        }),
+        url: new URL('https://projectnox.org/api/internal/media/revoke'),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv, NOX_STORAGE_BRIDGE_TOKEN: token },
+          caches: { default: unpurgableCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(endpointResSuccess.status).toBe(200);
+      const endpointDataSuccess = await endpointResSuccess.json();
+      expect(endpointDataSuccess.success).toBe(true);
+      expect(endpointDataSuccess.revokedIds).toContain(mediaId);
     });
   });
 });

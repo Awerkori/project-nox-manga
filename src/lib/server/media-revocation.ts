@@ -34,6 +34,8 @@ export interface RevokeMediaOptions {
   status?: string;
   skipDb?: boolean;
   requireGlobalPurge?: boolean;
+  requirePurgeDispatch?: boolean;
+  allowLocalOnly?: boolean;
   globalVerifier?: (mediaId: string) => Promise<boolean>;
 }
 
@@ -43,6 +45,8 @@ export interface PurgeMediaOptions {
   origin?: string;
   kv?: any;
   requireGlobalPurge?: boolean;
+  requirePurgeDispatch?: boolean;
+  allowLocalOnly?: boolean;
   globalVerifier?: (mediaId: string) => Promise<boolean>;
 }
 
@@ -842,6 +846,8 @@ export async function purgeMediaVariants(
         workersCachePurged++;
         globalPurgeDispatched = true;
       }
+    } else if (options.requirePurgeDispatch) {
+      errors.push('WORKERS_CACHE_PURGE_UNAVAILABLE: ctx.cache.purge API is not available to purge Cloudflare Workers Caching declarative edge cache');
     }
   } catch (err: any) {
     errors.push(`WORKERS_CACHE_PURGE_FAILED: ${err?.message || err}`);
@@ -1132,14 +1138,24 @@ export async function revokeMedia(
     origin: options.origin,
     kv: options.kv,
     requireGlobalPurge: options.requireGlobalPurge,
+    requirePurgeDispatch: options.requirePurgeDispatch,
+    allowLocalOnly: options.allowLocalOnly,
     globalVerifier: options.globalVerifier
   });
   const { cachePurged, workersCachePurged, kvPurged, localPurgeVerified, globalPurgeDispatched, globalPurgeVerified } = purgeResult;
   if (purgeResult.errors && purgeResult.errors.length > 0) {
     errors.push(...purgeResult.errors);
     purgeState = 'PURGE_FAILED';
+  } else if (globalPurgeVerified) {
+    purgeState = 'PURGE_GLOBAL_VERIFIED';
+  } else if (globalPurgeDispatched) {
+    purgeState = localPurgeVerified ? 'PURGE_VERIFIED' : 'PURGE_GLOBAL_DISPATCHED';
+  } else if (localPurgeVerified) {
+    purgeState = 'PURGE_LOCAL_VERIFIED';
+  } else if (cachePurged > 0) {
+    purgeState = 'PURGE_ACCEPTED';
   } else {
-    purgeState = localPurgeVerified ? 'PURGE_VERIFIED' : 'PURGE_ACCEPTED';
+    purgeState = 'PURGE_SKIPPED';
   }
 
   // 5. Determine overall revocation state
@@ -1150,12 +1166,15 @@ export async function revokeMedia(
   if (persistenceGuaranteed) {
     locallyInitiatedRevocations.delete(mediaId);
   }
-  const purgeGuaranteed = (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED');
+  const purgeGuaranteed = purgeState !== 'PURGE_FAILED';
 
   if (persistenceGuaranteed && purgeGuaranteed && errors.length === 0) {
     if (options.requireGlobalPurge && !globalPurgeVerified) {
       overallState = 'REVOCATION_PARTIAL';
       errors.push('GLOBAL_PURGE_UNVERIFIABLE: Local PoP cache purged, but global CDN edge invalidation cannot be proven synchronously; security preserved via authoritative KV tombstone and fail-closed checks');
+    } else if (options.requirePurgeDispatch && !globalPurgeDispatched) {
+      overallState = 'REVOCATION_PARTIAL';
+      errors.push('GLOBAL_PURGE_NOT_DISPATCHED: Workers Caching edge purge (ctx.cache.purge) was not dispatched; declarative edge cache may serve stale content until eviction');
     } else {
       overallState = 'REVOCATION_COMPLETED';
     }

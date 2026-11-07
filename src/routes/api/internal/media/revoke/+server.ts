@@ -98,7 +98,8 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
             origin: url.origin,
             reason: body.reason || 'MANUAL_REVOCATION',
             accessClass: body.accessClass,
-            status: body.status
+            status: body.status,
+            requirePurgeDispatch: true
           });
 
       if (res.success && res.errors.length === 0) {
