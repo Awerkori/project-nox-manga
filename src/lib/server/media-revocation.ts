@@ -160,15 +160,11 @@ export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 let memoryRevokedSet = new Set<string>();
 let lastManifestSync = 0;
 let manifestSuccessfullyLoaded = false;
-let manifestUpdateMutex: Promise<any> = Promise.resolve();
-let inFlightManifestSync: Promise<void> | null = null;
 
 export function clearMemoryRevocationCache(): void {
   memoryRevokedSet.clear();
   lastManifestSync = 0;
   manifestSuccessfullyLoaded = false;
-  manifestUpdateMutex = Promise.resolve();
-  inFlightManifestSync = null;
 }
 
 export function populateMemoryRevocationCache(ids: string[]): void {
@@ -181,45 +177,37 @@ export function getMemoryRevocationSet(): Set<string> {
   return new Set(memoryRevokedSet);
 }
 
-async function syncManifestSingleflight(kv: any): Promise<boolean> {
-  if (inFlightManifestSync) {
-    await inFlightManifestSync;
-    return manifestSuccessfullyLoaded;
-  }
-
-  inFlightManifestSync = (async () => {
-    try {
-      lastManifestSync = Date.now();
-      const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
-      if (manifest && Array.isArray(manifest.revokedIds)) {
-        manifestSuccessfullyLoaded = true;
-        const newSet = new Set<string>(manifest.revokedIds);
-        // Reconcile removed IDs against tombstones before discarding to protect against stale KV read replicas
-        for (const knownId of memoryRevokedSet) {
-          if (!newSet.has(knownId)) {
-            try {
-              const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId).catch(() => null);
-              if (tombstone) {
-                newSet.add(knownId);
-              }
-            } catch {
+async function syncManifest(kv: any): Promise<boolean> {
+  lastManifestSync = Date.now();
+  try {
+    const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+    if (manifest && Array.isArray(manifest.revokedIds)) {
+      manifestSuccessfullyLoaded = true;
+      const newSet = new Set<string>(manifest.revokedIds);
+      // Reconcile removed IDs against tombstones before discarding to protect against stale KV read replicas
+      for (const knownId of memoryRevokedSet) {
+        if (!newSet.has(knownId)) {
+          try {
+            const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
+            if (tombstone) {
               newSet.add(knownId);
             }
+          } catch {
+            // Fail closed on error: preserve known revocation
+            newSet.add(knownId);
           }
         }
-        memoryRevokedSet = newSet;
-      } else {
-        manifestSuccessfullyLoaded = false;
       }
-    } catch {
+      memoryRevokedSet = newSet;
+      return true;
+    } else {
       manifestSuccessfullyLoaded = false;
+      return false;
     }
-  })().finally(() => {
-    inFlightManifestSync = null;
-  });
-
-  await inFlightManifestSync;
-  return manifestSuccessfullyLoaded;
+  } catch {
+    manifestSuccessfullyLoaded = false;
+    return false;
+  }
 }
 
 /**
@@ -239,15 +227,12 @@ export async function isMediaRevoked(
 
   // 1. Instant in-memory check (only if caller did not explicitly request fresh sync or authoritative tombstone)
   if (!options?.checkTombstone && !options?.forceFresh && memoryRevokedSet.has(mediaId)) {
-    const now = Date.now();
-    const isTest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
-    if (!isTest && manifestSuccessfullyLoaded && (now - lastManifestSync <= REVOCATION_SYNC_INTERVAL_MS)) {
-      return true;
-    }
+    return true;
   }
 
+  // 2. If KV is absent, check known in-memory revocations first, then fall back to failClosed policy
   if (!kv) {
-    // If KV is absent and caller requires fail-closed protection on cached item, assume revoked
+    if (memoryRevokedSet.has(mediaId)) return true;
     return Boolean(options?.failClosed);
   }
 
@@ -256,7 +241,7 @@ export async function isMediaRevoked(
   const shouldSyncManifest = options?.forceFresh || isTest || !manifestSuccessfullyLoaded || (now - lastManifestSync > REVOCATION_SYNC_INTERVAL_MS);
 
   if (shouldSyncManifest) {
-    await syncManifestSingleflight(kv);
+    await syncManifest(kv);
   }
 
   // 1. Authoritative tombstone check: if explicitly requested
@@ -501,54 +486,50 @@ export async function revokeMedia(
       errors.push(`TOMBSTONE_WRITE_FAILED: ${err?.message || err}`);
     }
 
-    // 3. Update manifest in KV with mutex serialization within isolate, retry, RAWV and conflict-free set union
-    await (manifestUpdateMutex = manifestUpdateMutex.catch(() => {}).then(async () => {
-      let manifestWriteAttempts = 0;
-      const MAX_MANIFEST_ATTEMPTS = 5;
-      while (manifestWriteAttempts < MAX_MANIFEST_ATTEMPTS && !manifestUpdated) {
-        manifestWriteAttempts++;
-        try {
-          let currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-          if (!currentManifest || !Array.isArray(currentManifest.revokedIds)) {
-            currentManifest = { version: 1, updatedAt: revokedAt, revokedIds: [] };
-          }
-          const idSet = new Set<string>([
-            ...currentManifest.revokedIds,
-            mediaId
-          ]);
-          const nextVersion = (Number(currentManifest.version) || 1) + 1;
-          const nextManifest = {
-            version: nextVersion,
-            updatedAt: Date.now(),
-            revokedIds: Array.from(idSet)
-          };
-          await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(nextManifest));
+    // 3. Update manifest in KV with request-scoped retry, RAWV and conflict-free set union
+    let manifestWriteAttempts = 0;
+    const MAX_MANIFEST_ATTEMPTS = 5;
+    while (manifestWriteAttempts < MAX_MANIFEST_ATTEMPTS && !manifestUpdated) {
+      manifestWriteAttempts++;
+      try {
+        let currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+        if (!currentManifest || !Array.isArray(currentManifest.revokedIds)) {
+          currentManifest = { version: 1, updatedAt: revokedAt, revokedIds: [] };
+        }
+        const idSet = new Set<string>([
+          ...currentManifest.revokedIds,
+          mediaId
+        ]);
+        const nextVersion = (Number(currentManifest.version) || 1) + 1;
+        const nextManifest = {
+          version: nextVersion,
+          updatedAt: Date.now(),
+          revokedIds: Array.from(idSet)
+        };
+        await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(nextManifest));
 
-          // Read-After-Write Verification (RAWV): confirm our write was not overwritten concurrently
-          const verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-          if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
-            manifestUpdated = true;
-            for (const id of verified.revokedIds) {
-              memoryRevokedSet.add(id);
-            }
-          } else {
-            // Concurrent overwrite detected — back off with randomized jitter and retry union merge
-            const jitterMs = 10 * manifestWriteAttempts + Math.floor(Math.random() * 20);
-            await new Promise((r) => setTimeout(r, jitterMs));
+        // Read-After-Write Verification (RAWV): confirm our write was not overwritten concurrently
+        const verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+        if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
+          manifestUpdated = true;
+          for (const id of verified.revokedIds) {
+            memoryRevokedSet.add(id);
           }
-        } catch (manifestErr: any) {
-          if (manifestWriteAttempts >= MAX_MANIFEST_ATTEMPTS) {
-            errors.push(`MANIFEST_WRITE_FAILED: ${manifestErr?.message || manifestErr}`);
-          }
+        } else {
+          // Concurrent overwrite detected — back off with randomized jitter and retry union merge
+          const jitterMs = 10 * manifestWriteAttempts + Math.floor(Math.random() * 20);
+          await new Promise((r) => setTimeout(r, jitterMs));
+        }
+      } catch (manifestErr: any) {
+        if (manifestWriteAttempts >= MAX_MANIFEST_ATTEMPTS) {
+          errors.push(`MANIFEST_WRITE_FAILED: ${manifestErr?.message || manifestErr}`);
         }
       }
+    }
 
-      if (!manifestUpdated) {
-        errors.push(`MANIFEST_VERIFICATION_FAILED: Manifest write verification exhausted ${MAX_MANIFEST_ATTEMPTS} attempts without confirming mediaId persistence in shared manifest`);
-      }
-    }).catch((queueErr) => {
-      errors.push(`MANIFEST_QUEUE_ERROR: ${queueErr?.message || queueErr}`);
-    }));
+    if (!manifestUpdated) {
+      errors.push(`MANIFEST_VERIFICATION_FAILED: Manifest write verification exhausted ${MAX_MANIFEST_ATTEMPTS} attempts without confirming mediaId persistence in shared manifest`);
+    }
   }
 
   // 4. Purge Workers Caching, Cache API, and KV thumbnails
@@ -640,17 +621,13 @@ export async function unrevokeMedia(
       errors.push(`TOMBSTONE_DELETE_FAILED: ${err?.message || err}`);
     }
     try {
-      await (manifestUpdateMutex = manifestUpdateMutex.catch(() => {}).then(async () => {
-        const currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-        if (currentManifest?.revokedIds && Array.isArray(currentManifest.revokedIds)) {
-          currentManifest.revokedIds = currentManifest.revokedIds.filter((id: string) => id !== mediaId);
-          currentManifest.updatedAt = Date.now();
-          currentManifest.version = (Number(currentManifest.version) || 1) + 1;
-          await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
-        }
-      }).catch((manifestErr: any) => {
-        errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);
-      }));
+      const currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+      if (currentManifest?.revokedIds && Array.isArray(currentManifest.revokedIds)) {
+        currentManifest.revokedIds = currentManifest.revokedIds.filter((id: string) => id !== mediaId);
+        currentManifest.updatedAt = Date.now();
+        currentManifest.version = (Number(currentManifest.version) || 1) + 1;
+        await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
+      }
     } catch (manifestErr: any) {
       errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);
     }

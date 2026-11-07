@@ -184,55 +184,57 @@ const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 let workerRevokedMediaSet = new Set();
 let workerLastRevocationSync = 0;
 let workerManifestLoaded = false;
-let workerInFlightSync = null;
 
-async function syncWorkerManifestSingleflight(kv) {
-  if (workerInFlightSync) {
-    await workerInFlightSync;
-    return workerManifestLoaded;
-  }
-
-  workerInFlightSync = (async () => {
-    try {
-      workerLastRevocationSync = Date.now();
-      const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-      if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
-        workerManifestLoaded = true;
-        const newSet = new Set(manifest.revokedIds);
-        for (const knownId of workerRevokedMediaSet) {
-          if (!newSet.has(knownId)) {
-            try {
-              const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId).catch(() => null);
-              if (tombstone) {
-                newSet.add(knownId);
-              }
-            } catch {
+async function syncWorkerManifest(kv) {
+  workerLastRevocationSync = Date.now();
+  try {
+    const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
+    if (manifest && Array.isArray(manifest.revokedIds)) {
+      workerManifestLoaded = true;
+      const newSet = new Set(manifest.revokedIds);
+      for (const knownId of workerRevokedMediaSet) {
+        if (!newSet.has(knownId)) {
+          try {
+            const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
+            if (tombstone) {
               newSet.add(knownId);
             }
+          } catch {
+            // Fail closed on KV error: preserve known revocation
+            newSet.add(knownId);
           }
         }
-        workerRevokedMediaSet = newSet;
-      } else {
-        workerManifestLoaded = false;
       }
-    } catch {
+      workerRevokedMediaSet = newSet;
+      return true;
+    } else {
       workerManifestLoaded = false;
+      return false;
     }
-  })().finally(() => {
-    workerInFlightSync = null;
-  });
-
-  await workerInFlightSync;
-  return workerManifestLoaded;
+  } catch {
+    workerManifestLoaded = false;
+    return false;
+  }
 }
 
 async function checkMediaRevocationWorker(mediaId, kv, options) {
   if (!mediaId) return false;
-  if (!kv) return Boolean(options?.failClosed);
 
+  // 1. Instant in-memory check (only if caller did not explicitly request fresh sync or authoritative tombstone)
+  if (!options?.checkTombstone && !options?.forceFresh && workerRevokedMediaSet.has(mediaId)) {
+    return true;
+  }
+
+  // 2. If KV is absent, check known in-memory revocations first, then fall back to failClosed policy
+  if (!kv) {
+    if (workerRevokedMediaSet.has(mediaId)) return true;
+    return Boolean(options?.failClosed);
+  }
+
+  // 3. Authoritative tombstone check: if explicitly requested
   if (options?.checkTombstone) {
     try {
-      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
         workerRevokedMediaSet.add(mediaId);
         return true;
@@ -247,20 +249,20 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     }
   }
 
+  // 4. Periodic manifest sync (request-scoped, throttled by interval)
   const now = Date.now();
   const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
   if (shouldSync) {
-    const loaded = await syncWorkerManifestSingleflight(kv);
-    if (!loaded && options?.failClosed && !workerManifestLoaded) {
-      return true;
-    }
+    await syncWorkerManifest(kv);
   }
 
+  // 5. In-memory set check after sync
   if (workerRevokedMediaSet.has(mediaId)) return true;
 
+  // 6. Fallback tombstone check if manifest failed to load reliably from KV
   if (!workerManifestLoaded) {
     try {
-      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
         workerRevokedMediaSet.add(mediaId);
         return true;

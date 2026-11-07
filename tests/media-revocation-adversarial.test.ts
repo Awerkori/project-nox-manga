@@ -2016,26 +2016,36 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRev, 'Leitura negativa defasada de tombstone não pode anular revogação confirmada').toBe(true);
     });
 
-    it('Singleflight: múltiplas checagens concorrentes no mesmo isolate disparam apenas uma leitura do manifesto no KV', async () => {
+    it('Codex Rodada 3 - Item 1: manifesto ausente no KV (clean state) não bloqueia mídia válida', async () => {
       const mediaId = 'f0000004-ffff-4004-8004-000000000001';
-      const rawKv = createMockKv();
-      let manifestReads = 0;
-
-      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
-        version: 1,
-        updatedAt: Date.now(),
-        revokedIds: [mediaId]
-      }));
-
+      const mockKv = createMockKv();
+      // Manifest key does not exist (returns null)
       clearMemoryRevocationCache();
 
-      const instrumentedKv = {
+      const isRev = await isMediaRevoked(mediaId, mockKv);
+      expect(isRev, 'Mídia válida não pode ser bloqueada quando manifesto está ausente em KV novo').toBe(false);
+    });
+
+    it('Codex Rodada 3 - Item 2: falha de I/O na reconciliação de tombstone preserva revogação conhecida (fail-closed)', async () => {
+      const mediaId = 'f0000005-ffff-4005-8005-000000000001';
+      const rawKv = createMockKv();
+
+      // Seed in-memory set with mediaId
+      populateMemoryRevocationCache([mediaId]);
+
+      // Stale manifest omits mediaId
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: Date.now(),
+        revokedIds: ['other-media']
+      }));
+
+      // KV throws error when trying to fetch individual tombstone
+      const rejectingKv = {
         ...rawKv,
         get: vi.fn(async (key: string, opts?: any) => {
-          if (key === REVOCATION_MANIFEST_KEY) {
-            manifestReads++;
-            // Small async delay to simulate in-flight window
-            await new Promise((r) => setTimeout(r, 20));
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            throw new Error('KV_NETWORK_TIMEOUT');
           }
           return rawKv.get(key, opts);
         }),
@@ -2043,13 +2053,24 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         delete: rawKv.delete.bind(rawKv)
       };
 
-      // 20 concurrent requests triggering manifest sync
-      const results = await Promise.all(
-        Array.from({ length: 20 }, () => isMediaRevoked(mediaId, instrumentedKv, { forceFresh: true }))
-      );
+      // Sync manifest with rejecting tombstone lookup
+      const isRev = await isMediaRevoked(mediaId, rejectingKv, { forceFresh: true });
+      expect(isRev, 'Falha no lookup do tombstone deve preservar a revogação em fail-closed').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
 
-      expect(results.every(r => r === true)).toBe(true);
-      expect(manifestReads, 'Singleflight deve coalescer todas as leituras concorrentes em apenas 1').toBe(1);
+    it('Codex Rodada 3 - Item 3: revogação em memória é respeitada mesmo quando KV binding está ausente', async () => {
+      const mediaId = 'f0000006-ffff-4006-8006-000000000001';
+      clearMemoryRevocationCache();
+
+      // Revoke media without KV binding
+      const res = await revokeMedia(mediaId, { kv: null });
+      expect(res.state).toBe('REVOCATION_PARTIAL');
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // Verify that isMediaRevoked blocks this media even when called without KV and without failClosed
+      const isRev = await isMediaRevoked(mediaId, null);
+      expect(isRev, 'Mídia revogada em memória deve ser bloqueada mesmo sem binding KV').toBe(true);
     });
   });
 });
