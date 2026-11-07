@@ -2015,6 +2015,42 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const isRev = await isMediaRevoked(mediaId, staleReplicaKv, { checkTombstone: true });
       expect(isRev, 'Leitura negativa defasada de tombstone não pode anular revogação confirmada').toBe(true);
     });
+
+    it('Singleflight: múltiplas checagens concorrentes no mesmo isolate disparam apenas uma leitura do manifesto no KV', async () => {
+      const mediaId = 'f0000004-ffff-4004-8004-000000000001';
+      const rawKv = createMockKv();
+      let manifestReads = 0;
+
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        revokedIds: [mediaId]
+      }));
+
+      clearMemoryRevocationCache();
+
+      const instrumentedKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            manifestReads++;
+            // Small async delay to simulate in-flight window
+            await new Promise((r) => setTimeout(r, 20));
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // 20 concurrent requests triggering manifest sync
+      const results = await Promise.all(
+        Array.from({ length: 20 }, () => isMediaRevoked(mediaId, instrumentedKv, { forceFresh: true }))
+      );
+
+      expect(results.every(r => r === true)).toBe(true);
+      expect(manifestReads, 'Singleflight deve coalescer todas as leituras concorrentes em apenas 1').toBe(1);
+    });
   });
 });
 

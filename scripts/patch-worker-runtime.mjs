@@ -163,8 +163,48 @@ const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
 let workerLastRevocationSync = 0;
-let workerLastManifestVersion = 0;
 let workerManifestLoaded = false;
+let workerInFlightSync = null;
+
+async function syncWorkerManifestSingleflight(kv) {
+  if (workerInFlightSync) {
+    await workerInFlightSync;
+    return workerManifestLoaded;
+  }
+
+  workerInFlightSync = (async () => {
+    try {
+      workerLastRevocationSync = Date.now();
+      const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+      if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
+        workerManifestLoaded = true;
+        const newSet = new Set(manifest.revokedIds);
+        for (const knownId of workerRevokedMediaSet) {
+          if (!newSet.has(knownId)) {
+            try {
+              const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId).catch(() => null);
+              if (tombstone) {
+                newSet.add(knownId);
+              }
+            } catch {
+              newSet.add(knownId);
+            }
+          }
+        }
+        workerRevokedMediaSet = newSet;
+      } else {
+        workerManifestLoaded = false;
+      }
+    } catch {
+      workerManifestLoaded = false;
+    }
+  })().finally(() => {
+    workerInFlightSync = null;
+  });
+
+  await workerInFlightSync;
+  return workerManifestLoaded;
+}
 
 async function checkMediaRevocationWorker(mediaId, kv, options) {
   if (!mediaId) return false;
@@ -190,35 +230,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
   const now = Date.now();
   const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
   if (shouldSync) {
-    try {
-      workerLastRevocationSync = now;
-      const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-      if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
-        workerManifestLoaded = true;
-        const newVersion = Number(manifest.version) || 0;
-        if (newVersion >= workerLastManifestVersion) {
-          workerLastManifestVersion = newVersion;
-          const newSet = new Set(manifest.revokedIds);
-          for (const knownId of workerRevokedMediaSet) {
-            if (!newSet.has(knownId)) {
-              try {
-                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId).catch(() => null);
-                if (tombstone) {
-                  newSet.add(knownId);
-                }
-              } catch {
-                newSet.add(knownId);
-              }
-            }
-          }
-          workerRevokedMediaSet = newSet;
-        }
-      } else {
-        workerManifestLoaded = false;
-      }
-    } catch {
-      workerManifestLoaded = false;
-      if (options?.failClosed) return true;
+    const loaded = await syncWorkerManifestSingleflight(kv);
+    if (!loaded && options?.failClosed && !workerManifestLoaded) {
+      return true;
     }
   }
 
