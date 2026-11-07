@@ -64,9 +64,10 @@ export const GET: RequestHandler = async ({ url, locals, cookies, platform }: an
 
     const userReactions = userRes.rows.map((r: any) => r.emoji);
     return json({ counts: counts || {}, userReactions });
-  } catch (err: any) {
-    return json({ error: err?.message || 'Falha ao buscar reações' }, { status: 500 });
-  }
+    } catch (err: any) {
+      return json({ error: err?.message || 'Falha ao buscar reações' }, { status: 500 });
+    }
+  });
 };
 
 export const POST: RequestHandler = async ({ request, locals, cookies, platform }: any) => {
