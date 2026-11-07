@@ -216,20 +216,22 @@ async function syncWorkerManifest(kv) {
         // 1. Add all currently revoked IDs from manifest unless superseded by newer known restoration
         const workerRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
         for (const id of workerManifestRevokedSet) {
-          const perIdRevocationTs = Number(workerRevocationsMap[id]) || 0;
+          const hasPerIdTs = Object.prototype.hasOwnProperty.call(workerRevocationsMap, id);
+          const perIdRevocationTs = hasPerIdTs ? Number(workerRevocationsMap[id]) || 0 : 0;
+          const isLegacy = !hasPerIdTs;
           const restoration = workerKnownRestorations.get(id);
-          const effectiveRevocationTs = perIdRevocationTs || workerKnownRevocations.get(id)?.timestamp || manifestUpdatedAt;
+          const existing = workerKnownRevocations.get(id);
+          const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
 
-          if (restoration && (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
+          if (restoration && (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
             workerManifestRevokedSet.delete(id);
             continue;
           }
           workerRevokedMediaSet.add(id);
-          const existing = workerKnownRevocations.get(id);
           if (!existing) {
-            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion });
-          } else if (perIdRevocationTs > existing.timestamp) {
-            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion });
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion, isLegacy });
+          } else if (hasPerIdTs && perIdRevocationTs > existing.timestamp) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion, isLegacy: false });
           }
           workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
           workerKnownRestorations.delete(id);
@@ -360,11 +362,11 @@ async function syncWorkerManifest(kv) {
                 let restorationTs = manifestUpdatedAt;
                 let restorationVer = manifestVersion;
 
-                if (!known || known.timestamp === 0) {
-                  canRestore = true;
-                } else {
+                if ((known && known.timestamp > 0)) {
+                  const knownTs = (known && !known.isLegacy) ? known.timestamp : 0;
+                  const knownVer = (known && !known.isLegacy) ? known.version : 0;
                   const knownRest = workerKnownRestorations.get(knownId);
-                  if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
+                  if (knownRest && (known?.isLegacy || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
                     canRestore = true;
                     hasActualRestorationEvidence = true;
                     restorationTs = knownRest.timestamp;
@@ -375,7 +377,7 @@ async function syncWorkerManifest(kv) {
                       if (resRecord) {
                         const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                         const recVer = Number(resRecord.version) || 0;
-                        if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
+                        if (known?.isLegacy || recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
                           canRestore = true;
                           hasActualRestorationEvidence = true;
                           restorationTs = recTs;
@@ -384,6 +386,8 @@ async function syncWorkerManifest(kv) {
                       }
                     } catch {}
                   }
+                } else if (!known || known.timestamp === 0) {
+                  canRestore = true;
                 }
 
                 if (canRestore) {
@@ -411,19 +415,21 @@ async function syncWorkerManifest(kv) {
         // Manifest is older than known version/timestamp - only merge IDs not superseded by known restorations
         const olderRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
         for (const id of manifest.revokedIds) {
-          const perIdRevocationTs = Number(olderRevocationsMap[id]) || 0;
+          const hasPerIdTs = Object.prototype.hasOwnProperty.call(olderRevocationsMap, id);
+          const perIdRevocationTs = hasPerIdTs ? Number(olderRevocationsMap[id]) || 0 : 0;
+          const isLegacy = !hasPerIdTs;
           const existing = workerKnownRevocations.get(id);
-          const effectiveRevocationTs = perIdRevocationTs || existing?.timestamp || manifestUpdatedAt;
+          const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
           const restoration = workerKnownRestorations.get(id);
-          if (restoration && (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
+          if (restoration && (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
             continue; // Skip! ID was restored after this older manifest was written
           }
           workerRevokedMediaSet.add(id);
           workerManifestRevokedSet.add(id);
           if (!existing) {
-            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion });
-          } else if (perIdRevocationTs > existing.timestamp) {
-            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion });
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion, isLegacy });
+          } else if (hasPerIdTs && perIdRevocationTs > existing.timestamp) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion, isLegacy: false });
           }
         }
       }
@@ -510,7 +516,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           workerRevokedMediaSet.add(mediaId);
           const existing = workerKnownRevocations.get(mediaId);
           if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
-            workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion });
+            workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion, isLegacy: false });
           }
           workerPerIdRevocationSeq.set(mediaId, ++workerGlobalRevocationSeq);
           workerKnownRestorations.delete(mediaId);
@@ -518,10 +524,24 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         }
       } else {
         if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
-          const knownRest = workerKnownRestorations.get(mediaId);
           const known = workerKnownRevocations.get(mediaId);
-          const revTs = known?.timestamp || workerManifestUpdatedAt;
-          if (knownRest && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= workerManifestVersion))) {
+          let knownRest = workerKnownRestorations.get(mediaId);
+          const isLegacy = Boolean(known?.isLegacy || (!known?.timestamp && !workerKnownRevocations.has(mediaId)));
+
+          if (!knownRest && isLegacy && kv) {
+            try {
+              const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+              if (resRecord) {
+                const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                const recVer = Number(resRecord.version) || 0;
+                knownRest = { timestamp: recTs, version: recVer };
+                workerKnownRestorations.set(mediaId, knownRest);
+              }
+            } catch {}
+          }
+
+          const revTs = known?.isLegacy ? 0 : (known?.timestamp || workerManifestUpdatedAt);
+          if (knownRest && (isLegacy || knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= workerManifestVersion))) {
             workerManifestRevokedSet.delete(mediaId);
           } else {
             workerRevokedMediaSet.add(mediaId);
@@ -530,7 +550,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         }
         if (workerManifestLoaded && workerManifestKeyPresent && !workerManifestRevokedSet.has(mediaId)) {
           const known = workerKnownRevocations.get(mediaId);
-          if (known && (workerManifestUpdatedAt < known.timestamp || (workerManifestUpdatedAt === known.timestamp && workerManifestVersion <= known.version))) {
+          if (known && !known.isLegacy && (workerManifestUpdatedAt < known.timestamp || (workerManifestUpdatedAt === known.timestamp && workerManifestVersion <= known.version))) {
             return true;
           }
           const startSeq = workerPerIdRevocationSeq.get(mediaId) || 0;
@@ -538,9 +558,11 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           let restorationTs = workerManifestUpdatedAt;
           let restorationVer = workerManifestVersion;
 
-          if (known && known.timestamp > 0) {
+          if (known && (known.timestamp > 0 || known.isLegacy)) {
             const knownRest = workerKnownRestorations.get(mediaId);
-            if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
+            const knownTs = (known && !known.isLegacy) ? known.timestamp : 0;
+            const knownVer = (known && !known.isLegacy) ? known.version : 0;
+            if (knownRest && (known?.isLegacy || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
               hasRestorationEvidence = true;
               restorationTs = knownRest.timestamp;
               restorationVer = knownRest.version;
@@ -550,7 +572,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
                 if (resRecord) {
                   const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                   const recVer = Number(resRecord.version) || 0;
-                  if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
+                  if (known?.isLegacy || recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
                     hasRestorationEvidence = true;
                     restorationTs = recTs;
                     restorationVer = recVer;
