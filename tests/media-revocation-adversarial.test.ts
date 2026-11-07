@@ -2309,6 +2309,104 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRevAfter, 'Manifesto mais recente por timestamp deve reconciliar restauração mesmo com versão menor').toBe(false);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
     });
+
+    it('Codex Rodada 8 - Item 1: unrevokeMedia não publica restauração se deleção do tombstone falhar', async () => {
+      const mediaId = 'b0000001-bbbb-4001-8001-000000000001';
+      clearMemoryRevocationCache();
+
+      const rawKv = createMockKv();
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId],
+        restoredIds: []
+      }));
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({ mediaId }));
+
+      // Seed local memory
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // KV onde delete falha
+      const failingDeleteKv = {
+        get: rawKv.get.bind(rawKv),
+        put: vi.fn(async (key: string, val: any) => rawKv.put(key, val)),
+        delete: vi.fn(async () => {
+          throw new Error('KV_DELETE_TIMEOUT');
+        })
+      };
+
+      const res = await unrevokeMedia(mediaId, { kv: failingDeleteKv });
+      expect(res.success, 'unrevokeMedia deve reportar falha quando delete do tombstone falha').toBe(false);
+      expect(res.errors[0]).toContain('TOMBSTONE_DELETE_FAILED');
+
+      // Verifica que NÃO publicou mediaId em restoredIds no manifesto
+      const manifest = await rawKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(manifest.restoredIds || []).not.toContain(mediaId);
+
+      // A mídia deve continuar revogada em memória local
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 8 - Item 2: marcador defasado em restoredIds não sobrepõe re-revogação posterior', async () => {
+      const mediaId = 'b0000002-bbbb-4002-8002-000000000002';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // Manifesto contém mediaId em restoredIds (de restauração anterior) MAS TAMBÉM em revokedIds (re-revogado)
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: 3000,
+        revokedIds: [mediaId],
+        restoredIds: [mediaId] // marcador defasado
+      }));
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({ mediaId, revokedAt: 3000 }));
+
+      const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(isRev, 'Marcador defasado em restoredIds não pode sobrepor revokedIds atual').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 8 - Item 3: emparelhamento de versão e timestamp permite reconciliação contínua em múltiplos lotes', async () => {
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // 1. Isolate inicialmente vê manifesto v10 em t=1000
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: 1000,
+        revokedIds: ['initial-id']
+      }));
+      await isMediaRevoked('initial-id', mockKv, { forceFresh: true });
+
+      // 2. PoP concorrente grava manifesto v5 com timestamp mais recente t=2000 omitindo 15 IDs
+      const ids: string[] = [];
+      for (let i = 1; i <= 15; i++) {
+        ids.push(`e0000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+      }
+      populateMemoryRevocationCache(ids);
+
+      // Primeiro 10 têm tombstones; últimos 5 não têm tombstones
+      for (let i = 0; i < 10; i++) {
+        await mockKv.put(`${REVOCATION_KEY_PREFIX}${ids[i]}`, JSON.stringify({ mediaId: ids[i] }));
+      }
+
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 5,
+        updatedAt: 2000,
+        revokedIds: []
+      }));
+
+      // Primeiro sync processa primeiros 10
+      await isMediaRevoked('initial-id', mockKv, { forceFresh: true });
+
+      // Segundo sync contra o MESMO manifesto deve continuar reconciliando e processar os próximos 5
+      await isMediaRevoked('initial-id', mockKv, { forceFresh: true });
+
+      for (let i = 10; i < 15; i++) {
+        expect(getMemoryRevocationSet().has(ids[i]), `ID ${ids[i]} deve ser reconciliado no segundo ciclo mesmo com manifesto v5 < v10`).toBe(false);
+      }
+    });
   });
 });
 

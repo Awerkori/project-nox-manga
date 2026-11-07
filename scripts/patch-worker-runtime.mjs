@@ -186,8 +186,8 @@ async function syncWorkerManifest(kv) {
 
       if (isNewer) {
         workerManifestRevokedSet = new Set(manifest.revokedIds);
-        workerManifestVersion = Math.max(workerManifestVersion, manifestVersion);
-        workerManifestUpdatedAt = Math.max(workerManifestUpdatedAt, manifestUpdatedAt);
+        workerManifestVersion = manifestVersion;
+        workerManifestUpdatedAt = manifestUpdatedAt;
 
         for (const id of workerManifestRevokedSet) {
           workerRevokedMediaSet.add(id);
@@ -196,8 +196,10 @@ async function syncWorkerManifest(kv) {
 
         if (Array.isArray(manifest.restoredIds)) {
           for (const restoredId of manifest.restoredIds) {
-            workerRevokedMediaSet.delete(restoredId);
-            workerKnownRevocations.delete(restoredId);
+            if (!workerManifestRevokedSet.has(restoredId)) {
+              workerRevokedMediaSet.delete(restoredId);
+              workerKnownRevocations.delete(restoredId);
+            }
           }
         }
 
