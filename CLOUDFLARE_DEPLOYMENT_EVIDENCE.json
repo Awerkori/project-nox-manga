@@ -1,12 +1,13 @@
 {
-  "activeVersionId": "a6f1400b-ce73-40bf-bb0a-ce0c0a813785",
-  "created": "2026-11-07T10:40:38.368Z",
+  "activeVersionId": "f14b2b13-3fb1-4d0b-af4a-6e520e904d35",
+  "created": "2026-11-07T12:04:02.000Z",
   "trafficAllocation": "100%",
   "routes": [
     "projectnox.org/*",
     "www.projectnox.org/*"
   ],
-  "commit": "242c0a7",
+  "commit": "bb497d3",
+  "entrypoint": "./_app/immutable/entry/start.B1fJ8b5y.js",
   "author": "awerkori@gmail.com",
   "bindings": {
     "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
