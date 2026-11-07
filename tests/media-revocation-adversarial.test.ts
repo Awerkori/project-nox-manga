@@ -3427,9 +3427,78 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const isRev = await isMediaRevoked(mediaId, rawKv);
       expect(isRev, 'Mídia deve permanecer revogada (fail-closed)').toBe(true);
     });
+
+    it('Codex Rodada 21 - Item 1: reconciliação e verificação não aceitam restauração anterior mais antiga para sobrepor revogação legada posterior', async () => {
+      const mediaId = 'e0000021-ffff-4021-8021-000000000001';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate tem conhecimento de uma restauração antiga em t=1000 (versão 5)
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        restoredAt: 1000,
+        version: 5
+      }));
+      await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+
+      // 2. Posteriormente, em t=2000 (versão 10), um worker publica revogação legada contendo mediaId
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: 2000,
+        revokedIds: [mediaId],
+        restoredIds: []
+      }));
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId), 'Revogação legada deve ser aprendida').toBe(true);
+
+      // 3. Em t=3000 (versão 11), um novo manifesto é publicado omitindo mediaId (ex: overwrite concorrente)
+      // e o tombstone está temporariamente nulo/indisponível nesta réplica
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 11,
+        updatedAt: 3000,
+        revokedIds: ['other-id'],
+        restoredIds: []
+      }));
+
+      // 4. Sincronização e reconciliação: a restauração antiga (t=1000 < t=2000) NÃO pode ser aceita
+      // para descartar a revogação de t=2000
+      await isMediaRevoked('other-id', rawKv, { forceFresh: true });
+      const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(isRev, 'Restauração anterior não pode sobrepor revogação posterior mesmo legada').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia deve continuar revogada em memória').toBe(true);
+    });
+
+    it('Codex Rodada 21 - Item 2: unrevokeMedia sem KV binding recusa restauração de mídia persistentemente revogada e não fabrica registro de restauração', async () => {
+      const mediaId = 'e0000021-ffff-4021-8021-000000000002';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Mídia está persistentemente revogada no manifesto em t=2000
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 5,
+        updatedAt: 2000,
+        revokedIds: [mediaId],
+        restorations: {}
+      }));
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 2000
+      }));
+
+      // Isolate aprende a revogação
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // 2. Chamada de unrevokeMedia sem KV binding (KV indisponível)
+      const res = await unrevokeMedia(mediaId);
+      expect(res.success, 'unrevokeMedia sem KV deve falhar para mídia persistentemente revogada').toBe(false);
+      expect(res.errors[0]).toContain('KV_BINDING_REQUIRED');
+      expect(getMemoryRevocationSet().has(mediaId), 'Revogação deve ser mantida em memória (fail-closed)').toBe(true);
+
+      // 3. Chamada subsequente com KV ativo confirma que a mídia permanece revogada
+      const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(isRev, 'Mídia deve continuar revogada pois tombstone nunca foi deletado').toBe(true);
+    });
   });
 });
-
-
-
-

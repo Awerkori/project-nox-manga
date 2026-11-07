@@ -375,10 +375,10 @@ async function syncWorkerManifest(kv) {
                 let restorationVer = manifestVersion;
 
                 if ((known && known.timestamp > 0)) {
-                  const knownTs = (known && !known.isLegacy) ? known.timestamp : 0;
-                  const knownVer = (known && !known.isLegacy) ? known.version : 0;
+                  const knownTs = Number(known?.timestamp) || 0;
+                  const knownVer = Number(known?.version) || 0;
                   const knownRest = workerKnownRestorations.get(knownId);
-                  if (knownRest && (known?.isLegacy || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
+                  if (knownRest && ((knownTs === 0 && knownVer === 0) || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version >= knownVer))) {
                     canRestore = true;
                     hasActualRestorationEvidence = true;
                     restorationTs = knownRest.timestamp;
@@ -389,7 +389,7 @@ async function syncWorkerManifest(kv) {
                       if (resRecord) {
                         const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                         const recVer = Number(resRecord.version) || 0;
-                        if (known?.isLegacy || recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
+                        if ((knownTs === 0 && knownVer === 0) || recTs > knownTs || (recTs === knownTs && recVer >= knownVer)) {
                           canRestore = true;
                           hasActualRestorationEvidence = true;
                           restorationTs = recTs;
@@ -590,9 +590,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
 
           if (known && (known.timestamp > 0 || known.isLegacy)) {
             const knownRest = workerKnownRestorations.get(mediaId);
-            const knownTs = (known && !known.isLegacy) ? known.timestamp : 0;
-            const knownVer = (known && !known.isLegacy) ? known.version : 0;
-            if (knownRest && (known?.isLegacy || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
+            const knownTs = Number(known?.timestamp) || 0;
+            const knownVer = Number(known?.version) || 0;
+            if (knownRest && ((knownTs === 0 && knownVer === 0) || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version >= knownVer))) {
               hasRestorationEvidence = true;
               restorationTs = knownRest.timestamp;
               restorationVer = knownRest.version;
@@ -602,7 +602,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
                 if (resRecord) {
                   const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                   const recVer = Number(resRecord.version) || 0;
-                  if (known?.isLegacy || recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
+                  if ((knownTs === 0 && knownVer === 0) || recTs > knownTs || (recTs === knownTs && recVer >= knownVer)) {
                     hasRestorationEvidence = true;
                     restorationTs = recTs;
                     restorationVer = recVer;

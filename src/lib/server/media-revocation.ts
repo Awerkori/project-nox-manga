@@ -429,10 +429,10 @@ async function syncManifest(kv: any): Promise<boolean> {
                 let restorationVer = manifestVersion;
 
                 if ((known && known.timestamp > 0) || locallyInitiatedRevocations.has(knownId)) {
-                  const knownTs = (known && !known.isLegacy) ? known.timestamp : 0;
-                  const knownVer = (known && !known.isLegacy) ? known.version : 0;
+                  const knownTs = Number(known?.timestamp) || 0;
+                  const knownVer = Number(known?.version) || 0;
                   const knownRest = knownRestorations.get(knownId);
-                  if (knownRest && (known?.isLegacy || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
+                  if (knownRest && ((knownTs === 0 && knownVer === 0) || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version >= knownVer))) {
                     canRestore = true;
                     hasActualRestorationEvidence = true;
                     restorationTs = knownRest.timestamp;
@@ -443,7 +443,7 @@ async function syncManifest(kv: any): Promise<boolean> {
                       if (resRecord) {
                         const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                         const recVer = Number(resRecord.version) || 0;
-                        if (known?.isLegacy || recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
+                        if ((knownTs === 0 && knownVer === 0) || recTs > knownTs || (recTs === knownTs && recVer >= knownVer)) {
                           canRestore = true;
                           hasActualRestorationEvidence = true;
                           restorationTs = recTs;
@@ -686,9 +686,9 @@ export async function isMediaRevoked(
 
           if ((known && (known.timestamp > 0 || known.isLegacy)) || locallyInitiatedRevocations.has(mediaId)) {
             const knownRest = knownRestorations.get(mediaId);
-            const knownTs = (known && !known.isLegacy) ? known.timestamp : 0;
-            const knownVer = (known && !known.isLegacy) ? known.version : 0;
-            if (knownRest && (known?.isLegacy || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
+            const knownTs = Number(known?.timestamp) || 0;
+            const knownVer = Number(known?.version) || 0;
+            if (knownRest && ((knownTs === 0 && knownVer === 0) || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version >= knownVer))) {
               hasRestorationEvidence = true;
               restorationTs = knownRest.timestamp;
               restorationVer = knownRest.version;
@@ -698,7 +698,7 @@ export async function isMediaRevoked(
                 if (resRecord) {
                   const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                   const recVer = Number(resRecord.version) || 0;
-                  if (known?.isLegacy || recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
+                  if ((knownTs === 0 && knownVer === 0) || recTs > knownTs || (recTs === knownTs && recVer >= knownVer)) {
                     hasRestorationEvidence = true;
                     restorationTs = recTs;
                     restorationVer = recVer;
@@ -1348,11 +1348,20 @@ export async function unrevokeMedia(
       }
     }
   } else {
+    // KV binding is absent. Restoration cannot be confirmed in persistent storage.
+    // If the media was persistently revoked (in manifest or known in memory), keep revocation fail-closed!
+    if (
+      lastManifestRevokedSet.has(mediaId) ||
+      (memoryRevokedSet.has(mediaId) && !locallyInitiatedRevocations.has(mediaId))
+    ) {
+      errors.push('KV_BINDING_REQUIRED: Restoration cannot be confirmed in persistent storage without KV');
+      return { success: false, errors };
+    }
+    // Only unpersisted locally-initiated revocations can be cleared from this isolate's memory,
+    // and we NEVER record a restoration in knownRestorations without confirmed persistence in KV.
     locallyInitiatedRevocations.delete(mediaId);
     memoryRevokedSet.delete(mediaId);
     knownRevocations.delete(mediaId);
-    lastManifestRevokedSet.delete(mediaId);
-    knownRestorations.set(mediaId, { timestamp: restorationTimestamp, version: nextVersion });
   }
 
   // Purge any negative (404) cache entries from Workers Caching and Cache API
