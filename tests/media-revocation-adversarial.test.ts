@@ -48,7 +48,9 @@ vi.mock('$lib/server/session-cache', () => ({
 
 vi.mock('$lib/server/yugabyte', () => ({
   fetchMediaMetadataFromYugabyte: mocks.fetchMediaMetadataFromYugabyte,
-  executeYugabyteSql: mocks.executeYugabyteSql
+  executeYugabyteSql: mocks.executeYugabyteSql,
+  invalidateMediaMetadataCache: vi.fn(),
+  invalidateYugabyteLkgPrefix: vi.fn()
 }));
 
 import { GET as getPublicMediaRoute } from '../src/routes/media/[id]/+server';
