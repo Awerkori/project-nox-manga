@@ -159,11 +159,11 @@ self.addEventListener('fetch', (event: FetchEvent) => {
         const mediaCache = await caches.open(CACHE_MEDIA);
         const cached = await mediaCache.match(event.request);
         if (cached) {
-          // Check if local cache entry has exceeded maximum client retention age
-          // Or if it lacks any valid timestamp header (legacy unversioned entry)
-          const headerDate = cached.headers.get('X-Nox-Cached-At') || cached.headers.get('date');
-          const cachedAt = headerDate ? (Number(headerDate) || Date.parse(headerDate) || 0) : 0;
-          const isExpired = cachedAt <= 0 || (Date.now() - cachedAt > MAX_MEDIA_CACHE_AGE_MS);
+          // Check if local cache entry has the explicit X-Nox-Cached-At header
+          // Entries lacking X-Nox-Cached-At are unversioned legacy entries and are immediately evicted
+          const cachedAtStr = cached.headers.get('X-Nox-Cached-At');
+          const cachedAt = cachedAtStr ? Number(cachedAtStr) : 0;
+          const isExpired = !cachedAtStr || isNaN(cachedAt) || cachedAt <= 0 || (Date.now() - cachedAt > MAX_MEDIA_CACHE_AGE_MS);
           if (!isExpired) {
             return cached;
           }

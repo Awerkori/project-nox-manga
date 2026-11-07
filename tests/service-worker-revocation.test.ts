@@ -15,8 +15,8 @@ describe('Service Worker Media Revocation & Cache Lifetime Protection', () => {
 
   it('enforces maximum 7-day client retention TTL and expires legacy unversioned entries', () => {
     expect(swSource).toContain('MAX_MEDIA_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000');
-    expect(swSource).toContain("cached.headers.get('X-Nox-Cached-At') || cached.headers.get('date')");
-    expect(swSource).toContain('cachedAt <= 0 || (Date.now() - cachedAt > MAX_MEDIA_CACHE_AGE_MS)');
+    expect(swSource).toContain("const cachedAtStr = cached.headers.get('X-Nox-Cached-At');");
+    expect(swSource).toContain('!cachedAtStr || isNaN(cachedAt) || cachedAt <= 0 || (Date.now() - cachedAt > MAX_MEDIA_CACHE_AGE_MS)');
     expect(swSource).toContain('await mediaCache.delete(event.request)');
   });
 

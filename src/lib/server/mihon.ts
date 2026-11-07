@@ -38,14 +38,15 @@ export function invalidateMihonTokenCache(tokenHash?: string) {
 
 export async function recordMihonTokenRevocation(tokenHash: string, kv?: any): Promise<void> {
   invalidateMihonTokenCache(tokenHash);
-  if (kv && typeof kv.put === 'function') {
-    // Write KV tombstone with 300s TTL (exceeds 60s memory TTL)
-    await kv.put(
-      `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
-      JSON.stringify({ revokedAt: Date.now() }),
-      { expirationTtl: 300 }
-    );
+  if (!kv || typeof kv.put !== 'function') {
+    throw new Error('KV binding COVER_THUMBNAILS missing or unavailable for token revocation');
   }
+  // Write KV tombstone with 300s TTL (persists across edge PoPs)
+  await kv.put(
+    `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
+    JSON.stringify({ revokedAt: Date.now() }),
+    { expirationTtl: 300 }
+  );
 }
 
 export async function verifyMihonAuth(request: Request, platformEnv?: any): Promise<MihonAuthResult> {
@@ -60,37 +61,20 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
   const hash = await hashToken(rawToken);
   const kv = platformEnv?.COVER_THUMBNAILS;
 
-  // 1. Fast in-memory check with cross-isolate KV tombstone validation
-  const cached = mihonAuthCache.get(hash);
-  if (cached && Date.now() - cached.timestamp < MIHON_AUTH_CACHE_TTL_MS) {
-    if (kv && typeof kv.get === 'function') {
-      try {
-        const tombstone = await kv.get(`${MIHON_REVOKED_KV_PREFIX}${hash}`);
-        if (tombstone) {
-          mihonAuthCache.delete(hash);
-          return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token revogado' };
-        }
-      } catch (kvErr) {
-        // Fail-closed on KV error: evict from memory and verify authoritatively via YSQL
-        mihonAuthCache.delete(hash);
-      }
-    }
-    // Only return cached result if KV tombstone check did not fail-closed
-    if (mihonAuthCache.has(hash)) {
-      return cached.result;
-    }
-  }
-
-  // 2. Pre-YSQL KV tombstone check (saves Hyperdrive query if already known revoked globally)
+  // 1. Edge KV tombstone fast check: if already tombstoned in KV, reject immediately (0 Hyperdrive, 0 YSQL)
   if (kv && typeof kv.get === 'function') {
     try {
       const tombstone = await kv.get(`${MIHON_REVOKED_KV_PREFIX}${hash}`);
       if (tombstone) {
+        invalidateMihonTokenCache(hash);
         return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token revogado' };
       }
-    } catch {}
+    } catch {
+      // Non-fatal KV read failure: proceed to authoritative database verification
+    }
   }
 
+  // 2. Authoritative ACID database verification (guarantees global, multi-isolate, synchronous revocation without stale cache)
   try {
     const res = await executeYugabyteSql(
       `SELECT t.id, t.user_id, t.expires_at, t.revoked,
@@ -124,11 +108,6 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
       ageStatus: member.age_status || 'UNKNOWN'
     };
 
-    if (mihonAuthCache.size >= MAX_MIHON_AUTH_CACHE) {
-      const oldestKey = mihonAuthCache.keys().next().value;
-      if (oldestKey) mihonAuthCache.delete(oldestKey);
-    }
-    mihonAuthCache.set(hash, { timestamp: Date.now(), result: authResult });
     return authResult;
   } catch (err: any) {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Erro ao verificar token' };

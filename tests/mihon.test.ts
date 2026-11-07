@@ -132,6 +132,15 @@ describe('Mihon API & Security Helpers', () => {
     expect(mockKvStore.has(`${MIHON_REVOKED_KV_PREFIX}${tokenHash}`)).toBe(true);
   });
 
+  it('throws an error if KV binding is missing when recording revocation', async () => {
+    const rawToken = 'nox_mh_no_kv_token';
+    const tokenHash = await hashToken(rawToken);
+
+    await expect(recordMihonTokenRevocation(tokenHash, null)).rejects.toThrow(
+      'KV binding COVER_THUMBNAILS missing or unavailable for token revocation'
+    );
+  });
+
   it('immediately rejects revoked Mihon token via KV tombstone even if cached in isolate memory', async () => {
     const rawToken = 'nox_mh_active_session_token';
     const tokenHash = await hashToken(rawToken);
