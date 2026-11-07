@@ -65,8 +65,10 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   const kv = platform?.env?.COVER_THUMBNAILS;
 
+  const isUnrevoke = body?.action === 'unrevoke' || body?.action === 'restore';
   const processedIds: string[] = [];
   const revokedIds: string[] = [];
+  const restoredIds: string[] = [];
   const pendingIds: string[] = [];
   const invalidIds: string[] = [];
   const errors: Array<{ mediaId: string; error: string }> = [];
@@ -81,25 +83,38 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
 
     processedIds.push(id);
     try {
-      const res = await revokeMedia(id, {
-        kv,
-        cache,
-        ctx: platform?.context || platform?.ctx,
-        origin: url.origin,
-        reason: body.reason || 'MANUAL_REVOCATION',
-        accessClass: body.accessClass,
-        status: body.status
-      });
+      const res = isUnrevoke
+        ? await unrevokeMedia(id, {
+            kv,
+            cache,
+            ctx: platform?.context || platform?.ctx,
+            origin: url.origin,
+            reason: body.reason || 'MANUAL_RESTORATION'
+          })
+        : await revokeMedia(id, {
+            kv,
+            cache,
+            ctx: platform?.context || platform?.ctx,
+            origin: url.origin,
+            reason: body.reason || 'MANUAL_REVOCATION',
+            accessClass: body.accessClass,
+            status: body.status
+          });
+
       if (res.success && res.errors.length === 0) {
-        revokedIds.push(id);
+        if (isUnrevoke) {
+          restoredIds.push(id);
+        } else {
+          revokedIds.push(id);
+        }
       } else {
         pendingIds.push(id);
-        errors.push({ mediaId: id, error: res.errors.join('; ') || 'PARTIAL_REVOCATION_FAILURE' });
+        errors.push({ mediaId: id, error: res.errors.join('; ') || (isUnrevoke ? 'PARTIAL_RESTORATION_FAILURE' : 'PARTIAL_REVOCATION_FAILURE') });
       }
       results.push(res);
     } catch (err: any) {
       pendingIds.push(id);
-      errors.push({ mediaId: id, error: err?.message || 'REVOCATION_FAILED' });
+      errors.push({ mediaId: id, error: err?.message || (isUnrevoke ? 'RESTORATION_FAILED' : 'REVOCATION_FAILED') });
     }
   }
 
@@ -107,10 +122,13 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
 
   return json({
     success: allSucceeded,
+    action: isUnrevoke ? 'unrevoke' : 'revoke',
     revokedCount: revokedIds.length,
+    restoredCount: restoredIds.length,
     totalRequested: rawIds.length,
     processedIds,
     revokedIds,
+    restoredIds,
     pendingIds,
     invalidIds,
     errors,

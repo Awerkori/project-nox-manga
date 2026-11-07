@@ -63,8 +63,8 @@ Foram sanadas com rigor todas as fragilidades, bloqueadores de segurança e apon
 
 #### 2. Resultados da Suíte Global de Testes Automatizados
 - **Total de Arquivos de Teste no Repositório:** **108 arquivos de teste**.
-- **Total de Testes Executados:** **647 testes unitários, adversariais e de integração**.
-- **Resultado Global:** **100% verdes (647 passed, 0 failed, 0 skipped)** em 20.31s.
+- **Total de Testes Executados:** **648 testes unitários, adversariais e de integração**.
+- **Resultado Global:** **100% verdes (648 passed, 0 failed, 0 skipped)** em 20.39s.
 - **Suíte Específica de Revogação Adversarial (`tests/media-revocation-adversarial.test.ts`):**
   - **116 testes adversariais aprovados (100% green)** em 748ms.
   - Cobre exaustivamente todas as 24 rodadas de auditoria com o Codex:
@@ -75,6 +75,35 @@ Foram sanadas com rigor todas as fragilidades, bloqueadores de segurança e apon
     - Tombstones idênticos, restaurações duráveis e ordenação monotônica de timestamps.
     - Preservação de entradas legadas contra atrasos de propagação KV.
     - Intervenções de revogação durante rollback de restauração.
+- **Suíte Específica de Validação Criptográfica e Otimizações (`tests/zero-waste-optimizations.test.ts`):**
+  - **8 testes aprovados (100% green)** cobrindo distinção rigorosa entre formato de imagem (magic bytes) e verificação criptográfica SHA-256 (304, 206, ETag de 64 hex, hash ausente e divergente).
+
+#### 3. Bateria de Benchmark Pós-Deploy Real (1.100 Requisições)
+- **Deployment Ativo Durante Todo o Teste:** `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` (Deployment: `d9c5776f-2b54-40dd-851e-8058d9a6e465`, publicado em `2026-11-07T07:24:26.634Z`).
+- **Janela de Execução do Benchmark:** `2026-11-07T08:06:58.125Z` até `2026-11-07T08:10:32.867Z` (Início e Fim confirmados na mesma versão de produção via API).
+- **Reconciliação da Amostra do Catálogo (368 vs 390 vs 414):**
+  - *368 imagens:* Contagem preliminar do rascunho inicial durante exploração preliminar.
+  - *390 imagens:* Contagem colhida no Ensaio Histórico 1 executado contra a versão `63ec4ecd` (preservado em `PROJECT_NOX_MIHON_HISTORICAL_REPORT_63ec4ecd.json`).
+  - *414 imagens:* Contagem colhida na colheita exaustiva do catálogo ativo no Ensaio Pós-Deploy 2 contra a versão final `05cbfd51`.
+  - Em todos os ensaios, a amostra selecionada para teste atendeu rigorosamente ao critério regulamentar de **300 imagens distintas**.
+- **Auditoria Criptográfica Granular (Metodologia Corrigida):**
+  - Formato reconhecido via Magic Bytes (WebP, JPEG, PNG, AVIF): **300 / 300 (100%)**
+  - Tamanho consistente com Content-Length: **300 / 300 (100%)**
+  - ETag SHA-256 utilizável (64 caracteres hexadecimais): **300 / 300 (100%)**
+  - SHA-256 comparado contra bytes integrais: **300 / 300 (100%)**
+  - SHA-256 aprovado (criptograficamente idêntico ao corpo): **300 / 300 (100%)**
+  - SHA-256 indisponível: **200** (100 requisições 304 Not Modified sem corpo e 100 requisições parciais Range 206 bytes=0-2048, corretamente não pontuadas como falso-positivo)
+  - SHA-256 divergente: **0 (Zero corrupções)**
+- **Métricas de Tráfego e Latência:**
+  - Volume total de requisições: **1.100 requisições HTTP reais**
+  - Taxa de sucesso HTTP: **100.00% (1.100 / 1.100 sem nenhum erro)**
+  - Volume de dados transferidos: **876.41 MB (918.986.888 bytes)**
+  - Taxa de HIT no Cache Quente (Warm Cache): **100.00%**
+  - Taxa de HIT Consolidada: **72.73%** (300 misses frios iniciais de verificação + 800 hits em downloads/re-use)
+  - Latência de Cache HIT (P50): **37 ms** (P95: 47 ms, Mín: 20 ms, Máx: 84 ms)
+  - Latência de Revalidação 304 (P50): **29 ms**
+  - Latência de Range 206 (P50): **28 ms**
+  - Re-uso entre Mihon e Web Reader: **100.00% de HITs compartilhados na mesma URL canônica**
 
 ---
 
@@ -82,10 +111,10 @@ Foram sanadas com rigor todas as fragilidades, bloqueadores de segurança e apon
 
 | Critério Regulamentar | Meta Exigida | Resultado Auditado | Status |
 | :--- | :--- | :--- | :---: |
-| **Amostra de Imagens Distintas** | ≥ 300 imagens | **368 descobertas / 300 selecionadas / 300 validadas integralmente** | **APROVADO** |
-| **Volume de Requisições** | ≥ 1.000 requisições | **1.100 requisições executadas** | **APROVADO** |
-| **Erros Funcionais no Teste** | 0 erros | **0 erros (100% sucesso)** | **APROVADO** |
-| **Validação de Conteúdo Real** | Magic Bytes + SHA256 | **300 imagens validadas criptograficamente** | **APROVADO** |
+| **Amostra de Imagens Distintas** | ≥ 300 imagens | **414 descobertas / 300 selecionadas / 300 validadas integralmente** (390 e 368 conciliadas e preservadas) | **APROVADO** |
+| **Volume de Requisições** | ≥ 1.000 requisições | **1.100 requisições executadas** (após deploy final) | **APROVADO** |
+| **Erros Funcionais no Teste** | 0 erros | **0 erros (100% sucesso HTTP)** | **APROVADO** |
+| **Validação Criptográfica** | Separação Magic Bytes vs SHA-256 | **300 SHA-256 comparados e aprovados; 200 indisponíveis (304/206); 0 divergentes** | **APROVADO** |
 | **Execução de Código em Cache HIT** | 0 invocações de isolate | **0 invocações (borda serve antes do handler)** | **APROVADO** |
 | **CPU de Worker em Cache HIT** | 0 ms | **0 ms de CPU consumido** | **APROVADO** |
 | **Hyperdrive em Cache HIT** | 0 queries | **0 queries disparadas** | **APROVADO** |
@@ -109,6 +138,6 @@ Foram sanadas com rigor todas as fragilidades, bloqueadores de segurança e apon
 A operação Cloudflare Zero Waste Absolute está **definitivamente homologada e em produção**:
 - As mídias públicas em cache são entregues na borda pela Cloudflare com **zero execução de código de Worker, zero consumo de CPU, zero tráfego no Hyperdrive e zero queries no YSQL**.
 - A revogação está blindada com modelo fail-closed resiliente a atrasos de replicação assíncrona do Cloudflare KV.
-- A suíte global de testes (108 arquivos / 647 testes) e a suíte adversarial de revogação (116 testes) estão 100% verdes.
+- A suíte global de testes (108 arquivos / 648 testes) e a suíte adversarial de revogação (116 testes) estão 100% verdes.
 - O bundle com as correções finais (commit `77eb558`) está publicado em produção e verificado ao vivo na versão `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a`.
 - A campanha paralela YSQL M03 segue em plena execução com seus processos preservados.

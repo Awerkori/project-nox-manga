@@ -665,6 +665,39 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
 
     expect(await isMediaRevoked(mediaId1, mockKv)).toBe(true);
     expect(await isMediaRevoked(mediaId2, mockKv)).toBe(true);
+
+    // Now test restoring one media via action: 'unrevoke'
+    const unrevRes = await revokeMediaEndpoint({
+      request: new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'unrevoke',
+          mediaIds: [mediaId1],
+          reason: 'STAFF_RESTORATION'
+        })
+      }),
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: token
+        },
+        caches: { default: mockCache }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(unrevRes.status).toBe(200);
+    const unrevData = await unrevRes.json();
+    expect(unrevData.success).toBe(true);
+    expect(unrevData.action).toBe('unrevoke');
+    expect(unrevData.restoredCount).toBe(1);
+    expect(await isMediaRevoked(mediaId1, mockKv)).toBe(false);
+    expect(await isMediaRevoked(mediaId2, mockKv)).toBe(true);
   });
 
   // TEST L: Unrevoked media requests MUST NOT query KV tombstones (Cloudflare Free Tier 100k daily read quota)

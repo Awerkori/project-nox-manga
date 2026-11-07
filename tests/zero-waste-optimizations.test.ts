@@ -264,4 +264,109 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(mediaRoute).toContain("'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'");
     expect(mediaRoute).toContain("'CDN-Cache-Control': 'no-store'");
   });
+
+  it('rigorously distinguishes format recognition from cryptographic SHA-256 validation in benchmark methodology', async () => {
+    const { validateResponseBody } = await import('../scripts/mihon-zero-waste-benchmark.mjs');
+    const crypto = await import('node:crypto');
+
+    // 1. Valid JPEG with authentic matching 64-hex SHA-256 ETag -> Approved
+    const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const jpegSha256 = crypto.createHash('sha256').update(jpegBytes).digest('hex');
+    const jpegHeaders = new Headers({
+      'content-type': 'image/jpeg',
+      'content-length': String(jpegBytes.byteLength),
+      'etag': `"${jpegSha256}"`
+    });
+
+    const jpegVal = validateResponseBody(jpegBytes.buffer, 200, jpegHeaders);
+    expect(jpegVal.valid).toBe(true);
+    expect(jpegVal.imageReceived).toBe(true);
+    expect(jpegVal.nonEmpty).toBe(true);
+    expect(jpegVal.format).toBe('jpeg');
+    expect(jpegVal.formatRecognized).toBe(true);
+    expect(jpegVal.sizeConsistent).toBe(true);
+    expect(jpegVal.etagPresent).toBe(true);
+    expect(jpegVal.etagUsableAsSha256).toBe(true);
+    expect(jpegVal.sha256Compared).toBe(true);
+    expect(jpegVal.sha256Approved).toBe(true);
+    expect(jpegVal.sha256Unavailable).toBe(false);
+    expect(jpegVal.sha256Divergent).toBe(false);
+    expect(jpegVal.sha256Status).toBe('SHA256_APPROVED');
+    expect(jpegVal.sha256Valid).toBe(true);
+
+    // 2. Valid image with recognized format (Magic Bytes) but derivative non-hex ETag
+    // Must NOT count as SHA256_VERIFIED!
+    const thumbHeaders = new Headers({
+      'content-type': 'image/jpeg',
+      'content-length': String(jpegBytes.byteLength),
+      'etag': `"${jpegSha256}-thumb-v3"` // Non-SHA256 derivative tag
+    });
+    const thumbVal = validateResponseBody(jpegBytes.buffer, 200, thumbHeaders);
+    expect(thumbVal.valid).toBe(true);
+    expect(thumbVal.formatRecognized).toBe(true);
+    expect(thumbVal.etagPresent).toBe(true);
+    expect(thumbVal.etagUsableAsSha256).toBe(false);
+    expect(thumbVal.sha256Compared).toBe(false);
+    expect(thumbVal.sha256Approved).toBe(false);
+    expect(thumbVal.sha256Unavailable).toBe(true);
+    expect(thumbVal.sha256Divergent).toBe(false);
+    expect(thumbVal.sha256Status).toBe('SHA256_UNAVAILABLE');
+    expect(thumbVal.sha256Valid).toBe(false); // Rigorous: format recognition != sha256 valid
+
+    // 3. Valid image without ETag
+    const noEtagHeaders = new Headers({
+      'content-type': 'image/jpeg',
+      'content-length': String(jpegBytes.byteLength)
+    });
+    const noEtagVal = validateResponseBody(jpegBytes.buffer, 200, noEtagHeaders);
+    expect(noEtagVal.valid).toBe(true);
+    expect(noEtagVal.formatRecognized).toBe(true);
+    expect(noEtagVal.etagPresent).toBe(false);
+    expect(noEtagVal.sha256Compared).toBe(false);
+    expect(noEtagVal.sha256Approved).toBe(false);
+    expect(noEtagVal.sha256Unavailable).toBe(true);
+    expect(noEtagVal.sha256Valid).toBe(false);
+
+    // 4. Mismatched SHA-256 against 64-hex ETag -> Fails integrity
+    const badEtagHeaders = new Headers({
+      'content-type': 'image/jpeg',
+      'content-length': String(jpegBytes.byteLength),
+      'etag': '"1111111111111111111111111111111111111111111111111111111111111111"'
+    });
+    const badEtagVal = validateResponseBody(jpegBytes.buffer, 200, badEtagHeaders);
+    expect(badEtagVal.valid).toBe(false);
+    expect(badEtagVal.errorType).toBe('BODY_INTEGRITY_FAILURE');
+    expect(badEtagVal.sha256Compared).toBe(true);
+    expect(badEtagVal.sha256Approved).toBe(false);
+    expect(badEtagVal.sha256Divergent).toBe(true);
+    expect(badEtagVal.sha256Status).toBe('SHA256_DIVERGENT');
+    expect(badEtagVal.sha256Valid).toBe(false);
+
+    // 5. HTTP 304 Revalidated response (no body transferred)
+    // Must NOT be marked as sha256Valid: true!
+    const reval304Headers = new Headers({ 'etag': `"${jpegSha256}"` });
+    const val304 = validateResponseBody(null, 304, reval304Headers);
+    expect(val304.valid).toBe(true);
+    expect(val304.category).toBe('REVALIDATED_304');
+    expect(val304.imageReceived).toBe(false);
+    expect(val304.nonEmpty).toBe(false);
+    expect(val304.sha256Compared).toBe(false);
+    expect(val304.sha256Approved).toBe(false);
+    expect(val304.sha256Unavailable).toBe(true);
+    expect(val304.sha256Valid).toBe(false);
+
+    // 6. HTTP 206 Partial Content (slice does not equal complete file sha256)
+    const rangeHeaders = new Headers({
+      'content-type': 'image/jpeg',
+      'content-range': 'bytes 0-3/12',
+      'content-length': '4',
+      'etag': `"${jpegSha256}"`
+    });
+    const val206 = validateResponseBody(jpegBytes.subarray(0, 4).buffer, 206, rangeHeaders);
+    expect(val206.valid).toBe(true);
+    expect(val206.formatRecognized).toBe(true);
+    expect(val206.sha256Compared).toBe(false);
+    expect(val206.sha256Unavailable).toBe(true);
+    expect(val206.sha256Valid).toBe(false);
+  });
 });

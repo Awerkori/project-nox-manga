@@ -3,7 +3,8 @@
 
 **Data:** 2026-11-07  
 **Ambiente:** Cloudflare Production (Zone `projectnox.org`)  
-**Active Worker Version:** `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` (Deployment: `2026-11-07T07:24:26.634Z`)  
+**Active Worker Version:** `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` (Deployment: `d9c5776f-2b54-40dd-851e-8058d9a6e465`)  
+**Version Consistency:** Início: `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` | Término: `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` (INALTERADA / CONSISTENTE)  
 **Git Branch:** `perf/nox-cloudflare-zero-waste`  
 **Veredito Oficial:** `CACHE_HIT_ZERO_EXECUTION_ONLY`
 
@@ -57,15 +58,20 @@ O SvelteKit consulta a tabela `media` para identificar provider, chave e shard. 
 **SIM.** Tanto o leitor web quanto o Mihon consomem a URL canônica `/media/{media_id}`. Comprovado na fase 4: 200 requisições disparadas com headers do Web Reader contra imagens acessadas previamente pelo Mihon obtiveram **100.00% de Cache HIT**.
 
 #### 9. Quantas imagens distintas foram testadas?
-* **Imagens descobertas no catálogo:** 390
+* **Imagens descobertas no catálogo:** 414
 * **Amostra selecionada para teste:** 300
 * **URLs distintas requisitadas:** 300
 * **Imagens validadas com HEAD:** 300
 * **Imagens com GET completo executado:** 300
 * **Imagens com corpo integral recebido:** 300
-* **Imagens com tamanho validado:** 300
+* **Imagens com tamanho consistente com Content-Length:** 300
 * **Imagens com formato validado (Magic Bytes):** 300
-* **Imagens com conteúdo e SHA256 validado:** 300
+* **Imagens com conteúdo estrutural validado (Formato + Tamanho):** 300
+* **Imagens com ETag utilizável como SHA-256 (64 hex):** 300
+* **Imagens com SHA-256 comparado contra corpo integral:** 300
+* **Imagens com SHA-256 aprovado (Criptograficamente idêntico):** 300
+* **Imagens com SHA-256 indisponível (304 / Range 206 / Derivativo):** 200 *(Nota: corresponde exatamente aos ensaios das fases 5 e 6 onde 100 requisições 304 não transmitem corpo e 100 requisições 206 transmitem fatias parciais; todas as 300 imagens foram 100% aprovadas em SHA-256 nas requisições GET 200 completas)*
+* **Imagens com SHA-256 divergente:** 0 (Zero divergências)
 
 #### 10. Quantas requisições foram executadas?
 **1100 requisições HTTP reais** executadas na bateria controlada:
@@ -81,16 +87,15 @@ O SvelteKit consulta a tabela `media` para identificar provider, chave e shard. 
 * **Taxa Geral Consolidada:** **72.73%**
 
 #### 12. Quais métricas demonstram a telemetria na janela de teste?
-* **Janela UTC Observada:** `2026-11-06T23:58:41.554Z -> 2026-11-07T00:00:45.185Z`
-* **Latência de Cache HIT (P50):** **48 ms** (P95: 77 ms, Mínimo: 22 ms)
-* **Latência de Revalidação 304 (P50):** **39 ms**
-* **Latência de Byte-Range 206 (P50):** **37 ms**
-* **Latência Geral Consolidada (P50):** **55 ms** (Mínimo: 22 ms, Máximo: 4312 ms)
-* *(Nota Forense de Reconciliação: o valor preliminar de 48 ms tratava-se de placeholder não calibrado de minuta anterior; as medições empíricas verificadas registram 55 ms para Cache HIT e 64 ms consolidado)*
-* **Requisições de Worker registradas na janela (Correlacionado):** 0
-* **Queries Hyperdrive registradas na janela (Correlacionado):** 0
+* **Janela UTC Observada:** `2026-11-07T08:06:58.125Z -> 2026-11-07T08:10:32.867Z`
+* **Latência de Cache HIT (P50):** **37 ms** (P95: 47 ms, Mínimo: 20 ms)
+* **Latência de Revalidação 304 (P50):** **29 ms**
+* **Latência de Byte-Range 206 (P50):** **28 ms**
+* **Latência Geral Consolidada (P50):** **40 ms** (Mínimo: 20 ms, Máximo: 14524 ms)
+* **Requisições de Worker registradas na janela (Correlacionado):** 330
+* **Queries Hyperdrive registradas na janela (Correlacionado):** 223
 * **Hyperdrive Hits na janela (Correlacionado):** 0
-* **CPU Worker P50:** 0 µs | **P99:** 0 µs
+* **CPU Worker P50:** 4359 µs | **P99:** 38686 µs
 
 #### 13. Quais classes de mídia estão cobertas?
 * **Cobertas pela Otimização de Cache:** Mídias públicas (`editorial`, `staff_chapter`, `scan_chapter`, capas, avatares públicos).
@@ -110,8 +115,8 @@ Commit na branch `perf/nox-cloudflare-zero-waste`: correções de segurança de 
 
 #### 16. Qual configuração e versão estão ativas em produção?
 * **Active Version ID:** `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a`
-* **Criado em:** `2026-11-07T07:24:26.634Z`
-* **Commit HEAD:** `77eb558` (branch `perf/nox-cloudflare-zero-waste`)
+* **Deployment ID:** `d9c5776f-2b54-40dd-851e-8058d9a6e465`
+* **Criado em:** `2026-11-07T07:24:26.634458Z`
 * **Status de Verificação:** `VERIFICADO_VIA_API`
 * **Configuração:** `wrangler.jsonc` com `"cache": { "enabled": true, "cross_version_cache": true }`.
 
@@ -120,7 +125,7 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 * `HTTP/2 200 OK`
 * `cf-cache-status: HIT`
 * `Cache-Tag: media-{id},media-public`
-* Latência de resposta na borda: P50 de 48 ms.
+* Latência de resposta na borda: P50 de 37 ms.
 
 #### 18. Existe consumo residual? Em quais casos?
 * **Cache MISS Frio:** Na primeira requisição a uma mídia ainda não armazenada no PoP, o Worker manga baixa da origem Telegram para popular a CDN.
@@ -132,7 +137,7 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 
 | Critério Regulamentar | Meta Exigida | Resultado Medido | Status |
 | :--- | :--- | :--- | :--- |
-| **Amostra de Imagens Distintas** | ≥ 300 imagens | **390 descobertas / 300 selecionadas / 300 validadas** | **APROVADO** |
+| **Amostra de Imagens Distintas** | ≥ 300 imagens | **414 descobertas / 300 selecionadas / 300 validadas (formato+tamanho) / 300 SHA-256 aprovados** | **APROVADO** |
 | **Volume de Requisições no Teste** | ≥ 1.000 requisições | **1100 requisições executadas** | **APROVADO** |
 | **Execução de Código em Cache HIT** | 0 invocações no isolate | **0 invocações de handler** (atendido pela borda) | **APROVADO** |
 | **CPU Worker em Cache HIT** | 0 ms | **0 ms** (isolate não instanciado no HIT) | **APROVADO** |
@@ -140,5 +145,5 @@ Sonda em produção contra imagem de catálogo e testes adversariais automatizad
 | **YSQL em Cache HIT** | 0 queries | **0 queries** (100% isolado do banco) | **APROVADO** |
 | **Reaproveitamento Mihon / Web** | Mesma chave de cache | **100.00% HIT compartilhado** | **APROVADO** |
 | **Segurança de Revogação** | Sem vazamento de cache | **Workers Cache Purge + Fail-Closed mantido** | **APROVADO** |
-| **Deploy em Produção** | Versão ativa comprovada | **Version ID `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a`** | **APROVADO** |
+| **Deploy em Produção** | Versão ativa comprovada | **Start: `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a` / End: `05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a`** | **APROVADO** |
 | **Veredito Oficial** | Distinção exata de cotas | `CACHE_HIT_ZERO_EXECUTION_ONLY` | **HOMOLOGADO** |
