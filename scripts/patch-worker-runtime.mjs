@@ -170,21 +170,9 @@ async function syncWorkerManifest(kv) {
   try {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
-      const newSet = new Set(manifest.revokedIds);
-      for (const knownId of workerRevokedMediaSet) {
-        if (!newSet.has(knownId)) {
-          try {
-            const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
-            if (tombstone) {
-              newSet.add(knownId);
-            }
-          } catch {
-            // Fail closed on KV error: preserve known revocation
-            newSet.add(knownId);
-          }
-        }
+      for (const id of manifest.revokedIds) {
+        workerRevokedMediaSet.add(id);
       }
-      workerRevokedMediaSet = newSet;
       workerManifestLoaded = true;
       return true;
     } else if (manifest === null || manifest === undefined) {
@@ -222,10 +210,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         workerRevokedMediaSet.add(mediaId);
         return true;
       } else {
-        if (workerManifestLoaded && workerRevokedMediaSet.has(mediaId)) {
+        if (workerRevokedMediaSet.has(mediaId)) {
           return true;
         }
-        workerRevokedMediaSet.delete(mediaId);
         return false;
       }
     } catch {

@@ -161,10 +161,13 @@ let memoryRevokedSet = new Set<string>();
 let lastManifestSync = 0;
 let manifestSuccessfullyLoaded = false;
 
+let manifestSyncPromise: Promise<boolean> | null = null;
+
 export function clearMemoryRevocationCache(): void {
   memoryRevokedSet.clear();
   lastManifestSync = 0;
   manifestSuccessfullyLoaded = false;
+  manifestSyncPromise = null;
 }
 
 export function populateMemoryRevocationCache(ids: string[]): void {
@@ -178,40 +181,57 @@ export function getMemoryRevocationSet(): Set<string> {
 }
 
 async function syncManifest(kv: any): Promise<boolean> {
-  lastManifestSync = Date.now();
-  try {
-    const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
-    if (manifest && Array.isArray(manifest.revokedIds)) {
-      const newSet = new Set<string>(manifest.revokedIds);
-      // Reconcile removed IDs against tombstones before discarding to protect against stale KV read replicas
-      for (const knownId of memoryRevokedSet) {
-        if (!newSet.has(knownId)) {
-          try {
-            const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
-            if (tombstone) {
+  if (manifestSyncPromise) {
+    return manifestSyncPromise;
+  }
+
+  manifestSyncPromise = (async () => {
+    lastManifestSync = Date.now();
+    try {
+      const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      if (manifest && Array.isArray(manifest.revokedIds)) {
+        const snapshotBeforeSync = new Set(memoryRevokedSet);
+        const newSet = new Set<string>(manifest.revokedIds);
+        // Reconcile removed IDs against tombstones before discarding to protect against stale KV read replicas
+        for (const knownId of snapshotBeforeSync) {
+          if (!newSet.has(knownId)) {
+            try {
+              const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
+              if (tombstone) {
+                newSet.add(knownId);
+              }
+            } catch {
+              // Fail closed on error: preserve known revocation
               newSet.add(knownId);
             }
-          } catch {
-            // Fail closed on error: preserve known revocation
-            newSet.add(knownId);
           }
         }
+        // Merge any new revocations learned while reconciliation was in flight
+        for (const id of memoryRevokedSet) {
+          if (!snapshotBeforeSync.has(id)) {
+            newSet.add(id);
+          }
+        }
+        memoryRevokedSet = newSet;
+        manifestSuccessfullyLoaded = true;
+        return true;
+      } else if (manifest === null || manifest === undefined) {
+        // Manifest does not exist yet (clean slate) - no I/O error, but tombstone check needed if key exists
+        manifestSuccessfullyLoaded = false;
+        return true;
+      } else {
+        manifestSuccessfullyLoaded = false;
+        return false;
       }
-      memoryRevokedSet = newSet;
-      manifestSuccessfullyLoaded = true;
-      return true;
-    } else if (manifest === null || manifest === undefined) {
-      // Manifest does not exist yet (clean slate) - no I/O error, but tombstone check needed if key exists
-      manifestSuccessfullyLoaded = false;
-      return true;
-    } else {
+    } catch {
       manifestSuccessfullyLoaded = false;
       return false;
     }
-  } catch {
-    manifestSuccessfullyLoaded = false;
-    return false;
-  }
+  })().finally(() => {
+    manifestSyncPromise = null;
+  });
+
+  return manifestSyncPromise;
 }
 
 /**
@@ -261,10 +281,9 @@ export async function isMediaRevoked(
       } else {
         // A stale negative tombstone read from an eventually-consistent KV replica
         // cannot override a positive revocation already verified by manifest/in-memory
-        if (manifestSuccessfullyLoaded && memoryRevokedSet.has(mediaId)) {
+        if (memoryRevokedSet.has(mediaId)) {
           return true;
         }
-        memoryRevokedSet.delete(mediaId);
         return false;
       }
     } catch {
