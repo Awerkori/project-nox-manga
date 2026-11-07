@@ -369,4 +369,10 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(val206.sha256Unavailable).toBe(true);
     expect(val206.sha256Valid).toBe(false);
   });
+
+  it('enforces private, no-store, no-cache headers on Mihon adult chapter unauthorized 403 responses', () => {
+    const mihonPagesSource = readFileSync('src/routes/api/mihon/chapter/[id]/pages/+server.ts', 'utf8');
+    expect(mihonPagesSource).toContain("error: 'Conteúdo Adulto (+18)");
+    expect(mihonPagesSource).toContain("'Cache-Control': 'private, no-cache, no-store, must-revalidate'");
+  });
 });

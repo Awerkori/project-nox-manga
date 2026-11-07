@@ -1079,4 +1079,29 @@ var worker_default = {`;
   fs.writeFileSync(target, content, 'utf8');
 }
 
+function patchVitestReadonlySupport() {
+  const viteNodeChunk = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../node_modules/vite/dist/node/chunks/node.js');
+  if (fs.existsSync(viteNodeChunk)) {
+    let c = fs.readFileSync(viteNodeChunk, 'utf8');
+    const targetVite = `\t\ttry {\n\t\t\tawait fsp.writeFile(tempFileName, bundledCode);\n\t\t} catch (e) {\n\t\t\tif ((e.code === "EROFS" || e.code === "EACCES") && viteTempDir !== "/tmp") {\n\t\t\t\ttempFileName = path.resolve("/tmp", \`\${path.basename(fileName)}.\${hash}.mjs\`);\n\t\t\t\tawait fsp.writeFile(tempFileName, bundledCode);\n\t\t\t} else {\n\t\t\t\tthrow e;\n\t\t\t}\n\t\t}`;
+    const patchedVite = `\t\ttry {\n\t\t\tawait fsp.writeFile(tempFileName, bundledCode);\n\t\t} catch (e) {\n\t\t\tif ((e.code === "EROFS" || e.code === "EACCES") && viteTempDir !== "/tmp") {\n\t\t\t\ttempFileName = path.resolve("/tmp", \`\${path.basename(fileName)}.\${hash}.mjs\`);\n\t\t\t\ttry {\n\t\t\t\t\tawait fsp.writeFile(tempFileName, bundledCode);\n\t\t\t\t} catch (e2) {\n\t\t\t\t\tif (e2.code === "EROFS" || e2.code === "EACCES") {\n\t\t\t\t\t\treturn (await nativeImportConfigFile(fileName)).configExport;\n\t\t\t\t\t}\n\t\t\t\t\tthrow e2;\n\t\t\t\t}\n\t\t\t} else if (e.code === "EROFS" || e.code === "EACCES") {\n\t\t\t\treturn (await nativeImportConfigFile(fileName)).configExport;\n\t\t\t} else {\n\t\t\t\tthrow e;\n\t\t\t}\n\t\t}`;
+    if (c.includes(targetVite)) {
+      c = c.replace(targetVite, patchedVite);
+      fs.writeFileSync(viteNodeChunk, c, 'utf8');
+    }
+  }
+
+  const vitestIndexChunk = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../node_modules/vitest/dist/chunks/index.B89dZ0-N.js');
+  if (fs.existsSync(vitestIndexChunk)) {
+    let c = fs.readFileSync(vitestIndexChunk, 'utf8');
+    const targetVitest = `\t\t\tconst tmpDir = join(this.tmpProjectDir, environment.name);\n\t\t\tif (!this.tmpDirectories.has(tmpDir)) {\n\t\t\t\tif (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });\n\t\t\t\tthis.tmpDirectories.add(tmpDir);\n\t\t\t}\n\t\t\tconst tmpFile = join(tmpDir, hash("sha1", result.id, "hex"));\n\t\t\treturn this.cacheResult(result, tmpFile, transformResult).then((result) => {\n\t\t\t\tif (transformResult) transformResult.__vitestTmp = tmpFile;\n\t\t\t\treturn result;\n\t\t\t});`;
+    const patchedVitest = `\t\t\tconst tmpDir = join(this.tmpProjectDir, environment.name);\n\t\t\ttry {\n\t\t\t\tif (!this.tmpDirectories.has(tmpDir)) {\n\t\t\t\t\tif (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });\n\t\t\t\t\tthis.tmpDirectories.add(tmpDir);\n\t\t\t\t}\n\t\t\t\tconst tmpFile = join(tmpDir, hash("sha1", result.id, "hex"));\n\t\t\t\treturn this.cacheResult(result, tmpFile, transformResult).then((result) => {\n\t\t\t\t\tif (transformResult) transformResult.__vitestTmp = tmpFile;\n\t\t\t\t\treturn result;\n\t\t\t\t});\n\t\t\t} catch (e) {\n\t\t\t\tif (e && (e.code === 'EROFS' || e.code === 'ENOENT' || e.code === 'EACCES')) {\n\t\t\t\t\treturn result;\n\t\t\t\t}\n\t\t\t\tthrow e;\n\t\t\t}`;
+    if (c.includes(targetVitest)) {
+      c = c.replace(targetVitest, patchedVitest);
+      fs.writeFileSync(vitestIndexChunk, c, 'utf8');
+    }
+  }
+}
+
 patchGeneratedWorker();
+patchVitestReadonlySupport();

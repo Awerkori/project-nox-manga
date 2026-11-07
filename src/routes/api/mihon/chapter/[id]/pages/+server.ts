@@ -99,7 +99,13 @@ export const GET = async ({ params, request, url, platform }: any) => {
   if (chapter.content_rating === 'ADULT_18' && !allowAdult) {
     return json(
       { error: 'Conteúdo Adulto (+18). Requer autenticação com token de usuário maior de idade.' },
-      { status: 403 }
+      {
+        status: 403,
+        headers: {
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Vary': 'Authorization, Cookie'
+        }
+      }
     );
   }
 
