@@ -26,11 +26,28 @@ const MIHON_AUTH_CACHE_TTL_MS = 60_000;
 const MAX_MIHON_AUTH_CACHE = 500;
 const mihonAuthCache = new Map<string, { timestamp: number; result: MihonAuthResult }>();
 
+export const MIHON_REVOKED_KV_PREFIX = 'mihon:revoked:';
+
 export function invalidateMihonTokenCache(tokenHash?: string) {
   if (tokenHash) {
     mihonAuthCache.delete(tokenHash);
   } else {
     mihonAuthCache.clear();
+  }
+}
+
+export async function recordMihonTokenRevocation(tokenHash: string, kv?: any): Promise<void> {
+  invalidateMihonTokenCache(tokenHash);
+  if (kv && typeof kv.put === 'function') {
+    try {
+      await kv.put(
+        `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
+        JSON.stringify({ revokedAt: Date.now() }),
+        { expirationTtl: 300 }
+      );
+    } catch (err) {
+      console.error('[mihon] Failed to write KV revocation tombstone:', err);
+    }
   }
 }
 
@@ -44,10 +61,33 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
 
   const rawToken = match[1];
   const hash = await hashToken(rawToken);
+  const kv = platformEnv?.COVER_THUMBNAILS;
 
+  // 1. Fast in-memory check with cross-isolate KV tombstone validation
   const cached = mihonAuthCache.get(hash);
   if (cached && Date.now() - cached.timestamp < MIHON_AUTH_CACHE_TTL_MS) {
+    if (kv && typeof kv.get === 'function') {
+      try {
+        const tombstone = await kv.get(`${MIHON_REVOKED_KV_PREFIX}${hash}`);
+        if (tombstone) {
+          mihonAuthCache.delete(hash);
+          return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token revogado' };
+        }
+      } catch {
+        // Fail-safe: if KV read errors, proceed with verified memory cache
+      }
+    }
     return cached.result;
+  }
+
+  // 2. Pre-YSQL KV tombstone check (saves Hyperdrive query if already known revoked globally)
+  if (kv && typeof kv.get === 'function') {
+    try {
+      const tombstone = await kv.get(`${MIHON_REVOKED_KV_PREFIX}${hash}`);
+      if (tombstone) {
+        return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token revogado' };
+      }
+    } catch {}
   }
 
   try {

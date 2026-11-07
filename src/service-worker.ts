@@ -69,6 +69,30 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
   );
 });
 
+// Explicit cache purge dispatcher for client-side revocations
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  if (!event.data) return;
+  if (event.data.type === 'PURGE_MEDIA' && event.data.mediaId) {
+    const targetId = String(event.data.mediaId);
+    event.waitUntil(
+      caches.open(CACHE_MEDIA).then(async (cache) => {
+        const keys = await cache.keys();
+        for (const req of keys) {
+          if (req.url.includes(`/media/${targetId}`)) {
+            await cache.delete(req);
+          }
+        }
+      })
+    );
+  } else if (event.data.type === 'PURGE_MEDIA_URL' && event.data.url) {
+    event.waitUntil(
+      caches.open(CACHE_MEDIA).then((cache) => cache.delete(event.data.url))
+    );
+  } else if (event.data.type === 'CLEAR_MEDIA_CACHE') {
+    event.waitUntil(caches.delete(CACHE_MEDIA));
+  }
+});
+
 self.addEventListener('fetch', (event: FetchEvent) => {
   // Non-GET requests are never intercepted (strictly Network Only)
   if (event.request.method !== 'GET') return;
@@ -122,17 +146,28 @@ self.addEventListener('fetch', (event: FetchEvent) => {
     return;
   }
 
-  // 2. Public Media Delivery: Cache-First with bounded storage
+  // 2. Public Media Delivery: Cache-First with bounded storage & TTL revalidation
   // Public reader pages, cover thumbnails, banners, and icons (/media/[id])
   if (url.pathname.startsWith('/media/')) {
     const isPreview = url.searchParams.get('preview') === '1' || url.searchParams.get('preview') === 'true';
     if (isPreview) return; // Unpublished preview media must never be stored in CacheStorage
 
+    const MAX_MEDIA_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days local TTL
+
     event.respondWith(
       (async () => {
         const mediaCache = await caches.open(CACHE_MEDIA);
         const cached = await mediaCache.match(event.request);
-        if (cached) return cached;
+        if (cached) {
+          // Check if local cache entry has exceeded maximum client retention age
+          const cachedAt = Number(cached.headers.get('X-Nox-Cached-At') || 0);
+          const isExpired = cachedAt > 0 && Date.now() - cachedAt > MAX_MEDIA_CACHE_AGE_MS;
+          if (!isExpired) {
+            return cached;
+          }
+          // Expired locally: evict and re-fetch from network
+          await mediaCache.delete(event.request);
+        }
 
         try {
           const response = await fetch(event.request);
@@ -140,9 +175,21 @@ self.addEventListener('fetch', (event: FetchEvent) => {
             const cc = response.headers.get('cache-control') || '';
             // Only store public, non-private, non-no-store media
             if (!cc.includes('private') && !cc.includes('no-store')) {
-              await mediaCache.put(event.request, response.clone());
+              // Store with timestamp header to track local cache freshness
+              const headers = new Headers(response.headers);
+              headers.set('X-Nox-Cached-At', String(Date.now()));
+              const bodyBlob = await response.clone().blob();
+              const stampedResponse = new Response(bodyBlob, {
+                status: response.status,
+                statusText: response.statusText,
+                headers
+              });
+              await mediaCache.put(event.request, stampedResponse);
               trimCache(CACHE_MEDIA, MAX_MEDIA_ENTRIES);
             }
+          } else if (response.status === 401 || response.status === 403 || response.status === 404) {
+            // Revoked, private, +18 or deleted: immediately evict from client CacheStorage
+            await mediaCache.delete(event.request);
           }
           return response;
         } catch {

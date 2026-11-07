@@ -29,7 +29,7 @@ async function fetchMihonWorkData(slug: string, platformEnv?: any): Promise<Miho
 
 export const GET = async ({ params, request, url, platform }: any) => {
   const { slug } = params;
-  const auth = await verifyMihonAuth(request);
+  const auth = await verifyMihonAuth(request, platform?.env);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
   let bundle: MihonWorkBundle | null = null;

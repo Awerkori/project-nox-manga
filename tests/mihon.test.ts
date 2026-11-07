@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { hashToken, matchesETag } from '../src/lib/server/mihon';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  hashToken,
+  matchesETag,
+  recordMihonTokenRevocation,
+  verifyMihonAuth,
+  invalidateMihonTokenCache,
+  MIHON_REVOKED_KV_PREFIX
+} from '../src/lib/server/mihon';
 
 describe('Mihon API & Security Helpers', () => {
   it('hashes token consistently with SHA-256', async () => {
@@ -99,5 +106,59 @@ describe('Mihon API & Security Helpers', () => {
     // 6. Publicar novo capítulo (novo ID e timestamp)
     const newChapterEtag = computeChapterPagesEtag({ ...baseChapter, id: 'c2-uuid', published_at: '2026-11-06T00:00:00Z' }, basePages);
     expect(newChapterEtag).not.toBe(baseEtag);
+  });
+
+  it('records Mihon token revocation in KV tombstone and invalidates local cache', async () => {
+    const rawToken = 'nox_mh_test_token_revocation';
+    const tokenHash = await hashToken(rawToken);
+
+    const mockKvStore = new Map<string, string>();
+    const mockKv = {
+      put: vi.fn(async (key: string, val: string, opts?: any) => {
+        mockKvStore.set(key, val);
+      }),
+      get: vi.fn(async (key: string) => {
+        return mockKvStore.get(key) || null;
+      })
+    };
+
+    await recordMihonTokenRevocation(tokenHash, mockKv);
+
+    expect(mockKv.put).toHaveBeenCalledWith(
+      `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
+      expect.stringContaining('"revokedAt"'),
+      { expirationTtl: 300 }
+    );
+    expect(mockKvStore.has(`${MIHON_REVOKED_KV_PREFIX}${tokenHash}`)).toBe(true);
+  });
+
+  it('immediately rejects revoked Mihon token via KV tombstone even if cached in isolate memory', async () => {
+    const rawToken = 'nox_mh_active_session_token';
+    const tokenHash = await hashToken(rawToken);
+
+    const mockKvStore = new Map<string, string>();
+    const mockKv = {
+      put: vi.fn(async (key: string, val: string) => {
+        mockKvStore.set(key, val);
+      }),
+      get: vi.fn(async (key: string) => {
+        return mockKvStore.get(key) || null;
+      })
+    };
+
+    // Simulate an active token previously authenticated and cached in memory
+    invalidateMihonTokenCache();
+
+    // Now write a KV tombstone from "another isolate"
+    await mockKv.put(`${MIHON_REVOKED_KV_PREFIX}${tokenHash}`, JSON.stringify({ revokedAt: Date.now() }));
+
+    const req = new Request('https://projectnox.org/api/mihon/chapter/123/pages', {
+      headers: { Authorization: `Bearer ${rawToken}` }
+    });
+
+    const result = await verifyMihonAuth(req, { COVER_THUMBNAILS: mockKv });
+
+    expect(result.authenticated).toBe(false);
+    expect(result.error).toBe('Token revogado');
   });
 });

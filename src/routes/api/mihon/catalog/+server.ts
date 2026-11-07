@@ -4,7 +4,7 @@ import { verifyMihonAuth } from '$lib/server/mihon';
 import { fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
 
 export const GET = async ({ request, url, platform }: any) => {
-  const auth = await verifyMihonAuth(request);
+  const auth = await verifyMihonAuth(request, platform?.env);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
