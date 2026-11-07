@@ -177,7 +177,8 @@
   async function streamPreloadPage(page: any, signal: AbortSignal, retryCount = 0): Promise<void> {
     if (signal.aborted || !page?.media_id) return;
     const mediaId = page.media_id;
-    const mediaUrl = `/media/${mediaId}`;
+    const mediaBaseUrl = (data as any)?.mediaBaseUrl || '';
+    const mediaUrl = `${mediaBaseUrl}/media/${mediaId}`;
 
     if (preloadedUrls.has(mediaId)) return;
 
@@ -215,7 +216,14 @@
           if (!res.ok && res.status >= 400) {
             throw new Error(`HTTP ${res.status}`);
           }
-          await res.blob();
+          const blob = await res.blob();
+          if (!page.blobUrl && typeof URL !== 'undefined' && URL.createObjectURL) {
+            try {
+              const bUrl = URL.createObjectURL(blob);
+              page.blobUrl = bUrl;
+              createdBlobUrls.push(bUrl);
+            } catch {}
+          }
         } else {
           await new Promise<void>((resolve, reject) => {
             const img = new Image();
@@ -799,6 +807,9 @@
 
   onDestroy(() => {
     preloadAbortController?.abort();
+    for (const bUrl of createdBlobUrls) {
+      try { URL.revokeObjectURL(bUrl); } catch {}
+    }
     if (saveProgressTimer) {
       clearTimeout(saveProgressTimer);
       saveProgressTimer = null;
@@ -1052,6 +1063,7 @@
             {page}
             onSeen={handleSeen}
             eager={index < 2}
+            mediaBaseUrl={(data as any)?.mediaBaseUrl || ''}
           />
         {/each}
       </div>
@@ -1067,6 +1079,7 @@
               page={data.pages[current - 1]}
               onSeen={handleSeen}
               eager={true}
+              mediaBaseUrl={(data as any)?.mediaBaseUrl || ''}
             />
           </div>
         {/if}

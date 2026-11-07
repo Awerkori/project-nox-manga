@@ -1,12 +1,12 @@
 {
-  "activeVersionId": "19901175-6279-4dd3-abcc-f2ad2f39bfa4",
-  "created": "2026-11-07T10:03:57.883Z",
+  "activeVersionId": "e2a170fb-7818-4be8-93a6-2b8b97951252",
+  "created": "2026-11-07T10:17:06.004Z",
   "trafficAllocation": "100%",
   "routes": [
     "projectnox.org/*",
     "www.projectnox.org/*"
   ],
-  "commit": "67f8124",
+  "commit": "4e7acbb",
   "author": "awerkori@gmail.com",
   "bindings": {
     "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
@@ -23,6 +23,7 @@
     "mediaRevocationEnforced": true,
     "failClosedWorkersCachePurge": true,
     "edgeDeclarativeWorkersCaching": true,
-    "readOnlySandboxCompatible": true
+    "readOnlySandboxCompatible": true,
+    "ysqlSessionLifecyclePreserved": true
   }
 }
