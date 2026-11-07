@@ -174,13 +174,18 @@ async function syncWorkerManifest(kv) {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
       const manifestVersion = Number(manifest.version) || 0;
-      workerManifestRevokedSet = new Set(manifest.revokedIds);
-      for (const id of workerManifestRevokedSet) {
-        workerRevokedMediaSet.add(id);
-      }
       if (manifestVersion >= workerManifestVersion) {
-        for (const knownId of Array.from(workerRevokedMediaSet)) {
-          if (!workerManifestRevokedSet.has(knownId)) {
+        workerManifestRevokedSet = new Set(manifest.revokedIds);
+        workerManifestVersion = manifestVersion;
+
+        for (const id of workerManifestRevokedSet) {
+          workerRevokedMediaSet.add(id);
+        }
+
+        const missing = Array.from(workerRevokedMediaSet).filter((id) => !workerManifestRevokedSet.has(id));
+        const batch = missing.slice(0, 10);
+        await Promise.allSettled(
+          batch.map(async (knownId) => {
             try {
               const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
               if (!tombstone) {
@@ -189,9 +194,13 @@ async function syncWorkerManifest(kv) {
             } catch {
               // Fail closed on error
             }
-          }
+          })
+        );
+      } else {
+        for (const id of manifest.revokedIds) {
+          workerRevokedMediaSet.add(id);
+          workerManifestRevokedSet.add(id);
         }
-        workerManifestVersion = manifestVersion;
       }
       workerManifestLoaded = true;
       workerManifestKeyPresent = true;
