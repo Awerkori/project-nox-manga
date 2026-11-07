@@ -1641,5 +1641,218 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(classifyMediaAccess({ status: 'ACTIVE', storage_ready: true, purpose: 'unknown_raw' }).isPublic).toBe(false);
     });
   });
+
+  // =========================================================================
+  // SEÇÃO 17: AUDITORIA DOS QUATRO BLOQUEADORES REAIS APONTADOS PELO CODEX
+  // =========================================================================
+  describe('Seção 17: Auditoria dos Quatro Bloqueadores Reais Apontados pelo Codex', () => {
+    // BLOQUEADOR A: Ausência de KV
+    it('Bloqueador A.1: ausência de binding KV nunca retorna REVOCATION_COMPLETED e registra KV_BINDING_MISSING', async () => {
+      const mediaId = 'a0000001-aaaa-4001-8001-000000000001';
+      const mockCache = createMockCache();
+
+      // Revoke called with no KV binding
+      const res = await revokeMedia(mediaId, { cache: mockCache });
+
+      expect(res.success).toBe(false);
+      expect(res.state).toBe('REVOCATION_PARTIAL');
+      expect(res.tombstoneWritten).toBe(false);
+      expect(res.manifestUpdated).toBe(false);
+      expect(res.errors.some((e: string) => e.includes('KV_BINDING_MISSING'))).toBe(true);
+    });
+
+    it('Bloqueador A.2: falha em KV.put de tombstone impede REVOCATION_COMPLETED e reporta erro', async () => {
+      const mediaId = 'a0000002-aaaa-4002-8002-000000000002';
+      const mockCache = createMockCache();
+      const brokenKv = {
+        put: vi.fn().mockRejectedValue(new Error('KV_STORAGE_UNAVAILABLE')),
+        get: vi.fn().mockResolvedValue(null),
+        delete: vi.fn()
+      };
+
+      const res = await revokeMedia(mediaId, { kv: brokenKv, cache: mockCache });
+
+      expect(res.success).toBe(false);
+      expect(res.state).toBe('REVOCATION_PARTIAL');
+      expect(res.tombstoneWritten).toBe(false);
+      expect(res.errors.some((e: string) => e.includes('TOMBSTONE_WRITE_FAILED'))).toBe(true);
+    });
+
+    // BLOQUEADOR B: Expurgo global vs local
+    it('Bloqueador B.1: expurgo local na Cache API não é confundido com expurgo global', async () => {
+      const mediaId = 'b0000001-bbbb-4001-8001-000000000001';
+      const mockCache = createMockCache();
+      const mockKv = createMockKv();
+      await mockCache.put(`https://projectnox.org/media/${mediaId}`, new Response('cached', { status: 200 }));
+
+      const res = await revokeMedia(mediaId, { kv: mockKv, cache: mockCache });
+
+      expect(res.localPurgeVerified).toBe(true);
+      expect(res.globalPurgeVerified).toBe(false);
+      expect(res.state).toBe('REVOCATION_COMPLETED');
+    });
+
+    it('Bloqueador B.2: requireGlobalPurge marca REVOCATION_PARTIAL se invalidação global não puder ser comprovada', async () => {
+      const mediaId = 'b0000002-bbbb-4002-8002-000000000002';
+      const mockCache = createMockCache();
+      const mockKv = createMockKv();
+
+      const res = await revokeMedia(mediaId, {
+        kv: mockKv,
+        cache: mockCache,
+        requireGlobalPurge: true
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.state).toBe('REVOCATION_PARTIAL');
+      expect(res.localPurgeVerified).toBe(true);
+      expect(res.globalPurgeVerified).toBe(false);
+      expect(res.errors.some((e: string) => e.includes('GLOBAL_PURGE_UNVERIFIABLE'))).toBe(true);
+
+      // Preserva o bloqueio de segurança através do tombstone autoritativo
+      expect(await isMediaRevoked(mediaId, mockKv, { checkTombstone: true })).toBe(true);
+    });
+
+    it('Bloqueador B.3: requireGlobalPurge conclui REVOCATION_COMPLETED quando verificação multi-região aprova', async () => {
+      const mediaId = 'b0000003-bbbb-4003-8003-000000000003';
+      const mockCache = createMockCache();
+      const mockKv = createMockKv();
+      const mockGlobalVerifier = vi.fn().mockResolvedValue(true);
+
+      const res = await revokeMedia(mediaId, {
+        kv: mockKv,
+        cache: mockCache,
+        requireGlobalPurge: true,
+        globalVerifier: mockGlobalVerifier
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.state).toBe('REVOCATION_COMPLETED');
+      expect(res.globalPurgeVerified).toBe(true);
+      expect(mockGlobalVerifier).toHaveBeenCalledWith(mediaId);
+    });
+
+    // BLOQUEADOR C: Concorrência de manifestos & Tombstone como fonte autoritativa
+    it('Bloqueador C.1: RAWV e mesclagem de manifesto preservam IDs sob revogações simultâneas', async () => {
+      const idA = 'c0000001-cccc-4001-8001-00000000000a';
+      const idB = 'c0000001-cccc-4001-8001-00000000000b';
+      const mockKv = createMockKv();
+
+      const [resA, resB] = await Promise.all([
+        revokeMedia(idA, { kv: mockKv }),
+        revokeMedia(idB, { kv: mockKv })
+      ]);
+
+      expect(resA.tombstoneWritten).toBe(true);
+      expect(resB.tombstoneWritten).toBe(true);
+
+      const manifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(manifest.revokedIds).toContain(idA);
+      expect(manifest.revokedIds).toContain(idB);
+    });
+
+    it('Bloqueador C.2: tombstone autoritativo impede restauração de acesso mesmo se manifesto omitir entrada', async () => {
+      const idA = 'c0000002-cccc-4002-8002-00000000000a';
+      const idB = 'c0000002-cccc-4002-8002-00000000000b';
+      const mockKv = createMockKv();
+
+      // Revoke both
+      await revokeMedia(idA, { kv: mockKv });
+      await revokeMedia(idB, { kv: mockKv });
+
+      // Simulate corrupted manifest dropping idB due to simulated race
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 99,
+        updatedAt: Date.now(),
+        revokedIds: [idA] // idB is missing!
+      }));
+
+      clearMemoryRevocationCache();
+
+      // idB must still be recognized as revoked via authoritative tombstone check
+      const isRev = await isMediaRevoked(idB, mockKv, { checkTombstone: true });
+      expect(isRev, 'Tombstone individual deve funcionar como fonte autoritativa de revogação').toBe(true);
+
+      // Route request to media/[id] must reject with HTTP 404
+      mocks.mediaStore.set(idB, {
+        id: idB, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+        access_class: 'PUBLIC', purpose: 'editorial'
+      });
+      const routeRes = await getPublicMediaRoute({
+        locals: {}, params: { id: idB },
+        request: new Request(`https://projectnox.org/media/${idB}`),
+        platform: { env: { COVER_THUMBNAILS: mockKv } },
+        cookies: { getAll: () => [] }
+      });
+      expect(routeRes.status).toBe(404);
+      expect(routeRes.headers.get('Cache-Control')).toContain('no-store');
+    });
+
+    // BLOQUEADOR D: Janela residual de 10 segundos & Cache de Borda
+    it('Bloqueador D.1: rota /media/[id] consulta tombstone autoritativo no MISS e elimina janela residual', async () => {
+      const mediaId = 'd0000001-dddd-4001-8001-000000000001';
+      const mockKv = createMockKv();
+      const mockCache = createMockCache();
+
+      // Simulate isolate having synced manifest with empty list at t=0
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        revokedIds: []
+      }));
+      clearMemoryRevocationCache();
+      await isMediaRevoked('other-id', mockKv); // Syncs empty manifest into isolate memory
+
+      // Another isolate writes authoritative tombstone for mediaId at t=1
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: Date.now(),
+        reason: 'CONFIDENTIAL',
+        state: 'REVOCATION_COMPLETED'
+      }));
+
+      mocks.mediaStore.set(mediaId, {
+        id: mediaId, provider: 'telegram', storage_ready: true, status: 'ACTIVE',
+        access_class: 'PUBLIC', purpose: 'editorial'
+      });
+
+      // Request on current isolate hits route MISS path
+      const res = await getPublicMediaRoute({
+        locals: {}, params: { id: mediaId },
+        request: new Request(`https://projectnox.org/media/${mediaId}`),
+        platform: { env: { COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+        cookies: { getAll: () => [] }
+      });
+
+      // Must be rejected with 404 no-store, not streamed or re-cached
+      expect(res.status).toBe(404);
+      expect(res.headers.get('Cache-Control')).toContain('no-store');
+      expect(await mockCache.match(`https://projectnox.org/media/${mediaId}`)).toBeNull();
+    });
+
+    it('Bloqueador D.2: HITs de borda atendidos antes do Worker são explicitamente reconhecidos como fora do alcance do código do Worker', async () => {
+      // Invariant: Code inside the Worker cannot intercept responses served by edge cache before Worker executes.
+      // Protection requires declarative edge cache purge (ctx.cache.purge).
+      const mediaId = 'd0000002-dddd-4002-8002-000000000002';
+      const mockKv = createMockKv();
+      const mockCtx = {
+        cache: {
+          purge: vi.fn().mockResolvedValue({ success: true })
+        }
+      };
+
+      const res = await revokeMedia(mediaId, {
+        kv: mockKv,
+        ctx: mockCtx,
+        reason: 'SECURITY_INCIDENT'
+      });
+
+      expect(res.workersCachePurged).toBe(1);
+      expect(mockCtx.cache.purge).toHaveBeenCalledWith({
+        tags: [`media-${mediaId}`],
+        pathPrefixes: [`/media/${mediaId}`]
+      });
+    });
+  });
 });
 

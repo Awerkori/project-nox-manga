@@ -274,7 +274,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS)) {
+  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
     return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {

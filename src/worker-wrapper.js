@@ -190,6 +190,21 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
   if (workerRevokedMediaSet.has(mediaId)) return true;
   if (!kv) return Boolean(options?.failClosed);
 
+  if (options?.checkTombstone || options?.forceFresh) {
+    try {
+      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
+      if (tombstone) {
+        workerRevokedMediaSet.add(mediaId);
+        return true;
+      } else {
+        workerRevokedMediaSet.delete(mediaId);
+        return false;
+      }
+    } catch {
+      if (options?.failClosed) return true;
+    }
+  }
+
   const now = Date.now();
   const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
   if (shouldSync) {
@@ -211,7 +226,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     }
   }
 
-  if (options?.forceFresh || options?.checkTombstone || !workerManifestLoaded) {
+  if (!workerManifestLoaded) {
     try {
       const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId).catch(() => null);
       if (tombstone) {

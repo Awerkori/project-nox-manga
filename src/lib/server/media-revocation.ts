@@ -2,6 +2,9 @@ export type RevocationPurgeState =
   | 'PURGE_REQUESTED'
   | 'PURGE_ACCEPTED'
   | 'PURGE_VERIFIED'
+  | 'PURGE_LOCAL_VERIFIED'
+  | 'PURGE_GLOBAL_DISPATCHED'
+  | 'PURGE_GLOBAL_VERIFIED'
   | 'PURGE_FAILED'
   | 'PURGE_SKIPPED';
 
@@ -30,6 +33,8 @@ export interface RevokeMediaOptions {
   accessClass?: string;
   status?: string;
   skipDb?: boolean;
+  requireGlobalPurge?: boolean;
+  globalVerifier?: (mediaId: string) => Promise<boolean>;
 }
 
 export interface PurgeMediaOptions {
@@ -37,6 +42,8 @@ export interface PurgeMediaOptions {
   ctx?: any;
   origin?: string;
   kv?: any;
+  requireGlobalPurge?: boolean;
+  globalVerifier?: (mediaId: string) => Promise<boolean>;
 }
 
 export interface RevokeMediaResult {
@@ -50,6 +57,9 @@ export interface RevokeMediaResult {
   kvPurged: number;
   tombstoneWritten: boolean;
   manifestUpdated: boolean;
+  localPurgeVerified: boolean;
+  globalPurgeDispatched: boolean;
+  globalPurgeVerified: boolean;
   errors: string[];
 }
 
@@ -164,8 +174,8 @@ export function getMemoryRevocationSet(): Set<string> {
 /**
  * Check whether a media ID is revoked across edge isolates and datacenters.
  * Tier 1: Instant in-memory check (0ms, 0 KV reads).
- * Tier 2: Periodic manifest sync from KV (shared state, 1 read per interval per isolate).
- * Tier 3: Direct tombstone lookup on explicit demand or if manifest failed to load.
+ * Tier 2: Authoritative tombstone check when explicitly requested, forced fresh, or on MISS path.
+ * Tier 3: Periodic manifest sync from KV (shared state, 1 read per interval per isolate).
  * Fail-Closed: When failClosed=true, if KV is absent or fails to verify status on a cached item,
  * returns true (revoked) so caller bypasses fast cache and validates against authoritative DB.
  */
@@ -196,8 +206,9 @@ export async function isMediaRevoked(
       const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
       if (manifest && Array.isArray(manifest.revokedIds)) {
         manifestSuccessfullyLoaded = true;
-        memoryRevokedSet = new Set(manifest.revokedIds);
-        if (memoryRevokedSet.has(mediaId)) return true;
+        for (const id of manifest.revokedIds) {
+          memoryRevokedSet.add(id);
+        }
       } else {
         manifestSuccessfullyLoaded = false;
       }
@@ -207,13 +218,13 @@ export async function isMediaRevoked(
     }
   }
 
-  // 2. Direct tombstone check is executed if explicitly requested or if manifest is not reliably loaded
-  const shouldCheckTombstone =
-    Boolean(options?.forceFresh) ||
-    Boolean(options?.checkTombstone) ||
-    !manifestSuccessfullyLoaded;
+  // If in memory set after manifest sync, it is revoked
+  if (memoryRevokedSet.has(mediaId)) {
+    return true;
+  }
 
-  if (shouldCheckTombstone) {
+  // Authoritative tombstone check: if explicitly requested, forced fresh, or if manifest was not loaded
+  if (options?.checkTombstone || options?.forceFresh || !manifestSuccessfullyLoaded) {
     try {
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
@@ -240,12 +251,15 @@ export async function isMediaRevoked(
 export async function purgeMediaVariants(
   mediaId: string,
   options: PurgeMediaOptions & { currentUrl?: string } = {}
-): Promise<{ cachePurged: number; workersCachePurged: number; kvPurged: number; errors: string[] }> {
+): Promise<{ cachePurged: number; workersCachePurged: number; kvPurged: number; localPurgeVerified: boolean; globalPurgeDispatched: boolean; globalPurgeVerified: boolean; errors: string[] }> {
   const { cache, ctx, origin = 'https://projectnox.org', kv, currentUrl } = options;
   const errors: string[] = [];
   let cachePurged = 0;
   let workersCachePurged = 0;
   let kvPurged = 0;
+  let localPurgeVerified = false;
+  let globalPurgeDispatched = false;
+  let globalPurgeVerified = false;
 
   // 1. Purge Cloudflare Workers Caching (declarative edge cache before Worker)
   // Supports ctx.cache.purge, cache.purge from cloudflare:workers, or passed purge hook
@@ -274,6 +288,7 @@ export async function purgeMediaVariants(
         errors.push(`WORKERS_CACHE_PURGE_ERROR: ${errorMsgs}`);
       } else {
         workersCachePurged++;
+        globalPurgeDispatched = true;
       }
     }
   } catch (err: any) {
@@ -326,6 +341,18 @@ export async function purgeMediaVariants(
         errors.push(dr.reason?.message || 'CACHE_DELETE_REJECTED');
       }
     }
+
+    // Verify local purge
+    if (typeof cache.match === 'function') {
+      try {
+        const stillCached = await cache.match(`${origin}/media/${mediaId}`);
+        if (!stillCached) {
+          localPurgeVerified = true;
+        }
+      } catch {
+        // Keep unverified
+      }
+    }
   }
 
   // 3. Purge from KV COVER_THUMBNAILS
@@ -354,7 +381,16 @@ export async function purgeMediaVariants(
     }
   }
 
-  return { cachePurged, workersCachePurged, kvPurged, errors };
+  // 4. Global purge verifier (if custom verifier provided)
+  if (options.globalVerifier && typeof options.globalVerifier === 'function') {
+    try {
+      globalPurgeVerified = await options.globalVerifier(mediaId);
+    } catch (err: any) {
+      errors.push(`GLOBAL_VERIFIER_FAILED: ${err?.message || err}`);
+    }
+  }
+
+  return { cachePurged, workersCachePurged, kvPurged, localPurgeVerified, globalPurgeDispatched, globalPurgeVerified, errors };
 }
 
 /**
@@ -397,7 +433,9 @@ export async function revokeMedia(
     version: 1
   };
 
-  if (options.kv && typeof options.kv.put === 'function') {
+  if (!options.kv || typeof options.kv.put !== 'function') {
+    errors.push('KV_BINDING_MISSING: Persistent KV binding is required for media revocation guarantees');
+  } else {
     try {
       await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify(initialMetadata));
       tombstoneWritten = true;
@@ -405,24 +443,42 @@ export async function revokeMedia(
       errors.push(`TOMBSTONE_WRITE_FAILED: ${err?.message || err}`);
     }
 
-    // 3. Update manifest in KV with retry and merge logic to avoid concurrent overwrite
+    // 3. Update manifest in KV with retry, RAWV (read-after-write verification) and conflict-free set union
     let manifestWriteAttempts = 0;
-    while (manifestWriteAttempts < 3 && !manifestUpdated) {
+    const MAX_MANIFEST_ATTEMPTS = 5;
+    while (manifestWriteAttempts < MAX_MANIFEST_ATTEMPTS && !manifestUpdated) {
       manifestWriteAttempts++;
       try {
         let currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
         if (!currentManifest || !Array.isArray(currentManifest.revokedIds)) {
           currentManifest = { version: 1, updatedAt: revokedAt, revokedIds: [] };
         }
-        const idSet = new Set(currentManifest.revokedIds);
-        idSet.add(mediaId);
-        currentManifest.revokedIds = Array.from(idSet);
-        currentManifest.updatedAt = revokedAt;
-        currentManifest.version = (currentManifest.version || 1) + 1;
-        await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
-        manifestUpdated = true;
+        const idSet = new Set<string>([
+          ...currentManifest.revokedIds,
+          ...Array.from(memoryRevokedSet),
+          mediaId
+        ]);
+        const nextManifest = {
+          version: (currentManifest.version || 1) + 1,
+          updatedAt: Date.now(),
+          revokedIds: Array.from(idSet)
+        };
+        await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(nextManifest));
+
+        // Read-After-Write Verification (RAWV): confirm our write was not overwritten concurrently
+        const verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+        if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
+          manifestUpdated = true;
+          for (const id of verified.revokedIds) {
+            memoryRevokedSet.add(id);
+          }
+        } else {
+          // Concurrent overwrite detected — back off with randomized jitter and retry union merge
+          const jitterMs = 10 * manifestWriteAttempts + Math.floor(Math.random() * 20);
+          await new Promise((r) => setTimeout(r, jitterMs));
+        }
       } catch (manifestErr: any) {
-        if (manifestWriteAttempts >= 3) {
+        if (manifestWriteAttempts >= MAX_MANIFEST_ATTEMPTS) {
           errors.push(`MANIFEST_WRITE_FAILED: ${manifestErr?.message || manifestErr}`);
         }
       }
@@ -434,39 +490,39 @@ export async function revokeMedia(
     cache: options.cache,
     ctx: options.ctx,
     origin: options.origin,
-    kv: options.kv
+    kv: options.kv,
+    requireGlobalPurge: options.requireGlobalPurge,
+    globalVerifier: options.globalVerifier
   });
-  const { cachePurged, workersCachePurged, kvPurged } = purgeResult;
+  const { cachePurged, workersCachePurged, kvPurged, localPurgeVerified, globalPurgeDispatched, globalPurgeVerified } = purgeResult;
   if (purgeResult.errors && purgeResult.errors.length > 0) {
     errors.push(...purgeResult.errors);
     purgeState = 'PURGE_FAILED';
   } else {
-    purgeState = 'PURGE_ACCEPTED';
+    purgeState = localPurgeVerified ? 'PURGE_VERIFIED' : 'PURGE_ACCEPTED';
   }
 
-  // 5. Verify purge on local Cache API if available
-  if (purgeState === 'PURGE_ACCEPTED' && options.cache && typeof options.cache.match === 'function') {
-    try {
-      const origin = options.origin || 'https://projectnox.org';
-      const stillCached = await options.cache.match(`${origin}/media/${mediaId}`);
-      if (!stillCached) {
-        purgeState = 'PURGE_VERIFIED';
-      }
-    } catch {
-      // Keep PURGE_ACCEPTED
-    }
-  }
-
-  // 6. Determine overall revocation state
+  // 5. Determine overall revocation state
+  // Strict rule: Persistence in KV tombstone is mandatory for REVOCATION_COMPLETED.
+  // Absence or failure of KV can never return REVOCATION_COMPLETED.
   let overallState: RevocationOverallState = 'REVOCATION_FAILED';
-  const kvOk = options.kv ? tombstoneWritten : true;
-  if (kvOk && (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED') && errors.length === 0) {
-    overallState = 'REVOCATION_COMPLETED';
+  const persistenceGuaranteed = Boolean(tombstoneWritten);
+  const purgeGuaranteed = (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED' || purgeState === 'PURGE_LOCAL_VERIFIED');
+
+  if (persistenceGuaranteed && purgeGuaranteed && errors.length === 0) {
+    if (options.requireGlobalPurge && !globalPurgeVerified) {
+      overallState = 'REVOCATION_PARTIAL';
+      errors.push('GLOBAL_PURGE_UNVERIFIABLE: Local PoP cache purged, but global CDN edge invalidation cannot be proven synchronously; security preserved via authoritative KV tombstone and fail-closed checks');
+    } else {
+      overallState = 'REVOCATION_COMPLETED';
+    }
   } else if (tombstoneWritten || memoryRevokedSet.has(mediaId)) {
     overallState = 'REVOCATION_PARTIAL';
+  } else {
+    overallState = 'REVOCATION_FAILED';
   }
 
-  // 7. Update tombstone with final purge state
+  // 6. Update tombstone with final purge state
   if (tombstoneWritten && options.kv && typeof options.kv.put === 'function') {
     try {
       const finalMetadata: RevocationMetadata = {
@@ -495,6 +551,9 @@ export async function revokeMedia(
     kvPurged,
     tombstoneWritten,
     manifestUpdated,
+    localPurgeVerified,
+    globalPurgeDispatched,
+    globalPurgeVerified,
     errors
   };
 }
