@@ -92,7 +92,7 @@
 >
   {#if (eager || near) && !broken}<img
       use:setupPageImg
-      src={page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
+      src={(!retry && page.blobUrl) || `${mediaBaseUrl}/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
       alt="Página {page.position}"
       width={page.width || 800}
       height={page.height || 1200}
@@ -104,6 +104,7 @@
       <button
         class="button secondary"
         onclick={() => {
+          page.blobUrl = undefined;
           loaded = false;
           retry++;
           broken = false;

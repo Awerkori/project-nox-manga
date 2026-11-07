@@ -90,6 +90,8 @@
   const preloadedUrls = new SvelteSet<string>();
   const inFlightDownloads = new Map<string, Promise<void>>();
   const createdBlobUrls: string[] = [];
+  const MAX_ACTIVE_BLOBS = 50;
+  const createdBlobEntries: Array<{ url: string; page: any }> = [];
   let activePreloadWorkers = 0;
   let preloadAbortController: AbortController | null = null;
 
@@ -222,6 +224,16 @@
               const bUrl = URL.createObjectURL(blob);
               page.blobUrl = bUrl;
               createdBlobUrls.push(bUrl);
+              createdBlobEntries.push({ url: bUrl, page });
+              if (createdBlobEntries.length > MAX_ACTIVE_BLOBS) {
+                const oldest = createdBlobEntries.shift();
+                if (oldest) {
+                  oldest.page.blobUrl = undefined;
+                  try { URL.revokeObjectURL(oldest.url); } catch {}
+                  const idx = createdBlobUrls.indexOf(oldest.url);
+                  if (idx !== -1) createdBlobUrls.splice(idx, 1);
+                }
+              }
             } catch {}
           }
         } else {

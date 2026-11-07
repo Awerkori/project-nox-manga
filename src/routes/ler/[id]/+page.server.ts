@@ -17,12 +17,13 @@ type ReaderCacheEntry = {
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
 
-function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>): string | undefined {
+export function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>, mediaBaseUrl = ''): string | undefined {
+  const prefix = mediaBaseUrl ? mediaBaseUrl.replace(/\/+$/, '') : '';
   const links = pages
     .slice(0, 2)
     .map((page) => page.media_id)
     .filter((mediaId): mediaId is string => Boolean(mediaId && /^[0-9a-f-]{36}$/i.test(mediaId)))
-    .map((mediaId) => `</media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
+    .map((mediaId) => `<${prefix}/media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
   return links.length ? links.join(', ') : undefined;
 }
 
@@ -57,7 +58,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       const cachedComments = cached.comments || [];
 
       if (!locals.user) {
-        const link = firstPagePreloadHeader(cached.pages);
+        const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
+        const link = firstPagePreloadHeader(cached.pages, mediaBaseUrl);
         const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
         setHeaders({
           'cache-control': isAdultCached
@@ -286,7 +288,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   }
 
   const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
-  const link = firstPagePreloadHeader(pagesData);
+  const link = firstPagePreloadHeader(pagesData, mediaBaseUrl);
   const isAdultChapter = (chapter.works as any)?.content_rating === 'ADULT_18';
   if (!locals.user && !preview) {
     setHeaders({

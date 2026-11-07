@@ -1,12 +1,12 @@
 {
-  "activeVersionId": "be06dd9d-ef11-42c0-882d-fd7e8fcba602",
-  "created": "2026-11-07T10:26:14.365Z",
+  "activeVersionId": "07ab558b-4a5c-4b3e-88e7-c8b6e27fa70c",
+  "created": "2026-11-07T10:34:40.226Z",
   "trafficAllocation": "100%",
   "routes": [
     "projectnox.org/*",
     "www.projectnox.org/*"
   ],
-  "commit": "4e3e50c",
+  "commit": "a98ab60",
   "author": "awerkori@gmail.com",
   "bindings": {
     "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
