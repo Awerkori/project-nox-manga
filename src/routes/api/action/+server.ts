@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { member } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { stripSpoilers } from '$lib/comments';
-import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
+import { createNotification } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import { invalidateObraAuxCache } from '$lib/server/obra-cache';
@@ -878,10 +878,6 @@ export const POST = async ({ request, locals, platform }: any) => {
       });
     } catch (err) {
       console.error('[ACTION] Error dispatching comment mentions:', err);
-    }
-
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(10).catch(() => {}));
     }
   }
 
