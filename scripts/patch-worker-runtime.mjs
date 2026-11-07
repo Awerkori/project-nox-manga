@@ -170,22 +170,10 @@ async function syncWorkerManifest(kv) {
   try {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
-      workerManifestLoaded = true;
-      const newSet = new Set(manifest.revokedIds);
-      for (const knownId of workerRevokedMediaSet) {
-        if (!newSet.has(knownId)) {
-          try {
-            const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
-            if (tombstone) {
-              newSet.add(knownId);
-            }
-          } catch {
-            // Fail closed on KV error: preserve known revocation
-            newSet.add(knownId);
-          }
-        }
+      for (const id of manifest.revokedIds) {
+        workerRevokedMediaSet.add(id);
       }
-      workerRevokedMediaSet = newSet;
+      workerManifestLoaded = true;
       return true;
     } else {
       workerManifestLoaded = false;

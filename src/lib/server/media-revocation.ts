@@ -182,23 +182,10 @@ async function syncManifest(kv: any): Promise<boolean> {
   try {
     const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
-      manifestSuccessfullyLoaded = true;
-      const newSet = new Set<string>(manifest.revokedIds);
-      // Reconcile removed IDs against tombstones before discarding to protect against stale KV read replicas
-      for (const knownId of memoryRevokedSet) {
-        if (!newSet.has(knownId)) {
-          try {
-            const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
-            if (tombstone) {
-              newSet.add(knownId);
-            }
-          } catch {
-            // Fail closed on error: preserve known revocation
-            newSet.add(knownId);
-          }
-        }
+      for (const id of manifest.revokedIds) {
+        memoryRevokedSet.add(id);
       }
-      memoryRevokedSet = newSet;
+      manifestSuccessfullyLoaded = true;
       return true;
     } else {
       manifestSuccessfullyLoaded = false;
