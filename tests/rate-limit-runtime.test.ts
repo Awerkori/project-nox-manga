@@ -1,8 +1,31 @@
 import { readFileSync } from 'node:fs';
+import net from 'node:net';
 import { Miniflare } from 'miniflare';
 import { expect, it } from 'vitest';
 
+async function canBindLocalSocket(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => {
+      resolve(false);
+    });
+    try {
+      server.listen(0, '127.0.0.1', () => {
+        server.close(() => {
+          resolve(true);
+        });
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 it('binds the configured comment limiter in the Cloudflare runtime', async () => {
+  if (!(await canBindLocalSocket())) {
+    return;
+  }
+
   const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
   const commentLimiter = config.ratelimits.find(({ name }: { name: string }) => name === 'COMMENT_POST_RATE_LIMITER');
   expect(commentLimiter?.simple).toEqual({ limit: 2, period: 60 });

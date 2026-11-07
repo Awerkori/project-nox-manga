@@ -1658,14 +1658,36 @@ export async function fetchMediaMetadataFromYugabyte(
         SELECT m.id, m.provider, m.provider_key, m.bot_reference, m.storage_shard_id,
                m.mime, m.sha256, m.bytes, m.width, m.height, m.access_class, m.purpose,
                m.storage_ready, m.status, m.created_by,
-               COALESCE(w.content_rating, w_cov.content_rating) AS work_content_rating,
-               COALESCE(w.published, w_cov.published) AS work_published,
-               c.published_at AS chapter_published_at
-        FROM media m
-        LEFT JOIN pages p ON p.media_id = m.id
-        LEFT JOIN chapters c ON c.id = p.chapter_id
-        LEFT JOIN works w ON w.id = c.work_id
-        LEFT JOIN works w_cov ON w_cov.cover_id = m.id
+               (
+                 EXISTS (
+                   SELECT 1 FROM public.pages p
+                   JOIN public.chapters c ON c.id = p.chapter_id
+                   JOIN public.works w ON w.id = c.work_id
+                   WHERE p.media_id = m.id AND (w.content_rating = 'ADULT_18' OR c.chapter_kind = 'adult')
+                 ) OR EXISTS (
+                   SELECT 1 FROM public.works w_cov
+                   WHERE w_cov.cover_id = m.id AND w_cov.content_rating = 'ADULT_18'
+                 )
+               ) AS is_adult_associated,
+               (
+                 NOT EXISTS (
+                   SELECT 1 FROM public.pages p
+                   JOIN public.chapters c ON c.id = p.chapter_id
+                   JOIN public.works w ON w.id = c.work_id
+                   WHERE p.media_id = m.id AND w.published = false
+                 ) AND NOT EXISTS (
+                   SELECT 1 FROM public.works w_cov
+                   WHERE w_cov.cover_id = m.id AND w_cov.published = false
+                 )
+               ) AS all_works_published,
+               (
+                 NOT EXISTS (
+                   SELECT 1 FROM public.pages p
+                   JOIN public.chapters c ON c.id = p.chapter_id
+                   WHERE p.media_id = m.id AND c.published_at IS NULL
+                 )
+               ) AS all_chapters_published
+        FROM public.media m
         WHERE m.id = $1
         LIMIT 1;
       `;

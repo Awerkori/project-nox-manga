@@ -477,27 +477,28 @@ export const POST = async ({ request, locals, platform }: any) => {
     const finalMaxPage = readRow?.max_page || page;
     const finalCompleted = Boolean(readRow?.completed_at);
 
-    // Award XP atomically if completed (ON CONFLICT DO NOTHING eliminates redundant SELECT)
+    // Award XP atomically if completed (Atomic CTE: INSERT xp_awards + UPDATE members in 1 statement)
     let xpAward: any = null;
     if (finalCompleted) {
-      const awardInsertRes = await executeYugabyteSql<{ id: string }>(
-        `INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, 'read_chapter', NOW())
-         ON CONFLICT (user_id, chapter_id) DO NOTHING
-         RETURNING id;`,
+      const atomicXpRes = await executeYugabyteSql<{ xp: number }>(
+        `WITH new_award AS (
+           INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, $4, 'read_chapter', NOW())
+           ON CONFLICT (user_id, chapter_id) DO NOTHING
+           RETURNING user_id, amount
+         )
+         UPDATE members m
+         SET xp = COALESCE(m.xp, 0) + na.amount
+         FROM new_award na
+         WHERE m.id = na.user_id
+         RETURNING m.xp;`,
         [locals.user.id, cid, wid || null, 150],
         platform?.env
       ).catch(() => ({ rows: [] }));
 
-      const wasNewlyAwarded = awardInsertRes.rows.length > 0;
+      const wasNewlyAwarded = atomicXpRes.rows.length > 0;
       if (wasNewlyAwarded) {
-        const memUpdate = await executeYugabyteSql<{ xp: number }>(
-          `UPDATE members SET xp = COALESCE(xp, 0) + $1 WHERE id = $2 RETURNING xp;`,
-          [150, locals.user.id],
-          platform?.env
-        ).catch(() => ({ rows: [] }));
-
-        const newXp = memUpdate.rows[0]?.xp ?? 0;
+        const newXp = atomicXpRes.rows[0]?.xp ?? 0;
         xpAward = {
           ok: true,
           awarded: true,

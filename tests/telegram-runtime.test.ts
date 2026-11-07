@@ -1,9 +1,32 @@
 import { readFileSync } from 'node:fs';
+import net from 'node:net';
 import { Miniflare } from 'miniflare';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
 
+async function canBindLocalSocket(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => {
+      resolve(false);
+    });
+    try {
+      server.listen(0, '127.0.0.1', () => {
+        server.close(() => {
+          resolve(true);
+        });
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 it('constructs Telegram upload requests in the actual Cloudflare runtime', async () => {
+  if (!(await canBindLocalSocket())) {
+    return;
+  }
+
   const provider = ts.transpileModule(readFileSync('src/lib/server/telegram.ts', 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
   }).outputText;

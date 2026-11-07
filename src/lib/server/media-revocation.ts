@@ -99,16 +99,20 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
   }
 
   // 1.1 Unpublished work and chapter guards (fail closed for unpublished content)
-  if (media.work_published === false) {
+  if (media.work_published === false || media.all_works_published === false) {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_WORK', category: 'PRIVATE' };
   }
-  if (media.chapter_published === false || (media.chapter_published_at === null && (media.purpose === 'chapter_page' || media.purpose === 'staff_chapter' || media.purpose === 'scan_chapter'))) {
+  if (
+    media.chapter_published === false ||
+    media.all_chapters_published === false ||
+    (media.chapter_published_at === null && (media.purpose === 'chapter_page' || media.purpose === 'staff_chapter' || media.purpose === 'scan_chapter'))
+  ) {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_CHAPTER', category: 'PRIVATE' };
   }
 
   // 1.2 Content Rating guards (Adult +18 content is strictly restricted and never public)
   const contentRating = (media.work_content_rating || media.content_rating || '').toString().toUpperCase().trim();
-  if (contentRating === 'ADULT_18' || media.is_adult === true) {
+  if (contentRating === 'ADULT_18' || media.is_adult === true || media.is_adult_associated === true) {
     return { isPublic: false, isExplicitlyPrivate: true, reason: 'CONTENT_RATING_ADULT_18', category: 'RESTRICTED' };
   }
 

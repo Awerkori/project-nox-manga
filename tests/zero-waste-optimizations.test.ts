@@ -423,6 +423,48 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(unpubChapCls.isExplicitlyPrivate).toBe(true);
     expect(unpubChapCls.category).toBe('PRIVATE');
     expect(unpubChapCls.reason).toBe('UNPUBLISHED_CHAPTER');
+
+    // Associated adult content guard
+    const adultAssocMedia = {
+      id: 'adult-assoc-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      is_adult_associated: true
+    };
+    const adultAssocCls = classifyMediaAccess(adultAssocMedia);
+    expect(adultAssocCls.isPublic).toBe(false);
+    expect(adultAssocCls.isExplicitlyPrivate).toBe(true);
+    expect(adultAssocCls.category).toBe('RESTRICTED');
+    expect(adultAssocCls.reason).toBe('CONTENT_RATING_ADULT_18');
+
+    // Associated unpublished work guard
+    const unpubAssocWorkMedia = {
+      id: 'unpub-assoc-w-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      all_works_published: false
+    };
+    const unpubAssocWorkCls = classifyMediaAccess(unpubAssocWorkMedia);
+    expect(unpubAssocWorkCls.isPublic).toBe(false);
+    expect(unpubAssocWorkCls.isExplicitlyPrivate).toBe(true);
+    expect(unpubAssocWorkCls.category).toBe('PRIVATE');
+    expect(unpubAssocWorkCls.reason).toBe('UNPUBLISHED_WORK');
+
+    // Associated unpublished chapter guard
+    const unpubAssocChapMedia = {
+      id: 'unpub-assoc-c-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      all_chapters_published: false
+    };
+    const unpubAssocChapCls = classifyMediaAccess(unpubAssocChapMedia);
+    expect(unpubAssocChapCls.isPublic).toBe(false);
+    expect(unpubAssocChapCls.isExplicitlyPrivate).toBe(true);
+    expect(unpubAssocChapCls.category).toBe('PRIVATE');
+    expect(unpubAssocChapCls.reason).toBe('UNPUBLISHED_CHAPTER');
   });
 
   it('provides zero-SQL fast path for public non-adult 304 revalidation in Mihon chapter pages', () => {
@@ -431,16 +473,18 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(mihonPagesSource).toContain('status: 304');
   });
 
-  it('consolidates reading progress into a single atomic statement with RETURNING in /api/action', () => {
+  it('consolidates reading progress and XP into atomic statements with CTE in /api/action', () => {
     const actionSource = readFileSync('src/routes/api/action/+server.ts', 'utf8');
     // Verifies single atomic UPSERT eliminating SELECT before INSERT
     expect(actionSource).toContain('INSERT INTO reading (user_id, chapter_id, page, max_page, started_at, updated_at, completed_at)');
     expect(actionSource).toContain('ON CONFLICT (user_id, chapter_id) DO UPDATE SET');
     expect(actionSource).toContain('RETURNING page, max_page, completed_at');
-    // Verifies atomic idempotent XP award eliminating separate SELECT id
+    // Verifies atomic idempotent XP award eliminating separate statements via CTE
+    expect(actionSource).toContain('WITH new_award AS (');
     expect(actionSource).toContain('INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)');
     expect(actionSource).toContain('ON CONFLICT (user_id, chapter_id) DO NOTHING');
-    expect(actionSource).toContain('RETURNING id');
+    expect(actionSource).toContain('UPDATE members m');
+    expect(actionSource).toContain('RETURNING m.xp');
   });
 
   it('uses stable canonical image URLs in ReaderPage without cache-busting timestamp queries', () => {
