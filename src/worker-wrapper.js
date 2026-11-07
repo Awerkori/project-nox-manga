@@ -220,7 +220,10 @@ async function syncWorkerManifest(kv) {
             continue;
           }
           workerRevokedMediaSet.add(id);
-          workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          const existing = workerKnownRevocations.get(id);
+          if (!existing || manifestUpdatedAt > existing.timestamp || (manifestUpdatedAt === existing.timestamp && manifestVersion >= existing.version)) {
+            workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          }
           workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
           workerKnownRestorations.delete(id);
         }
@@ -400,6 +403,10 @@ async function syncWorkerManifest(kv) {
           }
           workerRevokedMediaSet.add(id);
           workerManifestRevokedSet.add(id);
+          const existing = workerKnownRevocations.get(id);
+          if (!existing || manifestUpdatedAt > existing.timestamp || (manifestUpdatedAt === existing.timestamp && manifestVersion >= existing.version)) {
+            workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          }
         }
       }
       workerManifestLoaded = true;

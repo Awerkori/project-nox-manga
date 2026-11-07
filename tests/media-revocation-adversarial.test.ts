@@ -2804,6 +2804,99 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRevFromStaleReplica, 'Leitura negativa anterior não pode fabricar restauração que impeça revogação do manifesto').toBe(true);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
     });
+
+    // REVISÃO CODEX POST (RODADA 13): Preservação de Timestamps Mais Recentes e Restauração Remota Confirmada
+    it('Codex Rodada 13 - Item 1: sincronização de manifesto não sobrescreve timestamp de revogação mais recente por timestamp mais antigo', async () => {
+      const mediaId = 'f0000003-ffff-4003-8003-000000000003';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate registra revogação autoritativa com timestamp recente (ex: t=5000) via tombstone
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 5000,
+        status: 'REVOKED'
+      }));
+      const rev1 = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(rev1).toBe(true);
+
+      // 2. Um manifesto com updatedAt=3000 (mais antigo que o tombstone observado) lista mediaId em revokedIds
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 3000,
+        revokedIds: [mediaId]
+      }));
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 3. Suponha que exista um registro de restauração defasado gravado em t=4000
+      // (isto é: t_manifest(3000) < t_restored(4000) < t_tombstone(5000)).
+      // O tombstone foi entretanto temporariamente ausente ou sob reconciliação.
+      // Como o timestamp real da revogação era 5000, o registro de restauração de 4000 NÃO PODE desbloquear a mídia.
+      await rawKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 6000,
+        revokedIds: [] // omitido do novo manifesto
+      }));
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        restoredAt: 4000,
+        version: 1
+      }));
+
+      // Verificação com checkTombstone:
+      // O manifesto v2 omite mediaId, tombstone é null, mas o registro de restauração (t=4000) é ANTERIOR
+      // à revogação conhecida pelo isolate (t=5000). A mídia DEVE permanecer revogada (fail-closed)!
+      const revCheck = await isMediaRevoked(mediaId, rawKv, { forceFresh: true, checkTombstone: true });
+      expect(revCheck, 'Restauração anterior ao timestamp da revogação conhecida não pode desbloquear mídia').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 13 - Item 2: isolate com revogação local não-persistida aceita restauração remota confirmada com timestamp superior', async () => {
+      const mediaId = 'f0000004-ffff-4004-8004-000000000004';
+      clearMemoryRevocationCache();
+
+      // Mock KV onde put de tombstone falha (falha parcial durante revokeMedia local)
+      const rawKv = createMockKv();
+      const failingKv = {
+        ...rawKv,
+        put: vi.fn(async (key: string, val: string) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            throw new Error('KV write timeout on tombstone');
+          }
+          return rawKv.put(key, val);
+        }),
+        get: rawKv.get.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // 1. Isolate executa revokeMedia localmente, mas sofre falha de escrita no KV
+      const revokeRes = await revokeMedia(mediaId, { kv: failingKv });
+      expect(revokeRes.success).toBe(false);
+      expect(revokeRes.state).toBe('REVOCATION_PARTIAL');
+
+      // O isolate protege a mídia localmente (fail-closed)
+      expect(await isMediaRevoked(mediaId, rawKv)).toBe(true);
+
+      // 2. Mais tarde, outro isolate ou administrador realiza restauração comprovada com timestamp futuro
+      const futureTime = Date.now() + 10000;
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: futureTime,
+        revokedIds: [],
+        restoredIds: [mediaId],
+        restorations: { [mediaId]: futureTime }
+      }));
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        restoredAt: futureTime,
+        version: 10
+      }));
+
+      // 3. Ao sincronizar o novo manifesto ou consultar a mídia com checkTombstone,
+      // a evidência positiva de restauração remota (com timestamp > revogação local) DEVE reconciliar e desbloquear a mídia
+      const isRevAfterRestoration = await isMediaRevoked(mediaId, rawKv, { forceFresh: true, checkTombstone: true });
+      expect(isRevAfterRestoration, 'Restauração remota confirmada com evidência positiva deve desbloquear isolate com revogação parcial').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+    });
   });
 });
 

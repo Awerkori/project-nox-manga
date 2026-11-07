@@ -230,7 +230,11 @@ async function syncManifest(kv: any): Promise<boolean> {
             continue; // ID was restored in a newer version/timestamp; skip
           }
           memoryRevokedSet.add(id);
-          knownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          const existing = knownRevocations.get(id);
+          if (!existing || manifestUpdatedAt > existing.timestamp || (manifestUpdatedAt === existing.timestamp && manifestVersion >= existing.version)) {
+            knownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          }
+          perIdRevocationSeq.set(id, ++globalRevocationSeq);
           knownRestorations.delete(id);
         }
 
@@ -295,7 +299,6 @@ async function syncManifest(kv: any): Promise<boolean> {
                 if (
                   manifestSyncGeneration !== syncGen ||
                   inFlightRevocations.has(restoredId) ||
-                  locallyInitiatedRevocations.has(restoredId) ||
                   lastManifestRevokedSet.has(restoredId) ||
                   (perIdRevocationSeq.get(restoredId) || 0) !== startSeq
                 ) {
@@ -365,11 +368,11 @@ async function syncManifest(kv: any): Promise<boolean> {
                 let restorationTs = manifestUpdatedAt;
                 let restorationVer = manifestVersion;
 
-                if (!known || known.timestamp === 0) {
-                  canRestore = true;
-                } else {
+                if ((known && known.timestamp > 0) || locallyInitiatedRevocations.has(knownId)) {
+                  const knownTs = known?.timestamp ?? 0;
+                  const knownVer = known?.version ?? 0;
                   const knownRest = knownRestorations.get(knownId);
-                  if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
+                  if (knownRest && (knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
                     canRestore = true;
                     hasActualRestorationEvidence = true;
                     restorationTs = knownRest.timestamp;
@@ -380,7 +383,7 @@ async function syncManifest(kv: any): Promise<boolean> {
                       if (resRecord) {
                         const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                         const recVer = Number(resRecord.version) || 0;
-                        if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
+                        if (recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
                           canRestore = true;
                           hasActualRestorationEvidence = true;
                           restorationTs = recTs;
@@ -389,6 +392,8 @@ async function syncManifest(kv: any): Promise<boolean> {
                       }
                     } catch {}
                   }
+                } else if (!known || known.timestamp === 0) {
+                  canRestore = true;
                 }
 
                 if (
@@ -422,6 +427,10 @@ async function syncManifest(kv: any): Promise<boolean> {
           }
           memoryRevokedSet.add(id);
           lastManifestRevokedSet.add(id);
+          const existing = knownRevocations.get(id);
+          if (!existing || manifestUpdatedAt > existing.timestamp || (manifestUpdatedAt === existing.timestamp && manifestVersion >= existing.version)) {
+            knownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          }
         }
       }
 
@@ -521,7 +530,7 @@ export async function isMediaRevoked(
 
         // B. If manifest is present and omits mediaId:
         if (manifestSuccessfullyLoaded && manifestKeyPresent && !lastManifestRevokedSet.has(mediaId)) {
-          if (locallyInitiatedRevocations.has(mediaId) || inFlightRevocations.has(mediaId)) {
+          if (inFlightRevocations.has(mediaId)) {
             return true;
           }
           const known = knownRevocations.get(mediaId);
@@ -538,9 +547,11 @@ export async function isMediaRevoked(
           let restorationTs = currentManifestUpdatedAt;
           let restorationVer = currentManifestVersion;
 
-          if (known && known.timestamp > 0) {
+          if ((known && known.timestamp > 0) || locallyInitiatedRevocations.has(mediaId)) {
             const knownRest = knownRestorations.get(mediaId);
-            if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
+            const knownTs = known?.timestamp ?? 0;
+            const knownVer = known?.version ?? 0;
+            if (knownRest && (knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version > knownVer))) {
               hasRestorationEvidence = true;
               restorationTs = knownRest.timestamp;
               restorationVer = knownRest.version;
@@ -550,7 +561,7 @@ export async function isMediaRevoked(
                 if (resRecord) {
                   const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
                   const recVer = Number(resRecord.version) || 0;
-                  if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
+                  if (recTs > knownTs || (recTs === knownTs && recVer > knownVer)) {
                     hasRestorationEvidence = true;
                     restorationTs = recTs;
                     restorationVer = recVer;
@@ -567,7 +578,6 @@ export async function isMediaRevoked(
           // Race Condition Guard (P1): Revalidate in-flight and sequence after any KV await
           if (
             inFlightRevocations.has(mediaId) ||
-            locallyInitiatedRevocations.has(mediaId) ||
             lastManifestRevokedSet.has(mediaId) ||
             (perIdRevocationSeq.get(mediaId) || 0) !== startSeq
           ) {
