@@ -225,7 +225,7 @@ async function syncManifest(kv: any): Promise<boolean> {
 
         // 1. Add all currently revoked IDs from manifest to isolate memory and record metadata unless superseded by newer restoration
         const revocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
-        for (const id of lastManifestRevokedSet) {
+        for (const id of Array.from(lastManifestRevokedSet)) {
           const hasPerIdTs = Object.prototype.hasOwnProperty.call(revocationsMap, id);
           const perIdRevocationTs = hasPerIdTs ? Number(revocationsMap[id]) || 0 : 0;
           const isLegacy = !hasPerIdTs;
@@ -235,9 +235,47 @@ async function syncManifest(kv: any): Promise<boolean> {
           // Unrelated manifest writes must not advance the revocation timestamp of legacy entries past authentic restorations.
           const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
 
-          if (restoration && (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
-            lastManifestRevokedSet.delete(id);
-            continue; // ID was restored; skip
+          if (restoration) {
+            if (isLegacy) {
+              // Ambiguous legacy revocation: verify tombstone before discarding!
+              // During a rolling deployment, an older worker can revoke a previously restored ID
+              // and publish a legacy manifest entry without per-ID timestamps.
+              let tombstoneExists = false;
+              let tombstoneTs = 0;
+              try {
+                const tombstone = await kv.get(REVOCATION_KEY_PREFIX + id);
+                if (tombstone) {
+                  tombstoneExists = true;
+                  tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                    else if (parsed?.timestamp) tombstoneTs = Number(parsed.timestamp);
+                    else if (typeof parsed === 'number') tombstoneTs = parsed;
+                  } catch {}
+                }
+              } catch {
+                // Fail closed on KV read error
+                tombstoneExists = true;
+                tombstoneTs = restoration.timestamp + 1;
+              }
+
+              if (tombstoneExists && (tombstoneTs >= restoration.timestamp || !tombstoneTs)) {
+                memoryRevokedSet.add(id);
+                if (!existing || tombstoneTs > existing.timestamp) {
+                  knownRevocations.set(id, { timestamp: tombstoneTs || manifestUpdatedAt, version: manifestVersion, isLegacy: false });
+                }
+                perIdRevocationSeq.set(id, ++globalRevocationSeq);
+                knownRestorations.delete(id);
+                continue;
+              } else {
+                lastManifestRevokedSet.delete(id);
+                continue;
+              }
+            } else if (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+              lastManifestRevokedSet.delete(id);
+              continue; // ID was restored; skip
+            }
           }
           memoryRevokedSet.add(id);
           if (!existing) {
@@ -438,15 +476,49 @@ async function syncManifest(kv: any): Promise<boolean> {
       } else {
         // Manifest is older than our known version/timestamp - only merge IDs that have NOT been superseded by known restorations
         const olderRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
-        for (const id of manifest.revokedIds) {
+        for (const id of Array.from(manifest.revokedIds)) {
           const hasPerIdTs = Object.prototype.hasOwnProperty.call(olderRevocationsMap, id);
           const perIdRevocationTs = hasPerIdTs ? Number(olderRevocationsMap[id]) || 0 : 0;
           const isLegacy = !hasPerIdTs;
           const existing = knownRevocations.get(id);
           const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
           const restoration = knownRestorations.get(id);
-          if (restoration && (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
-            continue; // Skip! ID was restored after this older manifest was written
+          if (restoration) {
+            if (isLegacy) {
+              let tombstoneExists = false;
+              let tombstoneTs = 0;
+              try {
+                const tombstone = await kv.get(REVOCATION_KEY_PREFIX + id);
+                if (tombstone) {
+                  tombstoneExists = true;
+                  tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                    else if (parsed?.timestamp) tombstoneTs = Number(parsed.timestamp);
+                    else if (typeof parsed === 'number') tombstoneTs = parsed;
+                  } catch {}
+                }
+              } catch {
+                tombstoneExists = true;
+                tombstoneTs = restoration.timestamp + 1;
+              }
+
+              if (tombstoneExists && (tombstoneTs >= restoration.timestamp || !tombstoneTs)) {
+                memoryRevokedSet.add(id);
+                lastManifestRevokedSet.add(id);
+                if (!existing || tombstoneTs > existing.timestamp) {
+                  knownRevocations.set(id, { timestamp: tombstoneTs || manifestUpdatedAt, version: manifestVersion, isLegacy: false });
+                }
+                perIdRevocationSeq.set(id, ++globalRevocationSeq);
+                knownRestorations.delete(id);
+                continue;
+              } else {
+                continue; // Skip! ID was restored after this older manifest was written
+              }
+            } else if (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+              continue; // Skip! ID was restored after this older manifest was written
+            }
           }
           memoryRevokedSet.add(id);
           lastManifestRevokedSet.add(id);

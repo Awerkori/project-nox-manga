@@ -3262,6 +3262,63 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRev, 'Entrada legada de snapshot não pode bloquear mídia que possui registro de restauração durável').toBe(false);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
     });
+
+    it('Codex Rodada 18 - Item 1: verifica tombstone para entradas legadas antes de descartar em isolate com restauração prévia', async () => {
+      const mediaId = 'e0000018-ffff-4018-8018-000000000018';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate executa ou registra restauração prévia em t=2000
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        restoredAt: 2000,
+        version: 5
+      }));
+      // Sincroniza estado para que isolate tenha mediaId em knownRestorations
+      await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+
+      // 2. Durante rolling deployment, worker legado re-revoga a mídia em t=3000
+      // gravando tombstone em KV e publicando manifesto legado sem timestamp por-ID
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        revokedAt: 3000,
+        reason: 'RE_REVOKED_BY_OLDER_WORKER'
+      }));
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 6,
+        updatedAt: 3000,
+        revokedIds: [mediaId],
+        restoredIds: []
+      }));
+
+      // 3. O isolate existente (que lembra da restauração t=2000) sincroniza o manifesto
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 4. A entrada legada não pode ser descartada cegamente: o isolate deve verificar o tombstone
+      // e confirmar que t=3000 >= t=2000, mantendo a mídia bloqueada em memória e no fast-path
+      expect(getMemoryRevocationSet().has(mediaId), 'Entrada legada re-revogada deve ser mantida em memória').toBe(true);
+      const isRev = await isMediaRevoked(mediaId, rawKv);
+      expect(isRev, 'Mídia re-revogada por worker legado deve permanecer revogada').toBe(true);
+
+      // 5. Caso contrário: se o tombstone estivesse ausente (deleção prévia), a entrada legada defasada é descartada
+      const staleMediaId = 'e0000018-ffff-4018-8018-000000000019';
+      await rawKv.put(`${REVOCATION_RESTORATION_KEY_PREFIX}${staleMediaId}`, JSON.stringify({
+        mediaId: staleMediaId,
+        restoredAt: 2000,
+        version: 5
+      }));
+      await isMediaRevoked(staleMediaId, rawKv, { checkTombstone: true });
+
+      // Manifesto legado ainda lista staleMediaId, mas tombstone em KV está nulo
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 7,
+        updatedAt: 3500,
+        revokedIds: [staleMediaId],
+        restoredIds: []
+      }));
+      await isMediaRevoked(staleMediaId, rawKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(staleMediaId), 'Entrada legada sem tombstone deve ser descartada como defasada').toBe(false);
+    });
   });
 });
 

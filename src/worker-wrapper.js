@@ -215,7 +215,7 @@ async function syncWorkerManifest(kv) {
 
         // 1. Add all currently revoked IDs from manifest unless superseded by newer known restoration
         const workerRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
-        for (const id of workerManifestRevokedSet) {
+        for (const id of Array.from(workerManifestRevokedSet)) {
           const hasPerIdTs = Object.prototype.hasOwnProperty.call(workerRevocationsMap, id);
           const perIdRevocationTs = hasPerIdTs ? Number(workerRevocationsMap[id]) || 0 : 0;
           const isLegacy = !hasPerIdTs;
@@ -223,9 +223,43 @@ async function syncWorkerManifest(kv) {
           const existing = workerKnownRevocations.get(id);
           const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
 
-          if (restoration && (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
-            workerManifestRevokedSet.delete(id);
-            continue;
+          if (restoration) {
+            if (isLegacy) {
+              let tombstoneExists = false;
+              let tombstoneTs = 0;
+              try {
+                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + id);
+                if (tombstone) {
+                  tombstoneExists = true;
+                  tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                    else if (parsed?.timestamp) tombstoneTs = Number(parsed.timestamp);
+                    else if (typeof parsed === 'number') tombstoneTs = parsed;
+                  } catch {}
+                }
+              } catch {
+                tombstoneExists = true;
+                tombstoneTs = restoration.timestamp + 1;
+              }
+
+              if (tombstoneExists && (tombstoneTs >= restoration.timestamp || !tombstoneTs)) {
+                workerRevokedMediaSet.add(id);
+                if (!existing || tombstoneTs > existing.timestamp) {
+                  workerKnownRevocations.set(id, { timestamp: tombstoneTs || manifestUpdatedAt, version: manifestVersion, isLegacy: false });
+                }
+                workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
+                workerKnownRestorations.delete(id);
+                continue;
+              } else {
+                workerManifestRevokedSet.delete(id);
+                continue;
+              }
+            } else if (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+              workerManifestRevokedSet.delete(id);
+              continue;
+            }
           }
           workerRevokedMediaSet.add(id);
           if (!existing) {
@@ -414,15 +448,49 @@ async function syncWorkerManifest(kv) {
       } else {
         // Manifest is older than known version/timestamp - only merge IDs not superseded by known restorations
         const olderRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
-        for (const id of manifest.revokedIds) {
+        for (const id of Array.from(manifest.revokedIds)) {
           const hasPerIdTs = Object.prototype.hasOwnProperty.call(olderRevocationsMap, id);
           const perIdRevocationTs = hasPerIdTs ? Number(olderRevocationsMap[id]) || 0 : 0;
           const isLegacy = !hasPerIdTs;
           const existing = workerKnownRevocations.get(id);
           const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
           const restoration = workerKnownRestorations.get(id);
-          if (restoration && (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
-            continue; // Skip! ID was restored after this older manifest was written
+          if (restoration) {
+            if (isLegacy) {
+              let tombstoneExists = false;
+              let tombstoneTs = 0;
+              try {
+                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + id);
+                if (tombstone) {
+                  tombstoneExists = true;
+                  tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                    else if (parsed?.timestamp) tombstoneTs = Number(parsed.timestamp);
+                    else if (typeof parsed === 'number') tombstoneTs = parsed;
+                  } catch {}
+                }
+              } catch {
+                tombstoneExists = true;
+                tombstoneTs = restoration.timestamp + 1;
+              }
+
+              if (tombstoneExists && (tombstoneTs >= restoration.timestamp || !tombstoneTs)) {
+                workerRevokedMediaSet.add(id);
+                workerManifestRevokedSet.add(id);
+                if (!existing || tombstoneTs > existing.timestamp) {
+                  workerKnownRevocations.set(id, { timestamp: tombstoneTs || manifestUpdatedAt, version: manifestVersion, isLegacy: false });
+                }
+                workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
+                workerKnownRestorations.delete(id);
+                continue;
+              } else {
+                continue; // Skip! ID was restored after this older manifest was written
+              }
+            } else if (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+              continue; // Skip! ID was restored after this older manifest was written
+            }
           }
           workerRevokedMediaSet.add(id);
           workerManifestRevokedSet.add(id);
