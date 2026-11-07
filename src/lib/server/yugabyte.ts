@@ -1655,11 +1655,18 @@ export async function fetchMediaMetadataFromYugabyte(
     `media_${mediaId}`,
     async () => {
       const sql = `
-        SELECT id, provider, provider_key, bot_reference, storage_shard_id,
-               mime, sha256, bytes, width, height, access_class, purpose,
-               storage_ready, status, created_by
-        FROM media
-        WHERE id = $1
+        SELECT m.id, m.provider, m.provider_key, m.bot_reference, m.storage_shard_id,
+               m.mime, m.sha256, m.bytes, m.width, m.height, m.access_class, m.purpose,
+               m.storage_ready, m.status, m.created_by,
+               COALESCE(w.content_rating, w_cov.content_rating) AS work_content_rating,
+               COALESCE(w.published, w_cov.published) AS work_published,
+               c.published_at AS chapter_published_at
+        FROM media m
+        LEFT JOIN pages p ON p.media_id = m.id
+        LEFT JOIN chapters c ON c.id = p.chapter_id
+        LEFT JOIN works w ON w.id = c.work_id
+        LEFT JOIN works w_cov ON w_cov.cover_id = m.id
+        WHERE m.id = $1
         LIMIT 1;
       `;
       const res = await executeYugabyteSql(sql, [mediaId], platformEnv);

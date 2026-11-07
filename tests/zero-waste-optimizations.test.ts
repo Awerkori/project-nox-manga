@@ -375,4 +375,77 @@ describe('Zero Waste Cloudflare Optimizations', () => {
     expect(mihonPagesSource).toContain("error: 'Conteúdo Adulto (+18)");
     expect(mihonPagesSource).toContain("'Cache-Control': 'private, no-cache, no-store, must-revalidate'");
   });
+
+  it('restricts adult +18 media in classifyMediaAccess and prevents public edge caching', async () => {
+    const { classifyMediaAccess } = await import('../src/lib/server/media-revocation');
+
+    // Adult work page must fail public classification
+    const adultMedia = {
+      id: 'adult-page-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      work_content_rating: 'ADULT_18'
+    };
+    const adultCls = classifyMediaAccess(adultMedia);
+    expect(adultCls.isPublic).toBe(false);
+    expect(adultCls.isExplicitlyPrivate).toBe(true);
+    expect(adultCls.category).toBe('RESTRICTED');
+    expect(adultCls.reason).toBe('CONTENT_RATING_ADULT_18');
+
+    // Unpublished work page must fail public classification
+    const unpubWorkMedia = {
+      id: 'unpub-work-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      work_published: false
+    };
+    const unpubWorkCls = classifyMediaAccess(unpubWorkMedia);
+    expect(unpubWorkCls.isPublic).toBe(false);
+    expect(unpubWorkCls.isExplicitlyPrivate).toBe(true);
+    expect(unpubWorkCls.category).toBe('PRIVATE');
+    expect(unpubWorkCls.reason).toBe('UNPUBLISHED_WORK');
+
+    // Unpublished chapter page must fail public classification
+    const unpubChapMedia = {
+      id: 'unpub-chap-1',
+      status: 'ACTIVE',
+      storage_ready: true,
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      chapter_published_at: null
+    };
+    const unpubChapCls = classifyMediaAccess(unpubChapMedia);
+    expect(unpubChapCls.isPublic).toBe(false);
+    expect(unpubChapCls.isExplicitlyPrivate).toBe(true);
+    expect(unpubChapCls.category).toBe('PRIVATE');
+    expect(unpubChapCls.reason).toBe('UNPUBLISHED_CHAPTER');
+  });
+
+  it('provides zero-SQL fast path for public non-adult 304 revalidation in Mihon chapter pages', () => {
+    const mihonPagesSource = readFileSync('src/routes/api/mihon/chapter/[id]/pages/+server.ts', 'utf8');
+    expect(mihonPagesSource).toContain("chapter.content_rating !== 'ADULT_18' && matchesETag(request.headers.get('if-none-match'), etag)");
+    expect(mihonPagesSource).toContain('status: 304');
+  });
+
+  it('consolidates reading progress into a single atomic statement with RETURNING in /api/action', () => {
+    const actionSource = readFileSync('src/routes/api/action/+server.ts', 'utf8');
+    // Verifies single atomic UPSERT eliminating SELECT before INSERT
+    expect(actionSource).toContain('INSERT INTO reading (user_id, chapter_id, page, max_page, started_at, updated_at, completed_at)');
+    expect(actionSource).toContain('ON CONFLICT (user_id, chapter_id) DO UPDATE SET');
+    expect(actionSource).toContain('RETURNING page, max_page, completed_at');
+    // Verifies atomic idempotent XP award eliminating separate SELECT id
+    expect(actionSource).toContain('INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)');
+    expect(actionSource).toContain('ON CONFLICT (user_id, chapter_id) DO NOTHING');
+    expect(actionSource).toContain('RETURNING id');
+  });
+
+  it('uses stable canonical image URLs in ReaderPage without cache-busting timestamp queries', () => {
+    const readerPageSource = readFileSync('src/lib/components/ReaderPage.svelte', 'utf8');
+    expect(readerPageSource).not.toContain('&_t=');
+    expect(readerPageSource).toContain('page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`');
+  });
 });

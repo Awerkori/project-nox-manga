@@ -90,10 +90,22 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
     const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
     const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+    const isAdultRestricted = accessClassification.category === 'RESTRICTED' && accessClassification.reason === 'CONTENT_RATING_ADULT_18';
+    let isAdultAllowed = false;
+    if (isAdultRestricted) {
+      const ageCookie = cookies.get('nox-age-status');
+      const sessionAgeStatus = verifiedSession?.profile?.age_status;
+      if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
+        isAdultAllowed = true;
+      }
+    }
 
-    if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
-      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
-        status: 404,
+    if (!isStaff && !isOwner && !isAuthenticatedAllowed && !isAdultAllowed) {
+      return new Response(JSON.stringify({
+        error: isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+        age_restricted: isAdultRestricted
+      }), {
+        status: isAdultRestricted ? 403 : 404,
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',

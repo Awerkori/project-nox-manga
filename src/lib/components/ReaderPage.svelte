@@ -92,7 +92,7 @@
 >
   {#if (eager || near) && !broken}<img
       use:setupPageImg
-      src={(!retry && page.blobUrl) || `${mediaBaseUrl}/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
+      src={page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`}
       alt="Página {page.position}"
       width={page.width || 800}
       height={page.height || 1200}

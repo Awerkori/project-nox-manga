@@ -205,6 +205,13 @@
 
     const downloadPromise = (async () => {
       try {
+        if (page.blobUrl) {
+          preloadedUrls.add(mediaId);
+          preloadedCount = preloadedUrls.size;
+          preloadProgressPct = Math.min(100, Math.round((preloadedCount / data.pages.length) * 100));
+          return;
+        }
+
         const isNearViewport = Math.abs(page.position - current) <= 2;
 
         if (!isNearViewport) {
@@ -218,24 +225,7 @@
           if (!res.ok && res.status >= 400) {
             throw new Error(`HTTP ${res.status}`);
           }
-          const blob = await res.blob();
-          if (!page.blobUrl && typeof URL !== 'undefined' && URL.createObjectURL) {
-            try {
-              const bUrl = URL.createObjectURL(blob);
-              page.blobUrl = bUrl;
-              createdBlobUrls.push(bUrl);
-              createdBlobEntries.push({ url: bUrl, page });
-              if (createdBlobEntries.length > MAX_ACTIVE_BLOBS) {
-                const oldest = createdBlobEntries.shift();
-                if (oldest) {
-                  oldest.page.blobUrl = undefined;
-                  try { URL.revokeObjectURL(oldest.url); } catch {}
-                  const idx = createdBlobUrls.indexOf(oldest.url);
-                  if (idx !== -1) createdBlobUrls.splice(idx, 1);
-                }
-              }
-            } catch {}
-          }
+          await res.arrayBuffer();
         } else {
           await new Promise<void>((resolve, reject) => {
             const img = new Image();

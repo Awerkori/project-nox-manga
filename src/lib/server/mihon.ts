@@ -22,6 +22,18 @@ export interface MihonAuthResult {
   error?: string;
 }
 
+const MIHON_AUTH_CACHE_TTL_MS = 60_000;
+const MAX_MIHON_AUTH_CACHE = 500;
+const mihonAuthCache = new Map<string, { timestamp: number; result: MihonAuthResult }>();
+
+export function invalidateMihonTokenCache(tokenHash?: string) {
+  if (tokenHash) {
+    mihonAuthCache.delete(tokenHash);
+  } else {
+    mihonAuthCache.clear();
+  }
+}
+
 export async function verifyMihonAuth(request: Request, platformEnv?: any): Promise<MihonAuthResult> {
   const authHeader = request.headers.get('Authorization') || '';
   const match = authHeader.match(/^Bearer\s+([A-Za-z0-9_\-]+)$/i);
@@ -32,6 +44,11 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
 
   const rawToken = match[1];
   const hash = await hashToken(rawToken);
+
+  const cached = mihonAuthCache.get(hash);
+  if (cached && Date.now() - cached.timestamp < MIHON_AUTH_CACHE_TTL_MS) {
+    return cached.result;
+  }
 
   try {
     const res = await executeYugabyteSql(
@@ -60,11 +77,18 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
       is_test: Boolean(row.is_test)
     };
 
-    return {
+    const authResult: MihonAuthResult = {
       authenticated: true,
       user: member,
       ageStatus: member.age_status || 'UNKNOWN'
     };
+
+    if (mihonAuthCache.size >= MAX_MIHON_AUTH_CACHE) {
+      const oldestKey = mihonAuthCache.keys().next().value;
+      if (oldestKey) mihonAuthCache.delete(oldestKey);
+    }
+    mihonAuthCache.set(hash, { timestamp: Date.now(), result: authResult });
+    return authResult;
   } catch (err: any) {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Erro ao verificar token' };
   }

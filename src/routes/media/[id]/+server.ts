@@ -313,8 +313,17 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
     const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
     const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+    const isAdultRestricted = accessClassification.category === 'RESTRICTED' && accessClassification.reason === 'CONTENT_RATING_ADULT_18';
+    let isAdultAllowed = false;
+    if (isAdultRestricted) {
+      const ageCookie = cookies.get('nox-age-status');
+      const sessionAgeStatus = verifiedSession?.profile?.age_status;
+      if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
+        isAdultAllowed = true;
+      }
+    }
 
-    if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
+    if (!isStaff && !isOwner && !isAuthenticatedAllowed && !isAdultAllowed) {
       // NOTE: Leitura não autorizada NÃO é revogação administrativa; não grava tombstone nem altera manifesto KV.
       // Porém, purga qualquer cache público residual da borda para garantir fail-closed contra entradas antigas.
       if (cache || platform?.context?.cache) {
@@ -330,35 +339,44 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           platform.context.waitUntil(purgePromise);
         }
       }
-      return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
-        status: 404,
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({
+        error: isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+        age_restricted: isAdultRestricted
+      }), {
+        status: isAdultRestricted ? 403 : 404,
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
           'CDN-Cache-Control': 'no-store',
           'Cloudflare-CDN-Cache-Control': 'no-store',
           'Pragma': 'no-cache',
-          'Expires': '0'
+          'Expires': '0',
+          'Vary': 'Cookie, Authorization'
         }
       });
     }
 
-    // Authorized access to non-public media: redirect to dedicated private endpoint
-    // to strictly prevent edge CDN caching under the /media/* zone rule.
-    return new Response(null, {
-      status: 307,
-      headers: {
-        'Location': `/api/media/${params.id}${url.search}`,
-        'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
-        'CDN-Cache-Control': 'no-store',
-        'Cloudflare-CDN-Cache-Control': 'no-store',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Vary': 'Cookie, Authorization'
-      }
-    });
+    if (isAdultAllowed && !isStaff && !isOwner && !isAuthenticatedAllowed) {
+      // Proceed to serve the media, but ensure headers are strictly private
+    } else if (media.access_class !== 'PUBLIC' && !isAdultRestricted) {
+      // Authorized access to non-public media: redirect to dedicated private endpoint
+      // to strictly prevent edge CDN caching under the /media/* zone rule.
+      return new Response(null, {
+        status: 307,
+        headers: {
+          'Location': `/api/media/${params.id}${url.search}`,
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Vary': 'Cookie, Authorization'
+        }
+      });
+    }
   }
 
+  const isPrivateDelivery = !isPublic || accessClassification.category === 'RESTRICTED';
   const headers: Record<string, string> = {
     'Content-Type': media.mime || 'image/jpeg',
     'X-Content-Type-Options': 'nosniff',
@@ -373,6 +391,13 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     'Accept-Ranges': 'bytes',
     'X-Media-Cache': 'MISS'
   };
+
+  if (isPrivateDelivery) {
+    headers['Cache-Control'] = 'private, max-age=86400, no-transform';
+    headers['CDN-Cache-Control'] = 'no-store';
+    headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
+    headers['Vary'] = 'Cookie, Authorization';
+  }
 
   if (media.bytes && Number(media.bytes) > 0) {
     headers['Content-Length'] = String(media.bytes);

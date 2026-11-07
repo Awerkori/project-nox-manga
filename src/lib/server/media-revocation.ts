@@ -98,6 +98,20 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
     return { isPublic: false, isExplicitlyPrivate: false, reason: media.status ? `INACTIVE_STATUS_${media.status}` : 'STATUS_MISSING', category: 'INVALID' };
   }
 
+  // 1.1 Unpublished work and chapter guards (fail closed for unpublished content)
+  if (media.work_published === false) {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_WORK', category: 'PRIVATE' };
+  }
+  if (media.chapter_published === false || (media.chapter_published_at === null && (media.purpose === 'chapter_page' || media.purpose === 'staff_chapter' || media.purpose === 'scan_chapter'))) {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'UNPUBLISHED_CHAPTER', category: 'PRIVATE' };
+  }
+
+  // 1.2 Content Rating guards (Adult +18 content is strictly restricted and never public)
+  const contentRating = (media.work_content_rating || media.content_rating || '').toString().toUpperCase().trim();
+  if (contentRating === 'ADULT_18' || media.is_adult === true) {
+    return { isPublic: false, isExplicitlyPrivate: true, reason: 'CONTENT_RATING_ADULT_18', category: 'RESTRICTED' };
+  }
+
   // 2. Explicit access classes
   const accessClass = typeof media.access_class === 'string' ? media.access_class.toUpperCase().trim() : '';
 

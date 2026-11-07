@@ -64,8 +64,6 @@ async function fetchChapterPagesData(id: string, platformEnv?: any): Promise<Mih
 
 export const GET = async ({ params, request, url, platform }: any) => {
   const { id } = params;
-  const auth = await verifyMihonAuth(request, platform?.env);
-  const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
   // Fast path: check in-memory cache
   let payload: MihonPagesPayload | null = null;
@@ -95,6 +93,21 @@ export const GET = async ({ params, request, url, platform }: any) => {
   }
 
   const { chapter, pages, etag } = payload;
+  const ifNoneMatch = request.headers.get('if-none-match');
+
+  // Zero-SQL fast path for public non-adult 304 revalidation
+  if (chapter.content_rating !== 'ADULT_18' && matchesETag(request.headers.get('if-none-match'), etag)) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=3600',
+        'ETag': etag
+      }
+    });
+  }
+
+  const auth = await verifyMihonAuth(request, platform?.env);
+  const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
   if (chapter.content_rating === 'ADULT_18' && !allowAdult) {
     return json(
@@ -119,7 +132,8 @@ export const GET = async ({ params, request, url, platform }: any) => {
       status: 304,
       headers: {
         'Cache-Control': cacheControl,
-        'ETag': etag
+        'ETag': etag,
+        'Vary': chapter.content_rating === 'ADULT_18' ? 'Authorization, Cookie' : 'Accept-Encoding'
       }
     });
   }
