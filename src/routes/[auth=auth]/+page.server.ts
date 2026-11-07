@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { claimInvite } from '$lib/server/invites';
-import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
+import { createNotification } from '$lib/server/notifications';
 import {
   authenticateWithYugabyte,
   registerWithYugabyte,
@@ -363,9 +363,6 @@ export const actions = {
           },
           platform
         );
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(processPendingEmailOutbox(10, undefined, platform?.env).catch(() => {}));
-        }
       } catch (notifErr) {
         console.warn('[AUTH] Falha ao disparar notificação de segurança de senha:', notifErr);
       }

@@ -50,3 +50,4 @@ verify_signup_db.js
 count_pages.ts
 get_*.ts
 get_*.sh
+.serena/
