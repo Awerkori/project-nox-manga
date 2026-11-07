@@ -163,6 +163,7 @@ const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
 let workerLastRevocationSync = 0;
+let workerLastManifestVersion = 0;
 let workerManifestLoaded = false;
 
 async function checkMediaRevocationWorker(mediaId, kv, options) {
@@ -176,7 +177,9 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         workerRevokedMediaSet.add(mediaId);
         return true;
       } else {
-        workerRevokedMediaSet.delete(mediaId);
+        if (workerRevokedMediaSet.has(mediaId)) {
+          return true;
+        }
         return false;
       }
     } catch {
@@ -192,7 +195,24 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
       const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
       if (manifest?.revokedIds && Array.isArray(manifest.revokedIds)) {
         workerManifestLoaded = true;
-        workerRevokedMediaSet = new Set(manifest.revokedIds);
+        const newVersion = Number(manifest.version) || 0;
+        if (newVersion >= workerLastManifestVersion) {
+          workerLastManifestVersion = newVersion;
+          const newSet = new Set(manifest.revokedIds);
+          for (const knownId of workerRevokedMediaSet) {
+            if (!newSet.has(knownId)) {
+              try {
+                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId).catch(() => null);
+                if (tombstone) {
+                  newSet.add(knownId);
+                }
+              } catch {
+                newSet.add(knownId);
+              }
+            }
+          }
+          workerRevokedMediaSet = newSet;
+        }
       } else {
         workerManifestLoaded = false;
       }
@@ -210,9 +230,6 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
       if (tombstone) {
         workerRevokedMediaSet.add(mediaId);
         return true;
-      } else {
-        workerRevokedMediaSet.delete(mediaId);
-        return false;
       }
     } catch {
       if (options?.failClosed) return true;

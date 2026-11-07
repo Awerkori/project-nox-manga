@@ -1934,6 +1934,87 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(res.tombstoneWritten).toBe(true);
       expect(res.errors.some(e => e.includes('MANIFEST_VERIFICATION_FAILED'))).toBe(true);
     });
+
+    // REVISÃO CODEX POST (RODADA 2): Concorrência Intra-Isolate & Consistência Eventual de KV
+    it('Codex Rodada 2 - Item 1: revogações concorrentes no mesmo isolate preservam todos os IDs via fila atômica', async () => {
+      const id1 = 'f0000001-ffff-4001-8001-000000000001';
+      const id2 = 'f0000001-ffff-4001-8001-000000000002';
+      const mockKv = createMockKv();
+
+      const [res1, res2] = await Promise.all([
+        revokeMedia(id1, { kv: mockKv }),
+        revokeMedia(id2, { kv: mockKv })
+      ]);
+
+      expect(res1.success).toBe(true);
+      expect(res2.success).toBe(true);
+      expect(res1.manifestUpdated).toBe(true);
+      expect(res2.manifestUpdated).toBe(true);
+
+      const manifest = await mockKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(manifest.revokedIds).toContain(id1);
+      expect(manifest.revokedIds).toContain(id2);
+      expect(getMemoryRevocationSet().has(id1)).toBe(true);
+      expect(getMemoryRevocationSet().has(id2)).toBe(true);
+    });
+
+    it('Codex Rodada 2 - Item 2: snapshot defasado do manifesto reconcilia IDs contra tombstones antes de descartar', async () => {
+      const mediaId = 'f0000002-ffff-4002-8002-000000000001';
+      const mockKv = createMockKv();
+
+      // 1. Media is revoked with tombstone
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: Date.now(),
+        state: 'REVOCATION_COMPLETED'
+      }));
+      populateMemoryRevocationCache([mediaId]);
+
+      // 2. A stale KV replica returns a manifest omitting mediaId but with equal or higher version
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 50,
+        updatedAt: Date.now(),
+        revokedIds: ['other-id'] // mediaId is missing due to simulated replica lag
+      }));
+
+      // 3. Sync must check tombstone before discarding mediaId from memory set
+      const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(isRev, 'Revogação não pode ser descartada se tombstone ainda existe no KV').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 2 - Item 3: leitura negativa defasada de tombstone não anula revogação comprovada pelo manifesto', async () => {
+      const mediaId = 'f0000003-ffff-4003-8003-000000000001';
+      const rawKv = createMockKv();
+
+      // Manifest has mediaId
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        revokedIds: [mediaId]
+      }));
+
+      // KV whose tombstone lookup returns null simulating stale read replica
+      const staleReplicaKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return null; // Stale negative read!
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // Populate memory set from manifest
+      await isMediaRevoked(mediaId, staleReplicaKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // Caller requests authoritative tombstone check on MISS path
+      const isRev = await isMediaRevoked(mediaId, staleReplicaKv, { checkTombstone: true });
+      expect(isRev, 'Leitura negativa defasada de tombstone não pode anular revogação confirmada').toBe(true);
+    });
   });
 });
 
