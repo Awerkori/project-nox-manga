@@ -1886,7 +1886,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(finalManifest.revokedIds, 'IDs restaurados não podem ser ressuscitados no manifesto global').not.toContain(restoredId);
     });
 
-    it('Codex Item 2: sincronização do manifesto limpa IDs restaurados da memória local do isolate', async () => {
+    it('Codex Item 2: revogação conhecida em memória é preservada contra leituras negativas defasadas de KV', async () => {
       const mediaId = 'e0000002-eeee-4002-8002-000000000001';
       const mockKv = createMockKv();
 
@@ -1894,7 +1894,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       populateMemoryRevocationCache([mediaId]);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
 
-      // Another isolate restored the media (manifest in KV has empty list and tombstone is gone)
+      // A stale replica returns an empty manifest and negative tombstone read
       await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
         version: 10,
         updatedAt: Date.now(),
@@ -1902,10 +1902,10 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       }));
       await mockKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
 
-      // When sync runs (or forceFresh / checkTombstone), memoryRevokedSet must be reconciled
+      // When sync runs (or forceFresh / checkTombstone), known revocation must NOT be discarded
       const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true, checkTombstone: true });
-      expect(isRev, 'Mídia restaurada deve retornar false após reconciliação').toBe(false);
-      expect(getMemoryRevocationSet().has(mediaId), 'ID restaurado deve ser removido de memoryRevokedSet').toBe(false);
+      expect(isRev, 'Revogação conhecida deve ser preservada contra leituras negativas defasadas de KV').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'ID revogado deve permanecer em memoryRevokedSet').toBe(true);
     });
 
     it('Codex Item 3: esgotamento de tentativas de verificação do manifesto registra falha explícita e retorna REVOCATION_PARTIAL', async () => {
@@ -2092,6 +2092,33 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const isRev = await isMediaRevoked(mediaId, brokenManifestKv, { failClosed: true });
       expect(isRev, 'Falha no carregamento do manifesto com failClosed=true deve falhar fechado imediatamente').toBe(true);
     });
+
+    it('Codex Rodada 5 - Item 2: forceFresh consulta tombstone autoritativo mesmo quando manifesto omite ID', async () => {
+      const mediaId = 'f0000008-ffff-4008-8008-000000000001';
+      const mockKv = createMockKv();
+      clearMemoryRevocationCache();
+
+      // 1. Authoritative individual tombstone exists in KV
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: Date.now(),
+        state: 'REVOCATION_COMPLETED'
+      }));
+
+      // 2. Manifest in KV exists and loads successfully, but omits mediaId (e.g. replication lag)
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 5,
+        updatedAt: Date.now(),
+        revokedIds: ['other-media-1', 'other-media-2']
+      }));
+
+      // 3. Caller invokes isMediaRevoked with forceFresh: true (bypassing stale/incomplete manifest)
+      // Must query authoritative individual tombstone and return true
+      const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(isRev, 'forceFresh deve consultar tombstone autoritativo e bloquear mídia mesmo se manifesto omitir ID').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'Mídia confirmada via tombstone deve ser adicionada à memória').toBe(true);
+    });
   });
 });
+
 

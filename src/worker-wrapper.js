@@ -222,8 +222,23 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     return Boolean(options?.failClosed);
   }
 
-  // 3. Authoritative tombstone check: if explicitly requested
-  if (options?.checkTombstone) {
+  // 3. Periodic manifest sync (request-scoped, throttled by interval)
+  const now = Date.now();
+  const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
+  if (shouldSync) {
+    const loaded = await syncWorkerManifest(kv);
+    if (!loaded && options?.failClosed && !workerManifestLoaded) {
+      return true;
+    }
+  }
+
+  // 4. Authoritative tombstone check: if explicitly requested, forced fresh, or manifest not loaded
+  const shouldCheckTombstone =
+    Boolean(options?.forceFresh) ||
+    Boolean(options?.checkTombstone) ||
+    !workerManifestLoaded;
+
+  if (shouldCheckTombstone) {
     try {
       const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
@@ -240,31 +255,8 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     }
   }
 
-  // 4. Periodic manifest sync (request-scoped, throttled by interval)
-  const now = Date.now();
-  const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
-  if (shouldSync) {
-    const loaded = await syncWorkerManifest(kv);
-    if (!loaded && options?.failClosed && !workerManifestLoaded) {
-      return true;
-    }
-  }
-
   // 5. In-memory set check after sync
   if (workerRevokedMediaSet.has(mediaId)) return true;
-
-  // 6. Fallback tombstone check if manifest failed to load reliably from KV
-  if (!workerManifestLoaded) {
-    try {
-      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
-      if (tombstone) {
-        workerRevokedMediaSet.add(mediaId);
-        return true;
-      }
-    } catch {
-      if (options?.failClosed) return true;
-    }
-  }
 
   return false;
 }
