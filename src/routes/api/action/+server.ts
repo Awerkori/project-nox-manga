@@ -456,76 +456,102 @@ export const POST = async ({ request, locals, platform }: any) => {
     const shouldMarkCompleted = Boolean(isCompleted && page >= totalPages);
 
     // Consolidated single atomic statement: Upsert reading progress with RETURNING
-    const readUpsertRes = await executeYugabyteSql<{
-      page: number;
-      max_page: number;
-      completed_at: string | null;
-    }>(
-      `INSERT INTO reading (user_id, chapter_id, page, max_page, started_at, updated_at, completed_at)
-       VALUES ($1, $2, $3, $3, NOW(), NOW(), CASE WHEN $4::boolean THEN NOW() ELSE NULL END)
-       ON CONFLICT (user_id, chapter_id) DO UPDATE SET
-         page = GREATEST(reading.page, EXCLUDED.page),
-         max_page = GREATEST(reading.max_page, EXCLUDED.max_page),
-         updated_at = NOW(),
-         completed_at = COALESCE(reading.completed_at, EXCLUDED.completed_at)
-       RETURNING page, max_page, completed_at;`,
-      [locals.user.id, cid, page, shouldMarkCompleted],
-      platform?.env
-    ).catch(() => ({ rows: [] }));
+    let readUpsertRes: any = null;
+    try {
+      readUpsertRes = await executeYugabyteSql<{
+        page: number;
+        max_page: number;
+        completed_at: string | null;
+      }>(
+        `INSERT INTO reading (user_id, chapter_id, page, max_page, started_at, updated_at, completed_at)
+         VALUES ($1, $2, $3, $3, NOW(), NOW(), CASE WHEN $4::boolean THEN NOW() ELSE NULL END)
+         ON CONFLICT (user_id, chapter_id) DO UPDATE SET
+           page = GREATEST(reading.page, EXCLUDED.page),
+           max_page = GREATEST(reading.max_page, EXCLUDED.max_page),
+           updated_at = NOW(),
+           completed_at = COALESCE(reading.completed_at, EXCLUDED.completed_at)
+         RETURNING page, max_page, completed_at;`,
+        [locals.user.id, cid, page, shouldMarkCompleted],
+        platform?.env
+      );
+    } catch (err: any) {
+      console.error('[ACTION_READING_UPSERT_ERROR]', err?.message);
+      error(500, 'Falha ao persistir registro de leitura');
+    }
 
-    const readRow = readUpsertRes.rows[0];
-    const finalMaxPage = readRow?.max_page || page;
-    const finalCompleted = Boolean(readRow?.completed_at);
+    const readRow = readUpsertRes?.rows?.[0];
+    if (!readRow) {
+      error(500, 'Falha ao persistir registro de leitura');
+    }
+
+    const finalMaxPage = readRow.max_page || page;
+    const finalCompleted = Boolean(readRow.completed_at);
 
     // Award XP atomically if completed (Atomic CTE: INSERT xp_awards + UPDATE members in 1 statement)
     let xpAward: any = null;
     if (finalCompleted) {
-      const atomicXpRes = await executeYugabyteSql<{ xp: number }>(
-        `WITH new_award AS (
-           INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
-           VALUES (gen_random_uuid(), $1, $2, COALESCE(NULLIF($3, '')::uuid, (SELECT work_id FROM public.chapters WHERE id = $2 LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), $4, 'web', NOW())
-           ON CONFLICT (user_id, chapter_id) DO NOTHING
-           RETURNING user_id, amount
-         )
-         UPDATE members m
-         SET xp = COALESCE(m.xp, 0) + na.amount
-         FROM new_award na
-         WHERE m.id = na.user_id
-         RETURNING m.xp;`,
-        [locals.user.id, cid, wid || null, 150],
-        platform?.env
-      ).catch(() => ({ rows: [] }));
+      let atomicXpRes: any = null;
+      let xpDatabaseError = false;
+      try {
+        atomicXpRes = await executeYugabyteSql<{ xp: number }>(
+          `WITH new_award AS (
+             INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
+             VALUES (gen_random_uuid(), $1, $2, COALESCE(NULLIF($3, '')::uuid, (SELECT work_id FROM public.chapters WHERE id = $2 LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), $4, 'web', NOW())
+             ON CONFLICT (user_id, chapter_id) DO NOTHING
+             RETURNING user_id, amount
+           )
+           UPDATE members m
+           SET xp = COALESCE(m.xp, 0) + na.amount
+           FROM new_award na
+           WHERE m.id = na.user_id
+           RETURNING m.xp;`,
+          [locals.user.id, cid, wid || null, 150],
+          platform?.env
+        );
+      } catch (err: any) {
+        console.error('[ACTION_XP_AWARD_ERROR]', err?.message);
+        xpDatabaseError = true;
+      }
 
-      const wasNewlyAwarded = atomicXpRes.rows.length > 0;
-      if (wasNewlyAwarded) {
-        const newXp = atomicXpRes.rows[0]?.xp ?? 0;
+      if (xpDatabaseError) {
         xpAward = {
-          ok: true,
-          awarded: true,
-          amount: 150,
-          total_xp: newXp
-        };
-
-        invalidateUserSession(locals.user.id);
-        invalidateRankingCache();
-      } else {
-        const currentXp = locals.sessionCache?.profile?.xp;
-        let totalXp = typeof currentXp === 'number' ? currentXp : 0;
-        if (typeof currentXp !== 'number') {
-          const memRes = await executeYugabyteSql<{ xp: number }>(
-            `SELECT COALESCE(xp, 0) AS xp FROM members WHERE id = $1 LIMIT 1;`,
-            [locals.user.id],
-            platform?.env
-          ).catch(() => ({ rows: [{ xp: 0 }] }));
-          totalXp = memRes.rows[0]?.xp || 0;
-        }
-
-        xpAward = {
-          ok: true,
+          ok: false,
           awarded: false,
-          reason: 'already_awarded',
-          total_xp: totalXp
+          reason: 'database_error',
+          total_xp: locals.sessionCache?.profile?.xp || 0
         };
+      } else {
+        const wasNewlyAwarded = (atomicXpRes?.rows?.length || 0) > 0;
+        if (wasNewlyAwarded) {
+          const newXp = atomicXpRes.rows[0]?.xp ?? 0;
+          xpAward = {
+            ok: true,
+            awarded: true,
+            amount: 150,
+            total_xp: newXp
+          };
+
+          invalidateUserSession(locals.user.id);
+          invalidateRankingCache();
+        } else {
+          const currentXp = locals.sessionCache?.profile?.xp;
+          let totalXp = typeof currentXp === 'number' ? currentXp : 0;
+          if (typeof currentXp !== 'number') {
+            const memRes = await executeYugabyteSql<{ xp: number }>(
+              `SELECT COALESCE(xp, 0) AS xp FROM members WHERE id = $1 LIMIT 1;`,
+              [locals.user.id],
+              platform?.env
+            ).catch(() => ({ rows: [{ xp: 0 }] }));
+            totalXp = memRes.rows[0]?.xp || 0;
+          }
+
+          xpAward = {
+            ok: true,
+            awarded: false,
+            reason: 'already_awarded',
+            total_xp: totalXp
+          };
+        }
       }
     }
 

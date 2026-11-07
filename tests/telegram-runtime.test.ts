@@ -22,8 +22,9 @@ async function canBindLocalSocket(): Promise<boolean> {
   });
 }
 
-it('constructs Telegram upload requests in the actual Cloudflare runtime', async () => {
+it('constructs Telegram upload requests in the actual Cloudflare runtime', async (ctx) => {
   if (!(await canBindLocalSocket())) {
+    ctx.skip();
     return;
   }
 
@@ -67,6 +68,7 @@ it('constructs Telegram upload requests in the actual Cloudflare runtime', async
     });
   } catch (err: any) {
     if (err?.code === 'EPERM' || err?.message?.includes('EPERM') || err?.message?.includes('listen')) {
+      ctx.skip();
       return;
     }
     throw err;
@@ -77,6 +79,7 @@ it('constructs Telegram upload requests in the actual Cloudflare runtime', async
       response = await runtime.dispatchFetch('http://localhost');
     } catch (err: any) {
       if (err?.code === 'EPERM' || err?.message?.includes('EPERM') || err?.message?.includes('listen')) {
+        ctx.skip();
         return;
       }
       throw err;

@@ -21,8 +21,9 @@ async function canBindLocalSocket(): Promise<boolean> {
   });
 }
 
-it('binds the configured comment limiter in the Cloudflare runtime', async () => {
+it('binds the configured comment limiter in the Cloudflare runtime', async (ctx) => {
   if (!(await canBindLocalSocket())) {
+    ctx.skip();
     return;
   }
 
@@ -43,6 +44,7 @@ it('binds the configured comment limiter in the Cloudflare runtime', async () =>
     } }] } as any);
   } catch (err: any) {
     if (err?.code === 'EPERM' || err?.message?.includes('EPERM') || err?.message?.includes('listen')) {
+      ctx.skip();
       return;
     }
     throw err;
@@ -55,6 +57,7 @@ it('binds the configured comment limiter in the Cloudflare runtime', async () =>
         response = await runtime.dispatchFetch('http://localhost/reader-a');
       } catch (err: any) {
         if (err?.code === 'EPERM' || err?.message?.includes('EPERM') || err?.message?.includes('listen')) {
+          ctx.skip();
           return;
         }
         throw err;
