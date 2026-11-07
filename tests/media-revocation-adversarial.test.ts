@@ -2300,7 +2300,8 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
         version: 4,
         updatedAt: 2000,
-        revokedIds: [] // mediaId restaurado
+        revokedIds: [],
+        restoredIds: [mediaId] // mediaId restaurado
       }));
       await mockKv.delete(`${REVOCATION_KEY_PREFIX}${mediaId}`);
 
@@ -2539,8 +2540,97 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRevStale, 'Manifesto antigo defasado não pode reintroduzir mídia que já foi restaurada').toBe(false);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
     });
+
+    // REVISÃO CODEX POST (RODADA 10): Timestamps por ID de Restauração e Proteção contra Corridas Pós-Await
+    it('Codex Rodada 10 - Item 1: re-revogação com tombstone anterior ao manifesto mas posterior à restauração mantém bloqueio', async () => {
+      const mediaId = 'd0000001-dddd-4001-8001-000000000001';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // 1. Mídia foi restaurada em t=100
+      // 2. Mídia foi re-revogada em t=200 com tombstone válido
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 200,
+        state: 'REVOCATION_COMPLETED'
+      }));
+
+      // 3. Em t=300, escritor não-coordenado grava manifesto para OUTRA mídia (updatedAt: 300)
+      // O escritor perdeu mediaId em revokedIds, mas manteve o histórico restoredIds com restoration timestamp t=100
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 10,
+        updatedAt: 300,
+        revokedIds: ['unrelated-media-y'],
+        restoredIds: [mediaId],
+        restorations: {
+          [mediaId]: 100
+        }
+      }));
+
+      // Deve comparar tombstone (t=200) contra per-ID restoration (t=100), reconhecer que 200 >= 100, e MANTER revogado!
+      const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(isRev, 'Tombstone em t=200 posterior à restauração em t=100 deve manter mídia revogada mesmo se manifesto foi escrito em t=300').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 10 - Item 2: revalidação pós-await de lookup de tombstone não sobrescreve revogação concorrente', async () => {
+      const mediaId = 'd0000002-dddd-4002-8002-000000000002';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // Inicializa cache em memória como revogado
+      populateMemoryRevocationCache([mediaId]);
+
+      let lookupStarted = false;
+      let resumeLookup: (() => void) | null = null;
+      const pausedLookupPromise = new Promise<void>((resolve) => {
+        resumeLookup = resolve;
+      });
+
+      const delayedKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            lookupStarted = true;
+            await pausedLookupPromise;
+            return null; // tombstone nulo
+          }
+          if (key === REVOCATION_MANIFEST_KEY) {
+            return {
+              version: 2,
+              updatedAt: 1000,
+              revokedIds: [],
+              restoredIds: [mediaId]
+            };
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // Inicia sync em background
+      const syncPromise = isMediaRevoked('other-check', delayedKv, { forceFresh: true });
+
+      // Aguarda o lookup da tombstone iniciar e pausar
+      while (!lookupStarted) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+
+      // Enquanto o lookup está pausado no await, uma nova revogação é registrada localmente em t=2000
+      const { populateMemoryRevocationCache: reRevoke } = await import('../src/lib/server/media-revocation');
+      reRevoke([mediaId]);
+
+      // Libera o lookup para terminar
+      resumeLookup!();
+      await syncPromise;
+
+      // O sync antigo não pode ter apagado a revogação local concorrente mais nova
+      expect(getMemoryRevocationSet().has(mediaId), 'Sync defasado não pode apagar revogação concorrente registrada durante await').toBe(true);
+    });
   });
 });
+
 
 
 
