@@ -3911,6 +3911,20 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(purgeRes.errors.length).toBeGreaterThan(0);
       expect(purgeRes.errors[0]).toContain('Cloudflare purge quota exceeded');
       expect(purgeRes.globalPurgeDispatched).toBe(false);
+
+      // 5. purgeMediaVariants rejeita resposta com errors em formato de objeto
+      const objErrorCtx = {
+        cache: {
+          purge: vi.fn().mockResolvedValue({ errors: { message: 'falha estruturada' } })
+        }
+      };
+      const purgeResObj = await purgeMediaVariants('22223333-4444-5555-9999-666677778888', {
+        ctx: objErrorCtx,
+        requirePurgeDispatch: true
+      });
+      expect(purgeResObj.errors.length).toBeGreaterThan(0);
+      expect(purgeResObj.errors[0]).toContain('falha estruturada');
+      expect(purgeResObj.globalPurgeDispatched).toBe(false);
     });
   });
 });

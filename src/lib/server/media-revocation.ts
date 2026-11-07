@@ -837,16 +837,35 @@ export async function purgeMediaVariants(
 
     if (purgePromise) {
       const purgeRes = await purgePromise;
-      const isPurgeFailure = purgeRes && typeof purgeRes === 'object' && (
-        purgeRes.success === false ||
-        (Array.isArray(purgeRes.errors) && purgeRes.errors.length > 0) ||
-        Boolean(purgeRes.error)
-      );
-      if (isPurgeFailure) {
-        const errorMsgs = Array.isArray(purgeRes.errors)
-          ? purgeRes.errors.map((e: any) => e.message || String(e)).join('; ')
-          : (purgeRes.error?.message || purgeRes.error || 'Workers cache purge returned unsuccessful');
-        errors.push(`WORKERS_CACHE_PURGE_ERROR: ${errorMsgs}`);
+      let hasPurgeError = false;
+      let errorDetails = '';
+
+      if (purgeRes && typeof purgeRes === 'object') {
+        if (purgeRes.success === false) {
+          hasPurgeError = true;
+        }
+        if (purgeRes.error) {
+          hasPurgeError = true;
+          errorDetails = typeof purgeRes.error === 'object'
+            ? (purgeRes.error.message || JSON.stringify(purgeRes.error))
+            : String(purgeRes.error);
+        }
+        if (purgeRes.errors) {
+          hasPurgeError = true;
+          if (Array.isArray(purgeRes.errors)) {
+            errorDetails = purgeRes.errors
+              .map((e: any) => (e && typeof e === 'object' ? (e.message || JSON.stringify(e)) : String(e)))
+              .join('; ');
+          } else if (typeof purgeRes.errors === 'object') {
+            errorDetails = purgeRes.errors.message || JSON.stringify(purgeRes.errors);
+          } else {
+            errorDetails = String(purgeRes.errors);
+          }
+        }
+      }
+
+      if (hasPurgeError) {
+        errors.push(`WORKERS_CACHE_PURGE_ERROR: ${errorDetails || 'Workers cache purge returned unsuccessful'}`);
       } else {
         workersCachePurged++;
         globalPurgeDispatched = true;
