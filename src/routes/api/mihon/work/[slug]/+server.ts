@@ -82,7 +82,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
     });
   }
 
-  const origin = url.origin;
+  const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '') || url.origin;
   const genres = (tags || []).map((t: any) => t.name).filter(Boolean);
 
   // Mihon expects chapters ascending by reading order
@@ -105,7 +105,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
     synopsis: work.synopsis,
     author: work.author,
     artist: work.artist,
-    cover_url: work.cover_id ? `${origin}/media/${work.cover_id}` : null,
+    cover_url: work.cover_id ? `${mediaBaseUrl}/media/${work.cover_id}` : null,
     updated_at: work.updated_at,
     genres,
     chapters: sortedChapters.map((ch: any) => ({

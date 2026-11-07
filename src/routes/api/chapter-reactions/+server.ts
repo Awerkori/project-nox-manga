@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 
 const REACTION_COUNTS_TTL_MS = 30_000;
 const MAX_REACTION_CACHE_ENTRIES = 500;
@@ -25,9 +25,8 @@ export const GET: RequestHandler = async ({ url, locals, cookies, platform }: an
     }
   }
 
-  const platformEnv = platform?.env;
-
-  try {
+  return withYugabyteReadSession(platform?.env, async (platformEnv) => {
+    try {
     const now = Date.now();
     let counts: Record<string, number> | null = null;
     const cachedEntry = reactionCountsCache.get(chapterId);

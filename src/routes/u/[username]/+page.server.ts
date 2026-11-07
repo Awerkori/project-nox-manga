@@ -2,10 +2,12 @@ import { error, fail } from '@sveltejs/kit';
 import { NOX_TITLES } from '$lib/levels';
 import { formatScanRoleTitle, formatScanBadgeText, getScanPreposition } from '$lib/scans';
 import { enrichReadingRowsWithCatalog } from '$lib/server/reading-history';
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 
 export const load = async ({ locals, params, platform, setHeaders }: any) => {
-  if (setHeaders) {
+  return withYugabyteReadSession(platform?.env, async (sessionEnv) => {
+    platform = platform ? { ...platform, env: sessionEnv } : { env: sessionEnv };
+    if (setHeaders) {
     if (!locals.user) {
       setHeaders({
         'cache-control': 'public, max-age=30, s-maxage=60, stale-while-revalidate=120'
@@ -479,6 +481,7 @@ export const load = async ({ locals, params, platform, setHeaders }: any) => {
     viewerAuthenticated: !!locals.user,
     staffRole
   };
+  });
 };
 
 export const actions = {

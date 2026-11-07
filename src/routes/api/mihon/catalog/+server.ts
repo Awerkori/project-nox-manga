@@ -36,7 +36,7 @@ export const GET = async ({ request, url, platform }: any) => {
     works = works.filter((w) => w.content_rating !== 'ADULT_18');
   }
 
-  const origin = url.origin;
+  const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '') || url.origin;
   const items = works.map((w) => ({
     id: w.id,
     title: w.title,
@@ -46,7 +46,7 @@ export const GET = async ({ request, url, platform }: any) => {
     status: w.status,
     content_rating: w.content_rating || 'GENERAL',
     synopsis: w.synopsis,
-    cover_url: w.cover_id ? `${origin}/media/${w.cover_id}` : null,
+    cover_url: w.cover_id ? `${mediaBaseUrl}/media/${w.cover_id}` : null,
     updated_at: w.updated_at
   }));
 

@@ -1,4 +1,4 @@
-import { executeYugabyteSql } from '$lib/server/yugabyte';
+import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 
 const HALL_CACHE_TTL_MS = 300_000; // 5 minutes
 let cachedHall: { timestamp: number; data: any } | null = null;
@@ -25,30 +25,24 @@ export const load = async ({ platform, setHeaders }: any) => {
 
   const run = (async () => {
     try {
-      const [activeSeasonRes, concludedSeasonsRes, allWinnersRes] = await Promise.all([
-        executeYugabyteSql(`
-          SELECT id, name, number, starts_at, ends_at, is_active, rules_text
-          FROM seasons
-          WHERE is_active = true
-          ORDER BY number DESC
-          LIMIT 1;
-        `, [], platform?.env).catch(() => ({ rows: [] })),
-        executeYugabyteSql(`
-          SELECT id, name, number, starts_at, ends_at, is_active
-          FROM seasons
-          WHERE is_active = false
-          ORDER BY number DESC;
-        `, [], platform?.env).catch(() => ({ rows: [] })),
-        executeYugabyteSql(`
-          SELECT *
-          FROM season_winners
-          ORDER BY place ASC;
-        `, [], platform?.env).catch(() => ({ rows: [] }))
-      ]);
+      return await withYugabyteReadSession(platform?.env, async (sessionEnv) => {
+        const [allSeasonsRes, allWinnersRes] = await Promise.all([
+          executeYugabyteSql(`
+            SELECT id, name, number, starts_at, ends_at, is_active, rules_text
+            FROM seasons
+            ORDER BY number DESC;
+          `, [], sessionEnv).catch(() => ({ rows: [] })),
+          executeYugabyteSql(`
+            SELECT *
+            FROM season_winners
+            ORDER BY place ASC;
+          `, [], sessionEnv).catch(() => ({ rows: [] }))
+        ]);
 
-      const activeSeason = activeSeasonRes.rows[0] || null;
-      const concludedSeasons = concludedSeasonsRes.rows || [];
-      const allWinners = allWinnersRes.rows || [];
+        const allSeasons = allSeasonsRes.rows || [];
+        const activeSeason = allSeasons.find((s: any) => s.is_active) || null;
+        const concludedSeasons = allSeasons.filter((s: any) => !s.is_active);
+        const allWinners = allWinnersRes.rows || [];
 
       // Group winners by season_id
       const winnersBySeason: Record<string, any[]> = {};
@@ -75,7 +69,8 @@ export const load = async ({ platform, setHeaders }: any) => {
       if (!isTestEnv) {
         cachedHall = { timestamp: Date.now(), data: result };
       }
-      return result;
+        return result;
+      });
     } finally {
       hallFlight = null;
     }
