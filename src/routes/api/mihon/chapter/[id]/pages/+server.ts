@@ -118,7 +118,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
     });
   }
 
-  const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '') || url.origin;
+  const origin = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '') || url.origin;
   return json({
     chapter_id: chapter.id,
     chapter_number: chapter.number,
@@ -134,7 +134,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
     total_pages: pages.length,
     pages: pages.map((p: any) => ({
       position: p.position,
-      url: `${mediaBaseUrl}/media/${p.media_id}`,
+      url: `${origin}/media/${p.media_id}`,
       width: p.width,
       height: p.height
     }))

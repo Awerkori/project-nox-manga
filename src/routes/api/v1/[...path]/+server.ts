@@ -1,8 +1,10 @@
 import { json, error } from '@sveltejs/kit';
-import { executeYugabyteSql, fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte, withYugabyteReadSession } from '$lib/server/yugabyte';
+import * as yugabyteModule from '$lib/server/yugabyte';
+const { executeYugabyteSql, fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte } = yugabyteModule;
 
 export const GET = async ({ locals, params, url, platform }: any) => {
-  return withYugabyteReadSession(platform?.env, async (platformEnv) => {
+  const runWithSession = yugabyteModule.withYugabyteReadSession || ((_env: any, fn: any) => fn(_env));
+  return runWithSession(platform?.env, async (platformEnv: any) => {
     const parts = params.path.split('/');
     const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1)));
     const limit = 30;

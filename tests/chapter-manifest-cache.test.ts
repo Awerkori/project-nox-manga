@@ -1,30 +1,34 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('$lib/server/reader-editorial', () => ({
-  readerChapter: vi.fn().mockResolvedValue({
-    data: {
-      id: 'chap-100',
-      number: 1,
-      title: 'Capítulo 1',
-      published_at: '2026-01-01T00:00:00.000Z',
-      works: {
-        id: 'work-1',
-        title: 'Obra 1',
-        slug: 'obra-1',
-        published: true,
-        content_rating: 'SAFE'
+vi.mock('$lib/server/reader-editorial', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    readerChapter: vi.fn().mockResolvedValue({
+      data: {
+        id: 'chap-100',
+        number: 1,
+        title: 'Capítulo 1',
+        published_at: '2026-01-01T00:00:00.000Z',
+        works: {
+          id: 'work-1',
+          title: 'Obra 1',
+          slug: 'obra-1',
+          published: true,
+          content_rating: 'SAFE'
+        }
       }
-    }
-  }),
-  readerContent: vi.fn().mockResolvedValue({
-    data: {
-      pages: [
-        { position: 1, media_id: '11111111-1111-4111-8111-111111111111', width: 800, height: 1200 },
-        { position: 2, media_id: '22222222-2222-4222-8222-222222222222', width: 800, height: 1200 }
-      ]
-    }
-  })
-}));
+    }),
+    readerContent: vi.fn().mockResolvedValue({
+      data: {
+        pages: [
+          { position: 1, media_id: '11111111-1111-4111-8111-111111111111', width: 800, height: 1200 },
+          { position: 2, media_id: '22222222-2222-4222-8222-222222222222', width: 800, height: 1200 }
+        ]
+      }
+    })
+  };
+});
 
 vi.mock('$lib/server/yugabyte', () => ({
   withYugabyteReadSession: (_env: any, fn: any) => fn(_env),
@@ -71,5 +75,23 @@ describe('Chapter Manifest API - Caching & CDN URLs', () => {
 
     expect(res.status).toBe(304);
     expect(res.headers.get('etag')).toBe(expectedEtag);
+  });
+
+  it('firstPagePreloadHeader preloads images with mediaBaseUrl when configured', async () => {
+    const { firstPagePreloadHeader } = await import('../src/lib/server/reader-editorial');
+    const pages = [
+      { media_id: '11111111-1111-4111-8111-111111111111' },
+      { media_id: '22222222-2222-4222-8222-222222222222' }
+    ];
+
+    const linkLocal = firstPagePreloadHeader(pages, '');
+    expect(linkLocal).toBe(
+      '</media/11111111-1111-4111-8111-111111111111>; rel=preload; as=image; fetchpriority=high, </media/22222222-2222-4222-8222-222222222222>; rel=preload; as=image; fetchpriority=high'
+    );
+
+    const linkCdn = firstPagePreloadHeader(pages, 'https://cdn.projectnox.org');
+    expect(linkCdn).toBe(
+      '<https://cdn.projectnox.org/media/11111111-1111-4111-8111-111111111111>; rel=preload; as=image; fetchpriority=high, <https://cdn.projectnox.org/media/22222222-2222-4222-8222-222222222222>; rel=preload; as=image; fetchpriority=high'
+    );
   });
 });
