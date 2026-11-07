@@ -452,14 +452,15 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           const stream = await downloadTelegramMedia(altClient, media.provider_key);
           body = stream;
           botRef = altBotRef;
-          // Self-heal DB mapping in background
-          const healingPromise = executeYugabyteSql(
-            'UPDATE media SET bot_reference = $1 WHERE id = $2;',
-            [altBotRef, media.id],
-            platform?.env
-          ).catch((e) => console.warn('[MEDIA_HEAL_WARN]', e));
-          if (platform?.context?.waitUntil) {
-            platform.context.waitUntil(healingPromise);
+          // Self-heal DB mapping synchronously within request lifecycle
+          try {
+            await executeYugabyteSql(
+              'UPDATE media SET bot_reference = $1 WHERE id = $2;',
+              [altBotRef, media.id],
+              platform?.env
+            );
+          } catch (e: any) {
+            console.warn('[MEDIA_HEAL_WARN]', e?.message);
           }
         } catch {
           console.error('[MEDIA_DOWNLOAD_FAILED]', {
