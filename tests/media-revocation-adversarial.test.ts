@@ -2118,6 +2118,80 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRev, 'forceFresh deve consultar tombstone autoritativo e bloquear mídia mesmo se manifesto omitir ID').toBe(true);
       expect(getMemoryRevocationSet().has(mediaId), 'Mídia confirmada via tombstone deve ser adicionada à memória').toBe(true);
     });
+
+    it('Codex Rodada 6 - Item 1: preserva revogação local quando persistência falha mesmo sob leitura negativa de tombstone e manifesto', async () => {
+      const mediaId = 'f0000009-ffff-4009-8009-000000000001';
+      clearMemoryRevocationCache();
+
+      // 1. Simula falha total de persistência no KV durante revokeMedia
+      const failingKv = {
+        get: vi.fn(async () => null),
+        put: vi.fn(async () => {
+          throw new Error('KV_PUT_NETWORK_ERROR');
+        }),
+        delete: vi.fn()
+      };
+
+      const res = await revokeMedia(mediaId, { kv: failingKv });
+      expect(res.state, 'Revogação com falha no KV deve ser REVOCATION_PARTIAL').toBe('REVOCATION_PARTIAL');
+      expect(getMemoryRevocationSet().has(mediaId), 'Revogação deve ser retida em memória local').toBe(true);
+
+      // 2. Requisição subsequente /media/[id] com checkTombstone: true
+      // KV autoritativo responde: manifesto existe (sem mediaId) e tombstone é nulo
+      const readingKv = createMockKv();
+      await readingKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        revokedIds: ['other-id']
+      }));
+
+      const isRev = await isMediaRevoked(mediaId, readingKv, { checkTombstone: true });
+      expect(isRev, 'Revogação local não persistida não pode ser limpa por leitura negativa do KV').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId), 'ID deve continuar bloqueado em memória').toBe(true);
+
+      // 3. Restauração explícita via unrevokeMedia
+      await unrevokeMedia(mediaId);
+      const isRevAfter = await isMediaRevoked(mediaId, readingKv, { checkTombstone: true });
+      expect(isRevAfter, 'unrevokeMedia explícito deve permitir restauração').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+    });
+
+    it('Codex Rodada 6 - Item 2: rotação do cursor de reconciliação evita inanição de IDs restaurados além do lote de 10', async () => {
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // Cria 15 IDs faltantes no manifesto
+      const ids: string[] = [];
+      for (let i = 1; i <= 15; i++) {
+        ids.push(`d0000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+      }
+      populateMemoryRevocationCache(ids);
+
+      // Os primeiros 10 ainda têm tombstones no KV (ainda revogados)
+      for (let i = 0; i < 10; i++) {
+        await mockKv.put(`${REVOCATION_KEY_PREFIX}${ids[i]}`, JSON.stringify({ mediaId: ids[i] }));
+      }
+      // IDs 10..14 (índices 10 a 14) NÃO possuem tombstones no KV (foram restaurados!)
+
+      // Manifest version 1 omite todos os 15 IDs
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: Date.now(),
+        revokedIds: ['manifest-kept-id']
+      }));
+
+      // Primeiro ciclo de sync: processa primeiros 10 IDs (que têm tombstones)
+      await isMediaRevoked('manifest-kept-id', mockKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(ids[0])).toBe(true);
+
+      // Segundo ciclo de sync: o cursor avançado deve processar os próximos IDs (10 a 14)
+      await isMediaRevoked('manifest-kept-id', mockKv, { forceFresh: true });
+
+      // Os IDs restaurados (índice 10 a 14) devem ter sido reconciliados e removidos da memória
+      for (let i = 10; i < 15; i++) {
+        expect(getMemoryRevocationSet().has(ids[i]), `ID ${ids[i]} além dos 10 primeiros deve ser reconciliado sem inanição`).toBe(false);
+      }
+    });
   });
 });
 

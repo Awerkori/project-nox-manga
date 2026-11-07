@@ -160,19 +160,25 @@ export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 let memoryRevokedSet = new Set<string>();
 let lastManifestRevokedSet = new Set<string>();
 let inFlightRevocations = new Set<string>();
+let locallyInitiatedRevocations = new Set<string>();
 let lastManifestSync = 0;
 let manifestSuccessfullyLoaded = false;
 let manifestKeyPresent = false;
 let currentManifestVersion = 0;
+let reconciliationCursor = 0;
+let manifestSyncGeneration = 0;
 
 export function clearMemoryRevocationCache(): void {
   memoryRevokedSet.clear();
   lastManifestRevokedSet.clear();
   inFlightRevocations.clear();
+  locallyInitiatedRevocations.clear();
   lastManifestSync = 0;
   manifestSuccessfullyLoaded = false;
   manifestKeyPresent = false;
   currentManifestVersion = 0;
+  reconciliationCursor = 0;
+  manifestSyncGeneration = 0;
 }
 
 export function populateMemoryRevocationCache(ids: string[]): void {
@@ -187,6 +193,7 @@ export function getMemoryRevocationSet(): Set<string> {
 
 async function syncManifest(kv: any): Promise<boolean> {
   lastManifestSync = Date.now();
+  const syncGen = ++manifestSyncGeneration;
   try {
     const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
@@ -196,36 +203,56 @@ async function syncManifest(kv: any): Promise<boolean> {
         lastManifestRevokedSet = new Set<string>(manifest.revokedIds);
         currentManifestVersion = manifestVersion;
 
-        // 1. Add all currently revoked IDs from manifest to isolate memory
+        // 1. Add all currently revoked IDs from manifest to isolate memory and confirm persistence
         for (const id of lastManifestRevokedSet) {
           memoryRevokedSet.add(id);
+          locallyInitiatedRevocations.delete(id);
         }
 
         // 2. Reconcile IDs: check missing IDs against individual tombstones with bounded concurrency (max 10)
-        // This allows legitimately restored media to leave memory without trusting a single stale negative read
-        // and bounds the per-request latency.
+        // Rotating cursor prevents starvation when early omitted IDs still have tombstones.
         const missingIds = Array.from(memoryRevokedSet).filter(
-          (id) => !lastManifestRevokedSet.has(id) && !inFlightRevocations.has(id)
+          (id) => !lastManifestRevokedSet.has(id) && !inFlightRevocations.has(id) && !locallyInitiatedRevocations.has(id)
         );
-        const batch = missingIds.slice(0, 10);
-        await Promise.allSettled(
-          batch.map(async (knownId) => {
-            try {
-              const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
-              if (!tombstone && !inFlightRevocations.has(knownId)) {
-                // Both manifest and authoritative tombstone confirm absence -> media was restored
-                memoryRevokedSet.delete(knownId);
+        if (missingIds.length > 0) {
+          if (reconciliationCursor >= missingIds.length) {
+            reconciliationCursor = 0;
+          }
+          const batchSize = Math.min(10, missingIds.length);
+          const batch: string[] = [];
+          for (let i = 0; i < batchSize; i++) {
+            batch.push(missingIds[(reconciliationCursor + i) % missingIds.length]);
+          }
+          reconciliationCursor = (reconciliationCursor + batchSize) % missingIds.length;
+
+          await Promise.allSettled(
+            batch.map(async (knownId) => {
+              try {
+                const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
+                if (
+                  !tombstone &&
+                  !inFlightRevocations.has(knownId) &&
+                  !locallyInitiatedRevocations.has(knownId) &&
+                  manifestSyncGeneration === syncGen &&
+                  !lastManifestRevokedSet.has(knownId)
+                ) {
+                  // Both manifest and authoritative tombstone confirm absence and no concurrent sync -> media was restored
+                  memoryRevokedSet.delete(knownId);
+                }
+              } catch {
+                // Fail closed: preserve known revocation on KV error
               }
-            } catch {
-              // Fail closed: preserve known revocation on KV error
-            }
-          })
-        );
+            })
+          );
+        } else {
+          reconciliationCursor = 0;
+        }
       } else {
         // Manifest is older than our known version - merge newly seen IDs, preserve newer state
         for (const id of manifest.revokedIds) {
           memoryRevokedSet.add(id);
           lastManifestRevokedSet.add(id);
+          locallyInitiatedRevocations.delete(id);
         }
       }
 
@@ -317,12 +344,18 @@ export async function isMediaRevoked(
 
         // B. If manifest is present and omits mediaId, both sources confirm absence -> restore:
         if (manifestSuccessfullyLoaded && manifestKeyPresent && !lastManifestRevokedSet.has(mediaId)) {
+          if (locallyInitiatedRevocations.has(mediaId)) {
+            return true;
+          }
           memoryRevokedSet.delete(mediaId);
           return false;
         }
 
         // C. Clean slate: manifest key does not exist and tombstone is null -> media is not revoked
         if (manifestSuccessfullyLoaded && !manifestKeyPresent) {
+          if (locallyInitiatedRevocations.has(mediaId)) {
+            return true;
+          }
           memoryRevokedSet.delete(mediaId);
           return false;
         }
@@ -535,6 +568,7 @@ export async function revokeMedia(
   }
 
   inFlightRevocations.add(mediaId);
+  locallyInitiatedRevocations.add(mediaId);
   try {
     const revokedAt = Date.now();
     const errors: string[] = [];
@@ -637,6 +671,9 @@ export async function revokeMedia(
   // Absence or failure of KV can never return REVOCATION_COMPLETED.
   let overallState: RevocationOverallState = 'REVOCATION_FAILED';
   const persistenceGuaranteed = Boolean(tombstoneWritten && manifestUpdated);
+  if (persistenceGuaranteed) {
+    locallyInitiatedRevocations.delete(mediaId);
+  }
   const purgeGuaranteed = (purgeState === 'PURGE_ACCEPTED' || purgeState === 'PURGE_VERIFIED' || purgeState === 'PURGE_LOCAL_VERIFIED');
 
   if (persistenceGuaranteed && purgeGuaranteed && errors.length === 0) {
@@ -699,6 +736,7 @@ export async function unrevokeMedia(
   options: { kv?: any; cache?: any; ctx?: any; origin?: string } = {}
 ): Promise<{ success: boolean; errors: string[] }> {
   const errors: string[] = [];
+  locallyInitiatedRevocations.delete(mediaId);
   memoryRevokedSet.delete(mediaId);
   lastManifestRevokedSet.delete(mediaId);
   if (options.kv && typeof options.kv.delete === 'function') {

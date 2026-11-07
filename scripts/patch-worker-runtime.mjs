@@ -167,9 +167,12 @@ let workerLastRevocationSync = 0;
 let workerManifestLoaded = false;
 let workerManifestKeyPresent = false;
 let workerManifestVersion = 0;
+let workerReconciliationCursor = 0;
+let workerSyncGeneration = 0;
 
 async function syncWorkerManifest(kv) {
   workerLastRevocationSync = Date.now();
+  const currentSyncGen = ++workerSyncGeneration;
   try {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
@@ -183,19 +186,34 @@ async function syncWorkerManifest(kv) {
         }
 
         const missing = Array.from(workerRevokedMediaSet).filter((id) => !workerManifestRevokedSet.has(id));
-        const batch = missing.slice(0, 10);
-        await Promise.allSettled(
-          batch.map(async (knownId) => {
-            try {
-              const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
-              if (!tombstone) {
-                workerRevokedMediaSet.delete(knownId);
+        if (missing.length > 0) {
+          if (workerReconciliationCursor >= missing.length) {
+            workerReconciliationCursor = 0;
+          }
+          const batchSize = Math.min(10, missing.length);
+          const batch = [];
+          for (let i = 0; i < batchSize; i++) {
+            batch.push(missing[(workerReconciliationCursor + i) % missing.length]);
+          }
+          workerReconciliationCursor = (workerReconciliationCursor + batchSize) % missing.length;
+
+          await Promise.allSettled(
+            batch.map(async (knownId) => {
+              try {
+                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
+                if (!tombstone) {
+                  if (workerSyncGeneration === currentSyncGen && !workerManifestRevokedSet.has(knownId)) {
+                    workerRevokedMediaSet.delete(knownId);
+                  }
+                }
+              } catch {
+                // Fail closed on error
               }
-            } catch {
-              // Fail closed on error
-            }
-          })
-        );
+            })
+          );
+        } else {
+          workerReconciliationCursor = 0;
+        }
       } else {
         for (const id of manifest.revokedIds) {
           workerRevokedMediaSet.add(id);
