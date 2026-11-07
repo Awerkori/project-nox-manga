@@ -221,6 +221,7 @@ async function syncWorkerManifest(kv) {
           const effectiveRevocationTs = perIdRevocationTs || workerKnownRevocations.get(id)?.timestamp || manifestUpdatedAt;
 
           if (restoration && (effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version))) {
+            workerManifestRevokedSet.delete(id);
             continue;
           }
           workerRevokedMediaSet.add(id);
@@ -517,8 +518,15 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         }
       } else {
         if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
-          workerRevokedMediaSet.add(mediaId);
-          return true;
+          const knownRest = workerKnownRestorations.get(mediaId);
+          const known = workerKnownRevocations.get(mediaId);
+          const revTs = known?.timestamp || workerManifestUpdatedAt;
+          if (knownRest && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= workerManifestVersion))) {
+            workerManifestRevokedSet.delete(mediaId);
+          } else {
+            workerRevokedMediaSet.add(mediaId);
+            return true;
+          }
         }
         if (workerManifestLoaded && workerManifestKeyPresent && !workerManifestRevokedSet.has(mediaId)) {
           const known = workerKnownRevocations.get(mediaId);

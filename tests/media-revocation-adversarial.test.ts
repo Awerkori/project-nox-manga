@@ -3070,6 +3070,113 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(isRev, 'Tombstone defasado que precede restauração confirmada não pode re-bloquear mídia').toBe(false);
       expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
     });
+
+    // REVISÃO CODEX POST (RODADA 16): Preservação de Revogação Interveniente, Backoff em Rate Limit e Exclusão de Revogação Superada
+    it('Codex Rodada 16 - Item 1: unrevokeMedia grava timestamp real de restauração e não apaga revogação interveniente posterior', async () => {
+      const mediaId = 'f0000009-ffff-4009-8009-000000000009';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Mídia revogada inicialmente em t=1000
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId],
+        revocations: { [mediaId]: 1000 }
+      }));
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({ mediaId, revokedAt: 1000 }));
+
+      // 2. Simulamos unrevokeMedia onde, após a deleção do tombstone, um escritor concorrente
+      // re-revoga a mídia com timestamp futuro antes da leitura do manifesto
+      const futureRevocationTime = Date.now() + 100000;
+      const racingKv = {
+        ...rawKv,
+        delete: vi.fn(async (key: string) => {
+          return rawKv.delete(key);
+        }),
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            // Manifest retornado tem re-revogação interveniente com timestamp futuro!
+            return {
+              version: 5,
+              updatedAt: futureRevocationTime,
+              revokedIds: [mediaId],
+              revocations: { [mediaId]: futureRevocationTime }
+            };
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: vi.fn(async (key: string, val: string) => {
+          return rawKv.put(key, val);
+        })
+      };
+
+      await unrevokeMedia(mediaId, { kv: racingKv });
+
+      // O unrevokeMedia NÃO pode ter apagado a revogação interveniente do manifest
+      const finalManifest = await rawKv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
+      expect(finalManifest.revokedIds).toContain(mediaId);
+      expect(finalManifest.revocations[mediaId]).toBe(futureRevocationTime);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 16 - Item 2: revokeMedia aplica backoff em exceções de escrita do manifesto por rate limit KV', async () => {
+      const mediaId = 'f000000a-ffff-400a-800a-00000000000a';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      let writeAttempts = 0;
+      const rateLimitedKv = {
+        ...rawKv,
+        put: vi.fn(async (key: string, val: string) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            writeAttempts++;
+            if (writeAttempts <= 2) {
+              throw new Error('KV 429: Rate limit exceeded (1 write per second per key)');
+            }
+          }
+          return rawKv.put(key, val);
+        }),
+        get: rawKv.get.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      const res = await revokeMedia(mediaId, { kv: rateLimitedKv });
+      expect(res.success).toBe(true);
+      expect(writeAttempts).toBeGreaterThanOrEqual(3);
+    });
+
+    it('Codex Rodada 16 - Item 3: manifestos novos com revogações superadas por restaurações conhecidas não bloqueiam em leitura de tombstone nulo', async () => {
+      const mediaId = 'f000000b-ffff-400b-800b-00000000000b';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Mídia com restauração confirmada em t=2000
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 2000,
+        revokedIds: [],
+        restoredIds: [mediaId],
+        restorations: { [mediaId]: 2000 }
+      }));
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 2. Um novo manifesto v3 em t=3000 de um escritor defasado contém mediaId, mas com per-ID revocation=1000 (< 2000)
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 3,
+        updatedAt: 3000,
+        revokedIds: [mediaId],
+        revocations: { [mediaId]: 1000 }
+      }));
+
+      // Sincroniza o manifesto v3
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+
+      // 3. Ao verificar tombstone (que é nulo), o isolate NÃO deve tratar mediaId como confirmada pelo manifesto v3
+      const isRev = await isMediaRevoked(mediaId, rawKv, { checkTombstone: true });
+      expect(isRev, 'Revogação superada no novo manifesto não pode confirmar bloqueio quando tombstone é nulo').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+    });
   });
 });
 
