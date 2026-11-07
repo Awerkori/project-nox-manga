@@ -2407,7 +2407,140 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         expect(getMemoryRevocationSet().has(ids[i]), `ID ${ids[i]} deve ser reconciliado no segundo ciclo mesmo com manifesto v5 < v10`).toBe(false);
       }
     });
+
+    // REVISÃO CODEX POST (RODADA 9): Validação de Restauração, RAWV com Propagação e Isolamento contra Réplicas Defasadas
+    it('Codex Rodada 9 - Item 1: marcador de restauração não sobrepõe re-revogação com tombstone mais recente', async () => {
+      const mediaId = 'c0000001-cccc-4001-8001-000000000001';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // Tombstone gravado em t=3000 (re-revogado)
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 3000,
+        state: 'REVOCATION_COMPLETED'
+      }));
+
+      // Manifesto desatualizado com restoredIds gravado em t=2000
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 5,
+        updatedAt: 2000,
+        revokedIds: [],
+        restoredIds: [mediaId]
+      }));
+
+      const isRev = await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(isRev, 'Marcador de restauração defasado em relação ao tombstone não pode desbloquear mídia re-revogada').toBe(true);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+    });
+
+    it('Codex Rodada 9 - Item 2: reconciliação de IDs omitidos não descarta revogação conhecida em leitura negativa sem registro de restauração', async () => {
+      const mediaId = 'c0000002-cccc-4002-8002-000000000002';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      // 1. Isolate confirma revogação em t=1000
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 1000,
+        revokedIds: [mediaId]
+      }));
+      await rawKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: 1000,
+        state: 'REVOCATION_COMPLETED'
+      }));
+      await isMediaRevoked(mediaId, rawKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(true);
+
+      // 2. PoP concorrente perde o ID do manifesto em t=2000 sem restauração
+      await rawKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 2,
+        updatedAt: 2000,
+        revokedIds: ['other-active-revocation']
+      }));
+
+      // 3. Simula réplica defasada do KV retornando null para a lápide individual durante reconciliação
+      const staleReplicaKv = {
+        ...rawKv,
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === `${REVOCATION_KEY_PREFIX}${mediaId}`) {
+            return null; // Réplica defasada simulada
+          }
+          return rawKv.get(key, opts);
+        }),
+        put: rawKv.put.bind(rawKv),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      // 4. Background sync deve recusar descartar a revogação sem registro positivo de restauração
+      await isMediaRevoked('other-active-revocation', staleReplicaKv, { forceFresh: true });
+      expect(getMemoryRevocationSet().has(mediaId), 'Reconciliação não pode descartar revogação confirmada apenas por leitura negativa defasada').toBe(true);
+    });
+
+    it('Codex Rodada 9 - Item 3: verificação RAWV de escrita do manifesto tolera atraso de propagação de réplica antes de reescrever', async () => {
+      const mediaId = 'c0000003-cccc-4003-8003-000000000003';
+      clearMemoryRevocationCache();
+      const rawKv = createMockKv();
+
+      let putCount = 0;
+      let manifestReadCount = 0;
+
+      const propagationLagKv = {
+        ...rawKv,
+        put: vi.fn(async (key: string, val: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            putCount++;
+          }
+          return rawKv.put(key, val);
+        }),
+        get: vi.fn(async (key: string, opts?: any) => {
+          if (key === REVOCATION_MANIFEST_KEY) {
+            manifestReadCount++;
+            // As primeiras 2 leituras após o put simulam retorno de versão defasada anterior
+            if (manifestReadCount <= 2) {
+              return { version: 0, updatedAt: 0, revokedIds: [] };
+            }
+          }
+          return rawKv.get(key, opts);
+        }),
+        delete: rawKv.delete.bind(rawKv)
+      };
+
+      const res = await revokeMedia(mediaId, { kv: propagationLagKv });
+      expect(res.success, 'Revogação deve ter sucesso após propagação do manifesto').toBe(true);
+      expect(res.manifestUpdated).toBe(true);
+      // Deve ter feito exatamente 1 put no manifesto, sem retentativas precipitadas de escrita que esgotem a cota
+      expect(putCount, 'Não deve reescrever o manifesto repetidamente durante atraso normal de propagação').toBe(1);
+    });
+
+    it('Codex Rodada 9 - Item 4: réplica defasada com manifesto antigo não reintroduz mídias restauradas', async () => {
+      const mediaId = 'c0000004-cccc-4004-8004-000000000004';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // 1. Mídia revogada inicialmente
+      await revokeMedia(mediaId, { kv: mockKv });
+      expect(await isMediaRevoked(mediaId, mockKv)).toBe(true);
+
+      // 2. Mídia restaurada legitimamente
+      await unrevokeMedia(mediaId, { kv: mockKv });
+      expect(await isMediaRevoked(mediaId, mockKv, { forceFresh: true })).toBe(false);
+
+      // 3. Réplica defasada serve snapshot anterior com mediaId ainda na lista de revogados
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: 500, // Defasado
+        revokedIds: [mediaId]
+      }));
+
+      // 4. Novo sync contra réplica defasada não pode reintroduzir a mídia restaurada
+      const isRevStale = await isMediaRevoked(mediaId, mockKv, { forceFresh: true });
+      expect(isRevStale, 'Manifesto antigo defasado não pode reintroduzir mídia que já foi restaurada').toBe(false);
+      expect(getMemoryRevocationSet().has(mediaId)).toBe(false);
+    });
   });
 });
+
 
 

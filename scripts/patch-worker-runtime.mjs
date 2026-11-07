@@ -159,10 +159,12 @@ function getSharedCacheKey(req) {
 
 const WORKER_REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
 const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
+const WORKER_REVOCATION_RESTORATION_KEY_PREFIX = 'restored:v1:';
 const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
 
 let workerRevokedMediaSet = new Set();
 let workerKnownRevocations = new Map();
+let workerKnownRestorations = new Map();
 let workerManifestRevokedSet = new Set();
 let workerLastRevocationSync = 0;
 let workerManifestLoaded = false;
@@ -189,20 +191,54 @@ async function syncWorkerManifest(kv) {
         workerManifestVersion = manifestVersion;
         workerManifestUpdatedAt = manifestUpdatedAt;
 
+        // 1. Add all currently revoked IDs from manifest unless superseded by newer known restoration
         for (const id of workerManifestRevokedSet) {
+          const restoration = workerKnownRestorations.get(id);
+          if (restoration && (manifestUpdatedAt < restoration.timestamp || (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version))) {
+            continue;
+          }
           workerRevokedMediaSet.add(id);
           workerKnownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          workerKnownRestorations.delete(id);
         }
 
+        // 2. Explicit positive restorations: verify against tombstone before applying
         if (Array.isArray(manifest.restoredIds)) {
           for (const restoredId of manifest.restoredIds) {
-            if (!workerManifestRevokedSet.has(restoredId)) {
-              workerRevokedMediaSet.delete(restoredId);
-              workerKnownRevocations.delete(restoredId);
+            if (workerManifestRevokedSet.has(restoredId)) continue;
+            const known = workerKnownRevocations.get(restoredId);
+            if (known && (manifestUpdatedAt < known.timestamp || (manifestUpdatedAt === known.timestamp && manifestVersion <= known.version))) {
+              continue;
             }
+
+            // Check individual tombstone in KV to verify restoration supersedes individual revocation
+            try {
+              const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + restoredId);
+              if (tombstone) {
+                let tombstoneTs = Date.now();
+                try {
+                  const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                  if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                } catch {}
+                if (tombstoneTs >= manifestUpdatedAt) {
+                  // Newer or concurrent tombstone exists: keep revoked!
+                  workerRevokedMediaSet.add(restoredId);
+                  workerKnownRevocations.set(restoredId, { timestamp: tombstoneTs, version: manifestVersion });
+                  workerKnownRestorations.delete(restoredId);
+                  continue;
+                }
+              }
+            } catch {
+              continue;
+            }
+
+            workerRevokedMediaSet.delete(restoredId);
+            workerKnownRevocations.delete(restoredId);
+            workerKnownRestorations.set(restoredId, { timestamp: manifestUpdatedAt, version: manifestVersion });
           }
         }
 
+        // 3. Reconcile missing IDs: check tombstones and restoration records (batch of 10)
         const missing = Array.from(workerRevokedMediaSet).filter((id) => {
           if (workerManifestRevokedSet.has(id)) return false;
           const known = workerKnownRevocations.get(id);
@@ -227,10 +263,52 @@ async function syncWorkerManifest(kv) {
             batch.map(async (knownId) => {
               try {
                 const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
-                if (!tombstone) {
+                if (tombstone) {
+                  let tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                  } catch {}
+                  workerKnownRevocations.set(knownId, { timestamp: tombstoneTs, version: workerManifestVersion });
+                  workerRevokedMediaSet.add(knownId);
+                  return;
+                }
+
+                // Tombstone is null: negative KV read alone is NOT sufficient proof of restoration
+                const known = workerKnownRevocations.get(knownId);
+                let canRestore = false;
+                let restorationTs = manifestUpdatedAt;
+                let restorationVer = manifestVersion;
+
+                if (!known || known.timestamp === 0) {
+                  canRestore = true;
+                } else {
+                  const knownRest = workerKnownRestorations.get(knownId);
+                  if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
+                    canRestore = true;
+                    restorationTs = knownRest.timestamp;
+                    restorationVer = knownRest.version;
+                  } else {
+                    try {
+                      const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + knownId, { type: 'json' });
+                      if (resRecord) {
+                        const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                        const recVer = Number(resRecord.version) || 0;
+                        if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
+                          canRestore = true;
+                          restorationTs = recTs;
+                          restorationVer = recVer;
+                        }
+                      }
+                    } catch {}
+                  }
+                }
+
+                if (canRestore) {
                   if (workerSyncGeneration === currentSyncGen && !workerManifestRevokedSet.has(knownId)) {
                     workerRevokedMediaSet.delete(knownId);
                     workerKnownRevocations.delete(knownId);
+                    workerKnownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
                   }
                 }
               } catch {
@@ -242,7 +320,12 @@ async function syncWorkerManifest(kv) {
           workerReconciliationCursor = 0;
         }
       } else {
+        // Manifest is older than known version/timestamp - only merge IDs not superseded by known restorations
         for (const id of manifest.revokedIds) {
+          const restoration = workerKnownRestorations.get(id);
+          if (restoration && (manifestUpdatedAt < restoration.timestamp || (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version))) {
+            continue; // Skip! ID was restored after this older manifest was written
+          }
           workerRevokedMediaSet.add(id);
           workerManifestRevokedSet.add(id);
         }
@@ -322,6 +405,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
           }
           workerRevokedMediaSet.delete(mediaId);
           workerKnownRevocations.delete(mediaId);
+          workerKnownRestorations.set(mediaId, { timestamp: workerManifestUpdatedAt, version: workerManifestVersion });
           return false;
         }
         if (workerManifestLoaded && !workerManifestKeyPresent) {

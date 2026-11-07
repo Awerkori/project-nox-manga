@@ -154,11 +154,13 @@ export function classifyMediaAccess(media: any): MediaAccessClassification {
 
 export const REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
 export const REVOCATION_KEY_PREFIX = 'revoked:v1:';
+export const REVOCATION_RESTORATION_KEY_PREFIX = 'restored:v1:';
 const isVitest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
 export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 
 let memoryRevokedSet = new Set<string>();
 let knownRevocations = new Map<string, { timestamp: number; version: number }>();
+let knownRestorations = new Map<string, { timestamp: number; version: number }>();
 let lastManifestRevokedSet = new Set<string>();
 let inFlightRevocations = new Set<string>();
 let locallyInitiatedRevocations = new Set<string>();
@@ -173,6 +175,7 @@ let manifestSyncGeneration = 0;
 export function clearMemoryRevocationCache(): void {
   memoryRevokedSet.clear();
   knownRevocations.clear();
+  knownRestorations.clear();
   lastManifestRevokedSet.clear();
   inFlightRevocations.clear();
   locallyInitiatedRevocations.clear();
@@ -215,27 +218,62 @@ async function syncManifest(kv: any): Promise<boolean> {
         currentManifestVersion = manifestVersion;
         currentManifestUpdatedAt = manifestUpdatedAt;
 
-        // 1. Add all currently revoked IDs from manifest to isolate memory and record metadata
+        // 1. Add all currently revoked IDs from manifest to isolate memory and record metadata unless superseded by newer restoration
         for (const id of lastManifestRevokedSet) {
+          const restoration = knownRestorations.get(id);
+          if (restoration && (manifestUpdatedAt < restoration.timestamp || (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version))) {
+            continue; // ID was restored in a newer version/timestamp; skip
+          }
           memoryRevokedSet.add(id);
           knownRevocations.set(id, { timestamp: manifestUpdatedAt, version: manifestVersion });
+          knownRestorations.delete(id);
         }
 
-        // 2. Explicit positive restorations: if manifest contains restoredIds, only restore if NOT in current revokedIds
+        // 2. Explicit positive restorations: if manifest contains restoredIds, verify against tombstone before applying
         if (Array.isArray(manifest.restoredIds)) {
           for (const restoredId of manifest.restoredIds) {
-            if (!lastManifestRevokedSet.has(restoredId) && !locallyInitiatedRevocations.has(restoredId)) {
-              memoryRevokedSet.delete(restoredId);
-              knownRevocations.delete(restoredId);
+            if (lastManifestRevokedSet.has(restoredId) || inFlightRevocations.has(restoredId)) {
+              continue;
             }
+            const known = knownRevocations.get(restoredId);
+            if (known && (manifestUpdatedAt < known.timestamp || (manifestUpdatedAt === known.timestamp && manifestVersion <= known.version))) {
+              continue; // A newer revocation exists in memory; do not unrevoke
+            }
+
+            // Check tombstone in KV to verify restoration supersedes individual revocation
+            try {
+              const tombstone = await kv.get(REVOCATION_KEY_PREFIX + restoredId);
+              if (tombstone) {
+                let tombstoneTs = Date.now();
+                try {
+                  const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                  if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                } catch {}
+                if (tombstoneTs >= manifestUpdatedAt) {
+                  // Newer or concurrent tombstone exists: keep revoked!
+                  memoryRevokedSet.add(restoredId);
+                  knownRevocations.set(restoredId, { timestamp: tombstoneTs, version: manifestVersion });
+                  knownRestorations.delete(restoredId);
+                  continue;
+                }
+              }
+            } catch {
+              // Fail closed: do not unrevoke on KV read error
+              continue;
+            }
+
+            locallyInitiatedRevocations.delete(restoredId);
+            memoryRevokedSet.delete(restoredId);
+            knownRevocations.delete(restoredId);
+            knownRestorations.set(restoredId, { timestamp: manifestUpdatedAt, version: manifestVersion });
           }
         }
 
-        // 3. Reconcile IDs: check missing IDs against individual tombstones with bounded concurrency (max 10)
+        // 3. Reconcile IDs: check missing IDs against tombstones with bounded concurrency (max 10)
         // Rotating cursor prevents starvation when early omitted IDs still have tombstones.
         // Known revocations are preserved if the manifest predates when the revocation was learned.
         const missingIds = Array.from(memoryRevokedSet).filter((id) => {
-          if (lastManifestRevokedSet.has(id) || inFlightRevocations.has(id) || locallyInitiatedRevocations.has(id)) {
+          if (lastManifestRevokedSet.has(id) || inFlightRevocations.has(id)) {
             return false;
           }
           const known = knownRevocations.get(id);
@@ -260,15 +298,57 @@ async function syncManifest(kv: any): Promise<boolean> {
             batch.map(async (knownId) => {
               try {
                 const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
+                if (tombstone) {
+                  let tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                  } catch {}
+                  knownRevocations.set(knownId, { timestamp: tombstoneTs, version: currentManifestVersion });
+                  memoryRevokedSet.add(knownId);
+                  return;
+                }
+
+                // Tombstone is null: negative KV read alone is NOT sufficient proof of restoration
+                const known = knownRevocations.get(knownId);
+                let canRestore = false;
+                let restorationTs = manifestUpdatedAt;
+                let restorationVer = manifestVersion;
+
+                if (!known || known.timestamp === 0) {
+                  canRestore = true;
+                } else {
+                  const knownRest = knownRestorations.get(knownId);
+                  if (knownRest && (knownRest.timestamp > known.timestamp || (knownRest.timestamp === known.timestamp && knownRest.version > known.version))) {
+                    canRestore = true;
+                    restorationTs = knownRest.timestamp;
+                    restorationVer = knownRest.version;
+                  } else {
+                    try {
+                      const resRecord = await kv.get(REVOCATION_RESTORATION_KEY_PREFIX + knownId, { type: 'json' });
+                      if (resRecord) {
+                        const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                        const recVer = Number(resRecord.version) || 0;
+                        if (recTs > known.timestamp || (recTs === known.timestamp && recVer > known.version)) {
+                          canRestore = true;
+                          restorationTs = recTs;
+                          restorationVer = recVer;
+                        }
+                      }
+                    } catch {}
+                  }
+                }
+
                 if (
-                  !tombstone &&
+                  canRestore &&
                   !inFlightRevocations.has(knownId) &&
-                  !locallyInitiatedRevocations.has(knownId) &&
                   manifestSyncGeneration === syncGen &&
                   !lastManifestRevokedSet.has(knownId)
                 ) {
+                  locallyInitiatedRevocations.delete(knownId);
                   memoryRevokedSet.delete(knownId);
                   knownRevocations.delete(knownId);
+                  knownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
                 }
               } catch {
                 // Fail closed: preserve known revocation on KV error
@@ -279,8 +359,12 @@ async function syncManifest(kv: any): Promise<boolean> {
           reconciliationCursor = 0;
         }
       } else {
-        // Manifest is older than our known version/timestamp - merge newly seen IDs, preserve newer state
+        // Manifest is older than our known version/timestamp - only merge IDs that have NOT been superseded by known restorations
         for (const id of manifest.revokedIds) {
+          const restoration = knownRestorations.get(id);
+          if (restoration && (manifestUpdatedAt < restoration.timestamp || (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version))) {
+            continue; // Skip! ID was restored after this older manifest was written
+          }
           memoryRevokedSet.add(id);
           lastManifestRevokedSet.add(id);
         }
@@ -383,14 +467,16 @@ export async function isMediaRevoked(
           if (locallyInitiatedRevocations.has(mediaId)) {
             return true;
           }
-          // If media was already known to be revoked in memory, do not delete unless manifest is established to be newer than revocation
           const known = knownRevocations.get(mediaId);
           if (known && (currentManifestUpdatedAt < known.timestamp || (currentManifestUpdatedAt === known.timestamp && currentManifestVersion <= known.version))) {
             // Negative reads on tombstone + older manifest do not prove restoration; preserve known revocation
             return true;
           }
+
+          locallyInitiatedRevocations.delete(mediaId);
           memoryRevokedSet.delete(mediaId);
           knownRevocations.delete(mediaId);
+          knownRestorations.set(mediaId, { timestamp: currentManifestUpdatedAt, version: currentManifestVersion });
           return false;
         }
 
@@ -640,6 +726,14 @@ export async function revokeMedia(
   if (!options.kv || typeof options.kv.put !== 'function') {
     errors.push('KV_BINDING_MISSING: Persistent KV binding is required for media revocation guarantees');
   } else {
+    // Clean up any existing restoration record
+    if (typeof options.kv.delete === 'function') {
+      try {
+        await options.kv.delete(REVOCATION_RESTORATION_KEY_PREFIX + mediaId);
+      } catch {}
+    }
+    knownRestorations.delete(mediaId);
+
     try {
       await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, JSON.stringify(initialMetadata));
       tombstoneWritten = true;
@@ -673,10 +767,32 @@ export async function revokeMedia(
         };
         await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(nextManifest));
 
-        // Read-After-Write Verification (RAWV): confirm our write was not overwritten concurrently
-        const verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
-        if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
-          manifestUpdated = true;
+        // Read-After-Write Verification (RAWV): poll reads to account for KV propagation delay before rewriting
+        const MAX_VERIFY_READS = 4;
+        let verified: any = null;
+        for (let readAttempt = 0; readAttempt < MAX_VERIFY_READS; readAttempt++) {
+          verified = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
+          if (verified?.revokedIds && Array.isArray(verified.revokedIds) && verified.revokedIds.includes(mediaId)) {
+            manifestUpdated = true;
+            break;
+          }
+
+          const readVersion = Number(verified?.version) || 0;
+          const readUpdatedAt = Number(verified?.updatedAt) || 0;
+
+          // If a genuinely newer manifest from a concurrent writer omitted mediaId, it was overwritten
+          if (readUpdatedAt > nextUpdatedAt || (readUpdatedAt === nextUpdatedAt && readVersion > nextVersion)) {
+            break;
+          }
+
+          // Otherwise it is replica propagation delay; wait before reading again without rewriting
+          if (readAttempt < MAX_VERIFY_READS - 1) {
+            const delayMs = isVitest ? 2 : 250 * (readAttempt + 1);
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
+        }
+
+        if (manifestUpdated && verified) {
           lastManifestRevokedSet = new Set(verified.revokedIds);
           currentManifestVersion = Math.max(currentManifestVersion, nextVersion);
           currentManifestUpdatedAt = Math.max(currentManifestUpdatedAt, nextUpdatedAt);
@@ -684,10 +800,11 @@ export async function revokeMedia(
             memoryRevokedSet.add(id);
             knownRevocations.set(id, { timestamp: nextUpdatedAt, version: nextVersion });
           }
-        } else {
-          // Concurrent overwrite detected — back off with randomized jitter and retry union merge
-          const jitterMs = 10 * manifestWriteAttempts + Math.floor(Math.random() * 20);
-          await new Promise((r) => setTimeout(r, jitterMs));
+          break;
+        } else if (manifestWriteAttempts < MAX_MANIFEST_ATTEMPTS) {
+          // Concurrent overwrite or propagation timeout; back off respecting KV 1 write/sec limit before retry
+          const backoffMs = isVitest ? 5 : 1000;
+          await new Promise((r) => setTimeout(r, backoffMs));
         }
       } catch (manifestErr: any) {
         if (manifestWriteAttempts >= MAX_MANIFEST_ATTEMPTS) {
@@ -805,20 +922,37 @@ export async function unrevokeMedia(
       knownRevocations.delete(mediaId);
       lastManifestRevokedSet.delete(mediaId);
 
+      const nextUpdatedAt = Date.now();
+      let nextVersion = currentManifestVersion + 1;
+
+      // Write explicit restoration record to KV to establish positive ordering against stale reads
+      try {
+        await options.kv.put(REVOCATION_RESTORATION_KEY_PREFIX + mediaId, JSON.stringify({
+          mediaId,
+          restoredAt: nextUpdatedAt,
+          version: nextVersion
+        }));
+      } catch {
+        // Non-fatal if KV put of restoration record fails, manifest update follows
+      }
+
       try {
         const currentManifest = await options.kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' }).catch(() => null);
         if (currentManifest && Array.isArray(currentManifest.revokedIds)) {
           currentManifest.revokedIds = currentManifest.revokedIds.filter((id: string) => id !== mediaId);
-          const nextVersion = Math.max(Number(currentManifest.version) || 1, currentManifestVersion) + 1;
-          const nextUpdatedAt = Math.max(Date.now(), (Number(currentManifest.updatedAt) || 0) + 1);
-          currentManifest.updatedAt = nextUpdatedAt;
+          nextVersion = Math.max(Number(currentManifest.version) || 1, currentManifestVersion) + 1;
+          const manifestUpdatedAt = Math.max(nextUpdatedAt, (Number(currentManifest.updatedAt) || 0) + 1);
+          currentManifest.updatedAt = manifestUpdatedAt;
           currentManifest.version = nextVersion;
           const existingRestored = Array.isArray(currentManifest.restoredIds) ? currentManifest.restoredIds : [];
           currentManifest.restoredIds = [mediaId, ...existingRestored.filter((id: string) => id !== mediaId)].slice(0, 100);
           await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
           lastManifestRevokedSet = new Set(currentManifest.revokedIds);
           currentManifestVersion = nextVersion;
-          currentManifestUpdatedAt = nextUpdatedAt;
+          currentManifestUpdatedAt = manifestUpdatedAt;
+          knownRestorations.set(mediaId, { timestamp: manifestUpdatedAt, version: nextVersion });
+        } else {
+          knownRestorations.set(mediaId, { timestamp: nextUpdatedAt, version: nextVersion });
         }
       } catch (manifestErr: any) {
         errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);
@@ -829,6 +963,7 @@ export async function unrevokeMedia(
     memoryRevokedSet.delete(mediaId);
     knownRevocations.delete(mediaId);
     lastManifestRevokedSet.delete(mediaId);
+    knownRestorations.set(mediaId, { timestamp: Date.now(), version: currentManifestVersion + 1 });
   }
 
   // Purge any negative (404) cache entries from Workers Caching and Cache API
