@@ -24,7 +24,8 @@ describe('Chapter Reactions In-Memory Aggregate Caching', () => {
     });
 
     vi.doMock('$lib/server/yugabyte', () => ({
-      executeYugabyteSql: mockSql
+      executeYugabyteSql: mockSql,
+      withYugabyteReadSession: (_env: any, fn: any) => fn(_env)
     }));
 
     const { GET } = await import('../src/routes/api/chapter-reactions/+server');

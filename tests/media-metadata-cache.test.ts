@@ -53,4 +53,33 @@ describe('Media Metadata In-Memory LRU Cache', () => {
     const res = await fetchMediaMetadataFromYugabyte(testMediaId, {});
     expect(res).toEqual(fakeRow);
   });
+
+  it('invalidates media metadata cache when revokeMedia and unrevokeMedia are invoked', async () => {
+    const { revokeMedia, unrevokeMedia } = await import('../src/lib/server/media-revocation');
+    const fakeRow = {
+      id: testMediaId,
+      access_class: 'PUBLIC',
+      status: 'ACTIVE'
+    };
+
+    setCachedMediaMetadata(testMediaId, fakeRow);
+    expect(getCachedMediaMetadata(testMediaId)).toEqual(fakeRow);
+
+    const mockKv = {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined)
+    };
+
+    // Calling revokeMedia must automatically purge mediaMetadataCache
+    await revokeMedia(testMediaId, { kv: mockKv });
+    expect(getCachedMediaMetadata(testMediaId)).toBeNull();
+
+    // Re-set and test unrevokeMedia
+    setCachedMediaMetadata(testMediaId, fakeRow);
+    expect(getCachedMediaMetadata(testMediaId)).toEqual(fakeRow);
+
+    await unrevokeMedia(testMediaId, { kv: mockKv });
+    expect(getCachedMediaMetadata(testMediaId)).toBeNull();
+  });
 });

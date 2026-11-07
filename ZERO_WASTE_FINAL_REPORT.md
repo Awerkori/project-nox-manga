@@ -139,5 +139,5 @@ A operação Cloudflare Zero Waste Absolute está **definitivamente homologada e
 - As mídias públicas em cache são entregues na borda pela Cloudflare com **zero execução de código de Worker, zero consumo de CPU, zero tráfego no Hyperdrive e zero queries no YSQL**.
 - A revogação está blindada com modelo fail-closed resiliente a atrasos de replicação assíncrona do Cloudflare KV.
 - A suíte global de testes (108 arquivos / 650 testes) e a suíte adversarial de revogação (118 testes) estão 100% verdes.
-- O bundle com as correções finais (commit `a98ab60`) está publicado em produção e verificado ao vivo na versão `07ab558b-4a5c-4b3e-88e7-c8b6e27fa70c`.
+- O bundle com as correções finais (commit `242c0a7`) está publicado em produção e verificado ao vivo na versão `a6f1400b-ce73-40bf-bb0a-ce0c0a813785`.
 - A campanha paralela YSQL M03 segue em plena execução com seus processos preservados.

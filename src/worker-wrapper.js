@@ -106,7 +106,12 @@ function getSharedCacheKey(req) {
   try {
     const url = new URL(req.url);
     const p = url.pathname;
-    if (p.startsWith('/media/') || p.startsWith('/_app/') || p.startsWith('/api') ||
+    const isPrivateApi = p.startsWith('/api/action') || p.startsWith('/api/admin') ||
+      p.startsWith('/api/auth') || p.startsWith('/api/internal') || p.startsWith('/api/media') ||
+      p.startsWith('/api/scan') || p.startsWith('/api/shop') || p.startsWith('/api/social') ||
+      p.startsWith('/api/staff') || p.startsWith('/api/upload') || p.startsWith('/api/comments') ||
+      p.startsWith('/api/invite') || p.startsWith('/api/banner') || p.startsWith('/api/avatar');
+    if (p.startsWith('/media/') || p.startsWith('/_app/') || isPrivateApi ||
         p.startsWith('/admin') || p.startsWith('/me') || p.startsWith('/perfil') || 
         p.startsWith('/biblioteca') || p.startsWith('/scan') || p.startsWith('/auth') ||
         p.startsWith('/settings')) {
