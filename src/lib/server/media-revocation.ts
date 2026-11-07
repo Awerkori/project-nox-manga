@@ -182,10 +182,27 @@ async function syncManifest(kv: any): Promise<boolean> {
   try {
     const manifest = await kv.get(REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
-      for (const id of manifest.revokedIds) {
-        memoryRevokedSet.add(id);
+      const newSet = new Set<string>(manifest.revokedIds);
+      // Reconcile removed IDs against tombstones before discarding to protect against stale KV read replicas
+      for (const knownId of memoryRevokedSet) {
+        if (!newSet.has(knownId)) {
+          try {
+            const tombstone = await kv.get(REVOCATION_KEY_PREFIX + knownId);
+            if (tombstone) {
+              newSet.add(knownId);
+            }
+          } catch {
+            // Fail closed on error: preserve known revocation
+            newSet.add(knownId);
+          }
+        }
       }
+      memoryRevokedSet = newSet;
       manifestSuccessfullyLoaded = true;
+      return true;
+    } else if (manifest === null || manifest === undefined) {
+      // Manifest does not exist yet (clean slate) - no I/O error, but tombstone check needed if key exists
+      manifestSuccessfullyLoaded = false;
       return true;
     } else {
       manifestSuccessfullyLoaded = false;
@@ -228,10 +245,13 @@ export async function isMediaRevoked(
   const shouldSyncManifest = options?.forceFresh || isTest || !manifestSuccessfullyLoaded || (now - lastManifestSync > REVOCATION_SYNC_INTERVAL_MS);
 
   if (shouldSyncManifest) {
-    await syncManifest(kv);
+    const loaded = await syncManifest(kv);
+    if (!loaded && options?.failClosed && !manifestSuccessfullyLoaded) {
+      return true;
+    }
   }
 
-  // 1. Authoritative tombstone check: if explicitly requested
+  // 3. Authoritative tombstone check: if explicitly requested
   if (options?.checkTombstone) {
     try {
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
@@ -241,9 +261,10 @@ export async function isMediaRevoked(
       } else {
         // A stale negative tombstone read from an eventually-consistent KV replica
         // cannot override a positive revocation already verified by manifest/in-memory
-        if (memoryRevokedSet.has(mediaId)) {
+        if (manifestSuccessfullyLoaded && memoryRevokedSet.has(mediaId)) {
           return true;
         }
+        memoryRevokedSet.delete(mediaId);
         return false;
       }
     } catch {
@@ -251,12 +272,12 @@ export async function isMediaRevoked(
     }
   }
 
-  // 2. Synced manifest in-memory lookup (0ms, 0 KV reads)
+  // 4. In-memory set check after sync (0ms, 0 KV reads)
   if (memoryRevokedSet.has(mediaId)) {
     return true;
   }
 
-  // 3. Fallback tombstone check if manifest failed to load reliably
+  // 5. Fallback tombstone check if manifest failed to load reliably from KV
   if (!manifestSuccessfullyLoaded) {
     try {
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);

@@ -190,10 +190,25 @@ async function syncWorkerManifest(kv) {
   try {
     const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
     if (manifest && Array.isArray(manifest.revokedIds)) {
-      for (const id of manifest.revokedIds) {
-        workerRevokedMediaSet.add(id);
+      const newSet = new Set(manifest.revokedIds);
+      for (const knownId of workerRevokedMediaSet) {
+        if (!newSet.has(knownId)) {
+          try {
+            const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
+            if (tombstone) {
+              newSet.add(knownId);
+            }
+          } catch {
+            // Fail closed on KV error: preserve known revocation
+            newSet.add(knownId);
+          }
+        }
       }
+      workerRevokedMediaSet = newSet;
       workerManifestLoaded = true;
+      return true;
+    } else if (manifest === null || manifest === undefined) {
+      workerManifestLoaded = false;
       return true;
     } else {
       workerManifestLoaded = false;
@@ -227,9 +242,10 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         workerRevokedMediaSet.add(mediaId);
         return true;
       } else {
-        if (workerRevokedMediaSet.has(mediaId)) {
+        if (workerManifestLoaded && workerRevokedMediaSet.has(mediaId)) {
           return true;
         }
+        workerRevokedMediaSet.delete(mediaId);
         return false;
       }
     } catch {
@@ -241,7 +257,10 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
   const now = Date.now();
   const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
   if (shouldSync) {
-    await syncWorkerManifest(kv);
+    const loaded = await syncWorkerManifest(kv);
+    if (!loaded && options?.failClosed && !workerManifestLoaded) {
+      return true;
+    }
   }
 
   // 5. In-memory set check after sync
