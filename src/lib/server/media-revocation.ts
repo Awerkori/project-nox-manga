@@ -940,11 +940,9 @@ export async function purgeMediaVariants(
 
   // 2. Purge all variants from Cache API (caches.default)
   if (cache && typeof cache.delete === 'function') {
+    // Cloudflare Cache API strictly enforces origin matching with the incoming request.
+    // Secondary domains (such as www.projectnox.org) are canonical 308 redirects that never store media.
     const originsToPurge = new Set([origin]);
-    if (origin !== 'https://projectnox.org') {
-      originsToPurge.add('https://projectnox.org');
-    }
-    originsToPurge.add('https://www.projectnox.org');
 
     const urlsToPurge: string[] = [];
     for (const org of originsToPurge) {

@@ -4015,6 +4015,33 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(missingErrorsRes.errors.length).toBeGreaterThan(0);
       expect(missingErrorsRes.errors[0]).toContain('missing errors array');
       expect(missingErrorsRes.globalPurgeDispatched).toBe(false);
+
+      // 15. purgeMediaVariants respeita origin-matching do Cloudflare Cache API e não despacha deleções cross-origin para www
+      const strictOriginCache = {
+        delete: vi.fn(async (req: Request) => {
+          const u = new URL(req.url);
+          if (u.origin !== 'https://projectnox.org') {
+            throw new TypeError(`Unable to delete cached response: origin mismatch for ${u.origin}`);
+          }
+          return true;
+        }),
+        match: vi.fn().mockResolvedValue(null)
+      };
+      const strictOriginCtx = { cache: { purge: vi.fn().mockResolvedValue({ success: true, errors: [] }) } };
+      const strictOriginRes = await purgeMediaVariants('2222dddd-eeee-ffff-3333-444455556666', {
+        origin: 'https://projectnox.org',
+        cache: strictOriginCache,
+        ctx: strictOriginCtx,
+        requirePurgeDispatch: true
+      });
+      expect(strictOriginRes.errors).toEqual([]);
+      expect(strictOriginRes.globalPurgeDispatched).toBe(true);
+      // Confirma que nenhuma chamada foi feita para www.projectnox.org
+      for (const call of strictOriginCache.delete.mock.calls) {
+        const calledUrl = new URL((call[0] as Request).url);
+        expect(calledUrl.origin).toBe('https://projectnox.org');
+        expect(calledUrl.hostname).not.toBe('www.projectnox.org');
+      }
     });
   });
 });
