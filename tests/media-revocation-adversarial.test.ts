@@ -3984,6 +3984,25 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       });
       expect(okRes.errors.length).toBe(0);
       expect(okRes.globalPurgeDispatched).toBe(true);
+
+      // 12. purgeMediaVariants aceita retorno com success: true e errors: [] (lista vazia não é falso erro)
+      const emptyErrorsPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue({ success: true, errors: [] }) } };
+      const emptyErrorsRes = await purgeMediaVariants('9999aaaa-bbbb-cccc-0000-111122223333', {
+        ctx: emptyErrorsPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(emptyErrorsRes.errors.length).toBe(0);
+      expect(emptyErrorsRes.globalPurgeDispatched).toBe(true);
+
+      // 13. purgeMediaVariants rejeita retorno com success: true mas com erros não vazios no array
+      const nonEmptyErrorsPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue({ success: true, errors: ['falha remota'] }) } };
+      const nonEmptyErrorsRes = await purgeMediaVariants('0000bbbb-cccc-dddd-1111-222233334444', {
+        ctx: nonEmptyErrorsPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(nonEmptyErrorsRes.errors.length).toBeGreaterThan(0);
+      expect(nonEmptyErrorsRes.errors[0]).toContain('falha remota');
+      expect(nonEmptyErrorsRes.globalPurgeDispatched).toBe(false);
     });
   });
 });

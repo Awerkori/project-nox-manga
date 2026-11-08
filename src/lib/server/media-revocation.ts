@@ -891,7 +891,7 @@ export async function purgeMediaVariants(
       let errorDetails = '';
 
       if (purgeRes === undefined || purgeRes === true) {
-        // Standard Cloudflare Workers Promise<void> or explicit boolean true
+        // Native Cloudflare Workers Promise<void> or boolean true
         hasPurgeError = false;
       } else if (purgeRes && typeof purgeRes === 'object') {
         const hasExplicitSuccess = purgeRes.success === true ||
@@ -908,15 +908,21 @@ export async function purgeMediaVariants(
             : String(purgeRes.error);
         }
         if (purgeRes.errors) {
-          hasPurgeError = true;
-          if (Array.isArray(purgeRes.errors)) {
-            errorDetails = purgeRes.errors
-              .map((e: any) => (e && typeof e === 'object' ? (e.message || JSON.stringify(e)) : String(e)))
-              .join('; ');
-          } else if (typeof purgeRes.errors === 'object') {
-            errorDetails = purgeRes.errors.message || JSON.stringify(purgeRes.errors);
-          } else {
-            errorDetails = String(purgeRes.errors);
+          const hasNonEmptyErrors = Array.isArray(purgeRes.errors)
+            ? purgeRes.errors.length > 0
+            : Boolean(purgeRes.errors);
+
+          if (hasNonEmptyErrors) {
+            hasPurgeError = true;
+            if (Array.isArray(purgeRes.errors)) {
+              errorDetails = purgeRes.errors
+                .map((e: any) => (e && typeof e === 'object' ? (e.message || JSON.stringify(e)) : String(e)))
+                .join('; ');
+            } else if (typeof purgeRes.errors === 'object') {
+              errorDetails = purgeRes.errors.message || JSON.stringify(purgeRes.errors);
+            } else {
+              errorDetails = String(purgeRes.errors);
+            }
           }
         }
         if (hasPurgeError && !errorDetails) {
