@@ -14,15 +14,15 @@
 - **Comando Executado:** `npx vitest run` / `npm test`
 - **Total de Arquivos de Teste:** 116 arquivos
 - **Arquivos Aprovados:** 116 arquivos (**100% de sucesso**)
-- **Total de Testes Individuais:** 736 testes
-- **Testes Aprovados:** 736 testes (**100% dos testes executados**)
+- **Total de Testes Individuais:** 737 testes
+- **Testes Aprovados:** 737 testes (**100% dos testes executados**)
 - **Testes Ignorados (Skipped por design):** 0
 - **Testes com Falha:** 0 falhas
-- **Duração Total da Suíte:** 20,37 segundos
-- **Compilação de Produção (`npm run build`):** Exit code 0 (sucesso absoluto em 15,82s)
+- **Duração Total da Suíte:** 20,46 segundos
+- **Compilação de Produção (`npm run build`):** Exit code 0 (sucesso absoluto em 15,15s)
 
 #### Destaques de Cobertura de Testes:
-1. `tests/reader-real-pipeline-integration.test.ts` (31 testes - NOVO SUÍTE DE INTEGRAÇÃO REAL):
+1. `tests/reader-real-pipeline-integration.test.ts` (32 testes - NOVO SUÍTE DE INTEGRAÇÃO REAL):
    - Execução real dos caminhos de requisição e resposta para os 5 arquétipos de leitores em capítulos de 15, 30 e 50 páginas.
    - Contabilidade real das 7 métricas: requisições geradas, requisições recebidas, requisições faturáveis, execuções de Worker, queries YSQL, conexões Hyperdrive, transferência de bytes e latência (p50, p95, p99).
    - Auditoria forense de revogação de mídia em 8 dimensões: exclusão (404 no-store), substituição (ETag mismatch), query strings (`?size=thumb&v=3`, etc.), escopo PoP-local de `caches.default.delete()` vs consistência global KV, fronteira de cache local com `immutable`, alteração de visibilidade (public -> staff-only), domínio canônico (308 www redirect) e guarda fail-closed em falhas de KV.

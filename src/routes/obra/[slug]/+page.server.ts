@@ -74,10 +74,11 @@ export const load = async ({ locals, params, url, cookies, platform, setHeaders 
   }
 
   const isAdultWork = (work as any).content_rating === 'ADULT_18';
-  if (!locals.user && setHeaders) {
-    if (isAdultWork) {
+  if (setHeaders) {
+    if (locals.user || isAdultWork) {
       setHeaders({
-        'cache-control': 'private, no-cache, no-store, must-revalidate'
+        'cache-control': 'private, no-cache, no-store, must-revalidate',
+        'vary': 'Cookie, Authorization'
       });
     } else {
       setHeaders({

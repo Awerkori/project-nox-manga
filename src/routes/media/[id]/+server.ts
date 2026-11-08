@@ -397,6 +397,8 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     headers['CDN-Cache-Control'] = 'no-store';
     headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
     headers['Vary'] = 'Cookie, Authorization';
+    delete headers['Cache-Tag'];
+    delete headers['X-Cache-Tag'];
   }
 
   if (media.bytes && Number(media.bytes) > 0) {
