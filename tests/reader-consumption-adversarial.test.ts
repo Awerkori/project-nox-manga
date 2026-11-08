@@ -1,15 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 /**
  * PROJECT NOX — SUÍTE ADVERSARIAL DE CONSUMO DO LEITOR & AUDITORIA DE RECURSOS
- * 
+ *
  * Baterias com cenários de 15, 30 e 50 imagens por capítulo, cobrindo:
  * 1. Novo Leitor Web (Cold Cache, Sem SW, Sem Cache Local)
  * 2. Leitor Web Recorrente (Com HTTP Disk Cache / immutable, Sem SW)
  * 3. Leitor Web PWA Recorrente (Com Service Worker / CacheStorage nox-media-v1)
  * 4. Leitor Mihon / Fork — Novo Capítulo (Download / Primeira Leitura no App)
  * 5. Leitor Mihon / Fork — Re-leitura (OkHttp Disk Cache Local)
- * 
+ *
  * Matriz estrita das 7 métricas obrigatórias:
  * (1) Requisições HTTP geradas pelo cliente
  * (2) Requisições que chegam à Cloudflare

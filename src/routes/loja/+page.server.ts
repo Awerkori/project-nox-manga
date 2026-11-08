@@ -1,4 +1,3 @@
-import { withTimeout } from '$lib/server/resilience';
 import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics-catalog';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
@@ -10,7 +9,7 @@ export const load = async ({ locals, setHeaders, platform }: any) => {
   if (cachedShopItems && Date.now() - cachedShopItems.timestamp < SHOP_CACHE_TTL_MS) {
     items = cachedShopItems.data;
   } else {
-    let dbItems: any[] = [];
+    let dbItems: any[];
     try {
       const ybRes = await executeYugabyteSql(
         `SELECT * FROM shop_items ORDER BY order_index ASC;`,

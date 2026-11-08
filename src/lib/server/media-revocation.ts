@@ -858,7 +858,7 @@ export async function purgeMediaVariants(
   options: PurgeMediaOptions & { currentUrl?: string } = {}
 ): Promise<{ cachePurged: number; workersCachePurged: number; kvPurged: number; localPurgeVerified: boolean; globalPurgeDispatched: boolean; globalPurgeVerified: boolean; errors: string[] }> {
   const { cache, ctx, origin = 'https://projectnox.org', kv, currentUrl } = options;
-  let cleanOrigin = 'https://projectnox.org';
+  let cleanOrigin: string;
   try {
     cleanOrigin = new URL(origin).origin;
   } catch {
