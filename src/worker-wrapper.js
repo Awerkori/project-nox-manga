@@ -91,7 +91,7 @@ var initialized = server.init({
     return response.body;
   }
 });
-const AUTHENTICATED_SESSION_COOKIE = /(?:^|[;\s])(?:nox-auth(?:-token)?|sb-[a-z0-9_-]+(?:-auth-token|-access-token|-token)?|supabase[-_]auth[-_]token|sb:token|access[-_]token|session|auth[-_]token)\s*=/i;
+const AUTHENTICATED_SESSION_COOKIE = /(?:^|[;\s])(?:nox-auth(?:-token)?|sb-[a-z0-9_-]+(?:-auth-token|-access-token|-token)?|supabase[-_]auth[-_]token|sb:token|access[-_]token|session|auth[-_]token)(?:\.\d+)?\s*=/i;
 const PERSONALIZED_HOME_COOKIE = /(?:^|[;\s])(?:nox-age-status|nox-blur-nsfw)\s*=/i;
 
 function shouldBypassSharedCache(req) {

@@ -101,6 +101,8 @@ describe('shared Worker cache guard', () => {
     expect(regex.test('cookie1=val;nox-auth=xyz')).toBe(true);
     expect(regex.test('cookie1=val ; nox-auth = xyz')).toBe(true);
     expect(regex.test('access_token=token123')).toBe(true);
+    expect(regex.test('nox-auth-token.0=chunked_part_0')).toBe(true);
+    expect(regex.test('sb-izregkwaqdygwioqzwwo-auth-token.1=chunked_part_1')).toBe(true);
     expect(regex.test('nox-age-status=ADULT; nox-blur-nsfw=false')).toBe(false);
   });
 
