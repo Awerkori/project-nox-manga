@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 describe('Service Worker Media Revocation & Cache Lifetime Protection', () => {

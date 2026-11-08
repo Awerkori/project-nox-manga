@@ -91,6 +91,8 @@ it('constructs Telegram upload requests in the actual Cloudflare runtime', async
   } finally {
     try {
       await runtime?.dispose();
-    } catch {}
+    } catch {
+      // Best-effort runtime cleanup
+    }
   }
 });

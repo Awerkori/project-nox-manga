@@ -22,7 +22,6 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
 
 const OAUTH_TOKEN_FILE = '/home/awerkori/.wrangler/config/default.toml';
@@ -296,8 +295,8 @@ function validateResponseBody(buffer, status, headers) {
   let sha256Approved = false;
   let sha256Unavailable = false;
   let sha256Divergent = false;
-  let sha256Status = 'SHA256_UNAVAILABLE';
-  let sha256Valid = false;
+  let sha256Status;
+  let sha256Valid;
 
   // We can ONLY compare SHA-256 for complete 200 responses where ETag is a 64-hex SHA-256
   if (status === 200 && etagUsableAsSha256) {
@@ -390,7 +389,7 @@ async function main() {
 
   // 2. Baseline telemetry
   console.log('\n[2/6] Capturing Cloudflare Baseline Telemetry (limit 1000)...');
-  const baselineData = await getCloudflareMetrics(new Date(Date.now() - 3600 * 1000).toISOString());
+  await getCloudflareMetrics(new Date(Date.now() - 3600 * 1000).toISOString());
   console.log('[BASELINE] Baseline telemetry captured successfully.');
 
   // 3. Harvest >= 300 distinct public chapter images from Mihon API
@@ -785,11 +784,10 @@ async function main() {
 
   // 5.3 Cache-Tag Header Verification
   const samplePublicUrl = sample300[0]?.url;
-  let hasCacheTag = false;
   if (samplePublicUrl) {
     const tagProbe = await fetch(samplePublicUrl, { headers: mihonHeaders });
     const tagHeader = tagProbe.headers.get('cache-tag') || tagProbe.headers.get('x-cache-tag') || '';
-    hasCacheTag = tagHeader.includes('media-');
+    const hasCacheTag = tagHeader.includes('media-');
     securityResults.push({
       test: 'Cache-Tag emission for selective Workers Caching purge',
       status: tagProbe.status,

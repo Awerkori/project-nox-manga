@@ -536,7 +536,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
     await mockCache.put(new Request(`${origin}/media/${mediaId}`), new Response('data', { status: 200 }));
 
     // Run revocation concurrent with 20 read requests
-    const readPromises = Array.from({ length: 20 }, (_, idx) => {
+    const readPromises = Array.from({ length: 20 }, (_, _idx) => {
       return getPublicMediaRoute({
         locals: {}, params: { id: mediaId },
         request: new Request(`${origin}/media/${mediaId}`),
@@ -3270,6 +3270,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const tombstone = await rawKv.get(`${REVOCATION_KEY_PREFIX}${mediaId}`, { type: 'json' });
       expect(tombstone).not.toBeNull();
       expect(Number(tombstone.revokedAt)).toBeGreaterThan(1000);
+      expect(deleteCalled).toBe(true);
     });
 
     it('Codex Rodada 17 - Item 2: entradas de manifesto legadas sem timestamp por-ID não inflam updatedAt do snapshot e respeitam registro durável de restauração em isolates limpos', async () => {

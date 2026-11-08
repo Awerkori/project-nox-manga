@@ -16,7 +16,7 @@ export const GET = async ({ locals, platform }) => {
       platform?.env
     );
     return json({ tokens: res.rows || [] });
-  } catch (err: any) {
+  } catch {
     return json({ error: 'Erro ao carregar tokens' }, { status: 500 });
   }
 };
@@ -45,7 +45,7 @@ export const POST = async ({ request, locals, platform }) => {
 export const DELETE = async ({ request, locals, platform }) => {
   const userId = member(locals);
 
-  let tokenId = '';
+  let tokenId: string;
   try {
     const body = await request.json();
     tokenId = body.id;
@@ -70,7 +70,7 @@ export const DELETE = async ({ request, locals, platform }) => {
     invalidateMihonTokenCache();
     await recordMihonTokenRevocation(tokenHash, platform?.env?.COVER_THUMBNAILS);
     return json({ ok: true });
-  } catch (err: any) {
+  } catch {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });
   }
 };

@@ -32,7 +32,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
   const auth = await verifyMihonAuth(request, platform?.env);
   const allowAdult = auth.authenticated && auth.ageStatus === 'ADULT';
 
-  let bundle: MihonWorkBundle | null = null;
+  let bundle: MihonWorkBundle | null;
   const cached = mihonWorkCache.get(slug);
   if (cached && Date.now() - cached.timestamp < MIHON_WORK_CACHE_TTL_MS) {
     bundle = cached.data;

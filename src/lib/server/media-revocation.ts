@@ -193,12 +193,12 @@ export const REVOCATION_RESTORATION_KEY_PREFIX = 'restored:v1:';
 const isVitest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
 export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 
-let memoryRevokedSet = new Set<string>();
-let knownRevocations = new Map<string, { timestamp: number; version: number; isLegacy?: boolean }>();
-let knownRestorations = new Map<string, { timestamp: number; version: number }>();
+const memoryRevokedSet = new Set<string>();
+const knownRevocations = new Map<string, { timestamp: number; version: number; isLegacy?: boolean }>();
+const knownRestorations = new Map<string, { timestamp: number; version: number }>();
 let lastManifestRevokedSet = new Set<string>();
-let inFlightRevocations = new Set<string>();
-let locallyInitiatedRevocations = new Set<string>();
+const inFlightRevocations = new Set<string>();
+const locallyInitiatedRevocations = new Set<string>();
 let lastManifestSync = 0;
 let manifestSuccessfullyLoaded = false;
 let manifestKeyPresent = false;
@@ -206,7 +206,7 @@ let currentManifestVersion = 0;
 let currentManifestUpdatedAt = 0;
 let reconciliationCursor = 0;
 let manifestSyncGeneration = 0;
-let perIdRevocationSeq = new Map<string, number>();
+const perIdRevocationSeq = new Map<string, number>();
 let globalRevocationSeq = 0;
 
 export function clearMemoryRevocationCache(): void {
@@ -268,7 +268,6 @@ async function syncManifest(kv: any): Promise<boolean> {
           const existing = knownRevocations.get(id);
           // For legacy entries without per-ID timestamps, do NOT invent manifestUpdatedAt as their revocation timestamp.
           // Unrelated manifest writes must not advance the revocation timestamp of legacy entries past authentic restorations.
-          const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
 
           if (restoration) {
             const isManifestOlderThanRestoration = manifestUpdatedAt < restoration.timestamp ||
@@ -298,9 +297,13 @@ async function syncManifest(kv: any): Promise<boolean> {
                     if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
                     else if (parsed?.timestamp) tombstoneTs = Number(parsed.timestamp);
                     else if (typeof parsed === 'number') tombstoneTs = parsed;
-                  } catch {}
+                  } catch {
+                    // Ignore malformed tombstone JSON
+                  }
                 }
-              } catch {}
+              } catch {
+                // Ignore KV read error
+              }
 
               const effectiveTs = (tombstoneFound && tombstoneTs >= restoration.timestamp)
                 ? tombstoneTs
@@ -370,7 +373,9 @@ async function syncManifest(kv: any): Promise<boolean> {
                     try {
                       const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
                       if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
-                    } catch {}
+                    } catch {
+                      // Ignore malformed tombstone JSON
+                    }
                     // Compare against per-ID restoration timestamp instead of manifestUpdatedAt
                     if (tombstoneTs >= perIdRestorationTs) {
                       // Newer or concurrent tombstone exists: keep revoked!
@@ -451,7 +456,9 @@ async function syncManifest(kv: any): Promise<boolean> {
                   try {
                     const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
                     if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
-                  } catch {}
+                  } catch {
+                    // Ignore malformed tombstone JSON
+                  }
                   const existing = knownRevocations.get(knownId);
                   if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && currentManifestVersion >= existing.version)) {
                     knownRevocations.set(knownId, { timestamp: tombstoneTs, version: currentManifestVersion });
@@ -490,7 +497,9 @@ async function syncManifest(kv: any): Promise<boolean> {
                           restorationVer = recVer;
                         }
                       }
-                    } catch {}
+                    } catch {
+                      // Ignore restoration record read error
+                    }
                   }
                 } else if (!known || known.timestamp === 0) {
                   canRestore = true;
@@ -620,7 +629,9 @@ export async function isMediaRevoked(
         try {
           const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
-        } catch {}
+        } catch {
+          // Ignore malformed tombstone JSON
+        }
 
         let isStaleTombstone = false;
         let restorationTs = 0;
@@ -643,7 +654,9 @@ export async function isMediaRevoked(
                 knownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
               }
             }
-          } catch {}
+          } catch {
+            // Ignore restoration record read error
+          }
         }
 
         if (!isStaleTombstone) {
@@ -698,7 +711,9 @@ export async function isMediaRevoked(
                 knownRest = { timestamp: recTs, version: recVer };
                 knownRestorations.set(mediaId, knownRest);
               }
-            } catch {}
+            } catch {
+              // Ignore restoration record read error
+            }
           }
 
           const revTs = known?.isLegacy ? 0 : (known?.timestamp || currentManifestUpdatedAt);
@@ -760,7 +775,9 @@ export async function isMediaRevoked(
                     restorationVer = recVer;
                   }
                 }
-              } catch {}
+              } catch {
+                // Ignore restoration record read error
+              }
             }
 
             if (!hasRestorationEvidence) {
@@ -774,7 +791,9 @@ export async function isMediaRevoked(
                 const recVer = Number(resRecord.version) || 0;
                 knownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
               }
-            } catch {}
+            } catch {
+              // Ignore restoration record read error
+            }
           }
 
           // Race Condition Guard (P1): Revalidate in-flight and sequence after any KV await
@@ -859,7 +878,7 @@ export async function purgeMediaVariants(
       purgePromise = cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
     } else {
       // Attempt dynamic import in runtime environments supporting cloudflare:workers
-      // @ts-ignore - optional cloudflare module available in Workers runtime
+      // @ts-expect-error - optional cloudflare module available in Workers runtime
       const cw = await import('cloudflare:workers').catch(() => null);
       if (cw?.cache && typeof cw.cache.purge === 'function') {
         purgePromise = cw.cache.purge({ tags: [tagToPurge], pathPrefixes: [prefixToPurge] });
@@ -945,7 +964,7 @@ export async function purgeMediaVariants(
           const deleted = await cache.delete(new Request(url, { method: 'GET' }));
           if (deleted) cachePurged++;
         } catch (err: any) {
-          throw new Error(`CACHE_API_DELETE_FAILED for ${url}: ${err?.message || err}`);
+          throw new Error(`CACHE_API_DELETE_FAILED for ${url}: ${err?.message || err}`, { cause: err });
         }
       })
     );
@@ -998,7 +1017,7 @@ export async function purgeMediaVariants(
           await kv.delete(key);
           kvPurged++;
         } catch (err: any) {
-          throw new Error(`KV_DELETE_FAILED for ${key}: ${err?.message || err}`);
+          throw new Error(`KV_DELETE_FAILED for ${key}: ${err?.message || err}`, { cause: err });
         }
       })
     );
@@ -1055,7 +1074,9 @@ export async function revokeMedia(
     perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
     try {
       invalidateMediaMetadataCache(mediaId);
-    } catch {}
+    } catch {
+      // Ignore cache invalidation error
+    }
 
   // 2. Write authoritative tombstone to KV BEFORE purge to ensure durable revocation
   const initialMetadata: RevocationMetadata = {
@@ -1076,7 +1097,9 @@ export async function revokeMedia(
     if (typeof options.kv.delete === 'function') {
       try {
         await options.kv.delete(REVOCATION_RESTORATION_KEY_PREFIX + mediaId);
-      } catch {}
+      } catch {
+        // Best-effort restoration record cleanup
+      }
     }
     knownRestorations.delete(mediaId);
 
@@ -1312,7 +1335,9 @@ export async function unrevokeMedia(
           const parsed = typeof priorTombstoneContent === 'string' ? JSON.parse(priorTombstoneContent) : priorTombstoneContent;
           if (parsed?.revokedAt) priorRevTs = Number(parsed.revokedAt) || 0;
           else if (parsed?.timestamp) priorRevTs = Number(parsed.timestamp) || 0;
-        } catch {}
+        } catch {
+          // Ignore malformed prior tombstone content
+        }
       }
       if (!priorRevTs) {
         priorRevTs = Number(knownRevocations.get(mediaId)?.timestamp) || 0;
@@ -1327,7 +1352,9 @@ export async function unrevokeMedia(
         if (currentManifest && typeof currentManifest.revocations === 'object') {
           interveningRevocationTs = Number(currentManifest.revocations[mediaId]) || 0;
         }
-      } catch {}
+      } catch {
+        // Best-effort manifest check
+      }
 
       let interveningTombstoneTs = 0;
       try {
@@ -1335,7 +1362,9 @@ export async function unrevokeMedia(
         if (checkTomb && checkTomb.revokedAt) {
           interveningTombstoneTs = Number(checkTomb.revokedAt) || 0;
         }
-      } catch {}
+      } catch {
+        // Best-effort tombstone check
+      }
 
       const isNewManifestRevocation = interveningRevocationTs > priorRevTs && interveningRevocationTs >= restorationTimestamp;
       const isNewTombstone = interveningTombstoneTs >= restorationTimestamp && interveningTombstoneTs > 0;
@@ -1353,7 +1382,9 @@ export async function unrevokeMedia(
             revokedAt: effectiveRevTs,
             reason: 'CONCURRENT_REVOCATION_PRESERVED'
           }));
-        } catch {}
+        } catch {
+          // Ignore concurrent revocation put error
+        }
 
         if (currentManifest && Array.isArray(currentManifest.revokedIds)) {
           if (!currentManifest.revokedIds.includes(mediaId)) {
@@ -1365,7 +1396,9 @@ export async function unrevokeMedia(
           currentManifest.revocations[mediaId] = effectiveRevTs;
           try {
             await options.kv.put(REVOCATION_MANIFEST_KEY, JSON.stringify(currentManifest));
-          } catch {}
+          } catch {
+            // Ignore manifest put error
+          }
         }
 
         errors.push('CONCURRENT_REVOCATION_INTERVENED');
@@ -1393,7 +1426,9 @@ export async function unrevokeMedia(
               ? priorTombstoneContent
               : JSON.stringify(priorTombstoneContent);
             await options.kv.put(REVOCATION_KEY_PREFIX + mediaId, contentToRestore);
-          } catch {}
+          } catch {
+            // Rollback put error ignored
+          }
         }
         return { success: false, errors };
       }
@@ -1409,7 +1444,9 @@ export async function unrevokeMedia(
               if (checkRaceTomb && checkRaceTomb.revokedAt) {
                 raceTombstoneTs = Number(checkRaceTomb.revokedAt) || 0;
               }
-            } catch {}
+            } catch {
+              // Best-effort check race tombstone
+            }
             const raceRevocationTs = Number(currentManifest.revocations?.[mediaId]) || 0;
             const isRaceManifestRevocation = raceRevocationTs > priorRevTs && raceRevocationTs >= restorationTimestamp;
             const isRaceTombstone = raceTombstoneTs >= restorationTimestamp && raceTombstoneTs > 0;
@@ -1422,7 +1459,9 @@ export async function unrevokeMedia(
                   revokedAt: effectiveRaceRevTs,
                   reason: 'CONCURRENT_REVOCATION_PRESERVED'
                 }));
-              } catch {}
+              } catch {
+                // Best-effort preserve race revocation
+              }
               memoryRevokedSet.add(mediaId);
               knownRevocations.set(mediaId, { timestamp: effectiveRaceRevTs, version: nextVersion, isLegacy: false });
               errors.push('CONCURRENT_REVOCATION_INTERVENED');
@@ -1460,14 +1499,22 @@ export async function unrevokeMedia(
             currentManifestVersion = nextVersion;
             currentManifestUpdatedAt = manifestUpdatedAt;
             knownRestorations.set(mediaId, { timestamp: restorationTimestamp, version: nextVersion });
-            try { invalidateMediaMetadataCache(mediaId); } catch {}
+            try {
+              invalidateMediaMetadataCache(mediaId);
+            } catch {
+              // Best-effort cache invalidate
+            }
           } else {
             locallyInitiatedRevocations.delete(mediaId);
             memoryRevokedSet.delete(mediaId);
             knownRevocations.delete(mediaId);
             lastManifestRevokedSet.delete(mediaId);
             knownRestorations.set(mediaId, { timestamp: restorationTimestamp, version: nextVersion });
-            try { invalidateMediaMetadataCache(mediaId); } catch {}
+            try {
+              invalidateMediaMetadataCache(mediaId);
+            } catch {
+              // Best-effort cache invalidate
+            }
           }
         } catch (manifestErr: any) {
           errors.push(`MANIFEST_UPDATE_FAILED: ${manifestErr?.message || manifestErr}`);

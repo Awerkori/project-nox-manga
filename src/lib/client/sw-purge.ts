@@ -23,6 +23,8 @@ export function clearClientMediaCache(): void {
       navigator.serviceWorker.controller.postMessage({
         type: 'CLEAR_MEDIA_CACHE'
       });
-    } catch {}
+    } catch {
+      // Non-fatal cache clear dispatch error
+    }
   }
 }

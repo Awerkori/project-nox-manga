@@ -87,6 +87,8 @@ it('binds the configured comment limiter in the Cloudflare runtime', async (ctx)
   } finally {
     try {
       await runtime?.dispose();
-    } catch {}
+    } catch {
+      // Best-effort runtime cleanup
+    }
   }
 });

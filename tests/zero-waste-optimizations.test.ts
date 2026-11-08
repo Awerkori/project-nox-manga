@@ -31,7 +31,9 @@ describe('Zero Waste Cloudflare Optimizations', () => {
       let decodedPath = pLower;
       try {
         decodedPath = decodeURIComponent(pLower);
-      } catch {}
+      } catch {
+        // Fall back to un-decoded path on malformed URI sequence
+      }
 
       const isDotfileProbe =
         ((pLower.startsWith('/.') || pLower.includes('/.') || decodedPath.startsWith('/.') || decodedPath.includes('/.') || decodedPath.includes('..')) &&
@@ -46,7 +48,7 @@ describe('Zero Waste Cloudflare Optimizations', () => {
         decodedPath.startsWith('/pma') ||
         decodedPath.startsWith('/phpmyadmin') ||
         decodedPath.startsWith('/boaform') ||
-        /\.(?:bak|sql|env|conf|ini|asp|aspx|jsp)(?:$|[\/?])/i.test(decodedPath);
+        /\.(?:bak|sql|env|conf|ini|asp|aspx|jsp)(?:$|[/?])/i.test(decodedPath);
 
       return isDotfileProbe || isExploitProbe;
     }

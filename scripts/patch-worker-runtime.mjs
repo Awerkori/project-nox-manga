@@ -952,7 +952,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
       decodedPath.startsWith('/pma') ||
       decodedPath.startsWith('/phpmyadmin') ||
       decodedPath.startsWith('/boaform') ||
-      /\\.(?:bak|sql|env|conf|ini|asp|aspx|jsp)(?:$|[\\/?])/i.test(decodedPath);
+      /\\.(?:bak|sql|env|conf|ini|asp|aspx|jsp)(?:$|[/?])/i.test(decodedPath);
 
     if (isDotfileProbe || isExploitProbe) {
       return new Response('Not Found', {

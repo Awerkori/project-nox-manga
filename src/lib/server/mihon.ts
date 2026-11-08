@@ -47,7 +47,7 @@ export async function recordMihonTokenRevocation(tokenHash: string, kv?: any): P
 
 export async function verifyMihonAuth(request: Request, platformEnv?: any): Promise<MihonAuthResult> {
   const authHeader = request.headers.get('Authorization') || '';
-  const match = authHeader.match(/^Bearer\s+([A-Za-z0-9_\-]+)$/i);
+  const match = authHeader.match(/^Bearer\s+([A-Za-z0-9_-]+)$/i);
 
   if (!match) {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN' };
@@ -105,7 +105,7 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
     };
 
     return authResult;
-  } catch (err: any) {
+  } catch {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Erro ao verificar token' };
   }
 }

@@ -1638,7 +1638,9 @@ export function invalidateMediaMetadataCache(mediaId: string): void {
   mediaMetadataCache.delete(mediaId);
   try {
     invalidateYugabyteLkgPrefix(`media_${mediaId}`);
-  } catch {}
+  } catch {
+    // Non-fatal cache invalidation error
+  }
 }
 
 /**

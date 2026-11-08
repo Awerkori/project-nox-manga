@@ -114,7 +114,7 @@ describe('Mihon API & Security Helpers', () => {
 
     const mockKvStore = new Map<string, string>();
     const mockKv = {
-      put: vi.fn(async (key: string, val: string, opts?: any) => {
+      put: vi.fn(async (key: string, val: string, _opts?: any) => {
         mockKvStore.set(key, val);
       }),
       get: vi.fn(async (key: string) => {
@@ -200,7 +200,6 @@ describe('Mihon API & Security Helpers', () => {
 
   it('fails closed on KV error: evicts in-memory cache and revalidates authoritatively against database', async () => {
     const rawToken = 'nox_mh_fail_closed_token';
-    const tokenHash = await hashToken(rawToken);
 
     invalidateMihonTokenCache();
     const req = new Request('https://projectnox.org/api/mihon/chapter/123/pages', {

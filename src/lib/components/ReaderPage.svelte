@@ -53,7 +53,7 @@
     visibleObserver?.disconnect();
   });
 
-  function setupPageImg(node: HTMLImageElement, currentRetry?: number) {
+  function setupPageImg(node: HTMLImageElement, _currentRetry?: number) {
     const handleLoad = () => {
       loaded = true;
       broken = false;
