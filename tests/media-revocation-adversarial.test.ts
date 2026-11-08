@@ -4088,6 +4088,21 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         cache: currentUrlCache
       });
       expect(resMalformed.errors).toEqual([]);
+
+      // 17. purgeMediaVariants normaliza origin com barra final (trailing slash) sem duplicar barras nem descartar currentUrl
+      currentUrlCache.delete.mockClear();
+      const resTrailing = await purgeMediaVariants('2222dddd-eeee-ffff-3333-444455556666', {
+        origin: 'https://projectnox.org/',
+        currentUrl: sameOriginUrl,
+        cache: currentUrlCache
+      });
+      expect(resTrailing.errors).toEqual([]);
+      const deletedUrlsTrailing = currentUrlCache.delete.mock.calls.map((c: any[]) => (c[0] as Request).url);
+      expect(deletedUrlsTrailing).toContain(sameOriginUrl);
+      for (const dUrl of deletedUrlsTrailing) {
+        expect(dUrl).not.toContain('https://projectnox.org//media/');
+        expect(dUrl.startsWith('https://projectnox.org/media/')).toBe(true);
+      }
     });
   });
 });

@@ -858,6 +858,12 @@ export async function purgeMediaVariants(
   options: PurgeMediaOptions & { currentUrl?: string } = {}
 ): Promise<{ cachePurged: number; workersCachePurged: number; kvPurged: number; localPurgeVerified: boolean; globalPurgeDispatched: boolean; globalPurgeVerified: boolean; errors: string[] }> {
   const { cache, ctx, origin = 'https://projectnox.org', kv, currentUrl } = options;
+  let cleanOrigin = 'https://projectnox.org';
+  try {
+    cleanOrigin = new URL(origin).origin;
+  } catch {
+    cleanOrigin = (origin || 'https://projectnox.org').replace(/\/+$/, '');
+  }
   const errors: string[] = [];
   let cachePurged = 0;
   let workersCachePurged = 0;
@@ -942,7 +948,7 @@ export async function purgeMediaVariants(
   if (cache && typeof cache.delete === 'function') {
     // Cloudflare Cache API strictly enforces origin matching with the incoming request.
     // Secondary domains (such as www.projectnox.org) are canonical 308 redirects that never store media.
-    const originsToPurge = new Set([origin]);
+    const originsToPurge = new Set([cleanOrigin]);
 
     const urlsToPurge: string[] = [];
     for (const org of originsToPurge) {
@@ -967,7 +973,7 @@ export async function purgeMediaVariants(
     if (currentUrl) {
       try {
         const parsedCurrent = new URL(currentUrl);
-        if (parsedCurrent.origin === origin) {
+        if (parsedCurrent.origin === cleanOrigin) {
           safeCurrentUrl = currentUrl;
           if (!urlsToPurge.includes(currentUrl)) {
             urlsToPurge.push(currentUrl);
@@ -1001,9 +1007,9 @@ export async function purgeMediaVariants(
       try {
         let anyVariantStillCached = false;
         const variantsToCheck = [
-          `${origin}/media/${mediaId}`,
-          `${origin}/media/${mediaId}?size=thumb&v=3`,
-          `${origin}/media/${mediaId}?size=hero&v=3`,
+          `${cleanOrigin}/media/${mediaId}`,
+          `${cleanOrigin}/media/${mediaId}?size=thumb&v=3`,
+          `${cleanOrigin}/media/${mediaId}?size=hero&v=3`,
           ...(safeCurrentUrl ? [safeCurrentUrl] : [])
         ];
         for (const variantUrl of variantsToCheck) {

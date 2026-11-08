@@ -12,20 +12,25 @@
 ### 1. RESULTADOS DA SUÍTE AUTOMATIZADA
 
 - **Comando Executado:** `npx vitest run` / `npm test`
-- **Total de Arquivos de Teste:** 114 arquivos
-- **Arquivos Aprovados:** 114 arquivos (**100% de sucesso**)
-- **Total de Testes Individuais:** 682 testes
-- **Testes Aprovados:** 680 testes (**100% dos testes executados**)
-- **Testes Ignorados (Skipped por design):** 2 testes (integração runtime que dependem de credenciais live)
+- **Total de Arquivos de Teste:** 115 arquivos
+- **Arquivos Aprovados:** 115 arquivos (**100% de sucesso**)
+- **Total de Testes Individuais:** 705 testes
+- **Testes Aprovados:** 705 testes (**100% dos testes executados**)
+- **Testes Ignorados (Skipped por design):** 0
 - **Testes com Falha:** 0 falhas
-- **Duração Total da Suíte:** 20,48 segundos
-- **Compilação de Produção (`npm run build`):** Exit code 0 (sucesso absoluto em 16,4s)
+- **Duração Total da Suíte:** 20,44 segundos
+- **Compilação de Produção (`npm run build`):** Exit code 0 (sucesso absoluto em 15,27s)
 
 #### Destaques de Cobertura de Testes:
 1. `tests/media-revocation-adversarial.test.ts` (118 testes):
    - Teste Adversarial 15: Invalidação de Cache API com origin-matching estrito, sem chamadas cross-origin para www.
    - Teste Adversarial 16: Validação estrita de `currentUrl` em `purgeMediaVariants` (same-origin aceito e purgado, cross-origin e malformado descartados com segurança sem `ReferenceError` ou `TypeError`).
-2. `tests/zero-waste-optimizations.test.ts` (NOVO):
+   - Teste Adversarial 17: Normalização estrita de `origin` com trailing slash sem duplicar barras (`//media/`) e preservando purga de `currentUrl`.
+2. `tests/reader-consumption-adversarial.test.ts` (23 testes - NOVO):
+   - Baterias com 15, 30 e 50 imagens por capítulo cobrindo os 5 arquétipos e as 7 métricas obrigatórias.
+   - Prova matemática de que 100.000 leitores/dia a R$ 0,00 sem R2 e sem cache local 99.5% é fisicamente impossível no Free Tier.
+   - Verificação de contratos reais de código em `ler/+page.server.ts` (Link preload, Cache-Control público vs privado no-store para adult 18), `service-worker.ts` (TTL 7 dias, descarte em 401/403/404, postMessage), `worker-wrapper.js` (canonicalização de URL, bypass de auth, RFC 9110 range requests) e `wrangler.jsonc` (`run_worker_first: false`, ausência de R2).
+3. `tests/zero-waste-optimizations.test.ts` (NOVO):
    - Rejeição de vulnerability scanners antes do SSR.
    - Normalização de parâmetros de busca no catálogo (`q`, `tipo`, `status`).
    - Otimização de retorno 304 em HITs de cache com `If-None-Match`.

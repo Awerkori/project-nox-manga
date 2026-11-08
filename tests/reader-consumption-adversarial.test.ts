@@ -369,4 +369,87 @@ describe('Project Nox — Adversarial Reader Consumption & Resource Matrix', () 
       expect(minRequestsAssumingAllNew).toBeGreaterThan(FREE_TIER_DAILY_LIMIT * 30);
     });
   });
+
+  describe('Auditoria Real de Código e Contratos de Infraestrutura do Leitor', () => {
+    it('comprova contrato de headers do leitor em src/routes/ler/[id]/+page.server.ts', async () => {
+      const { readFileSync } = await import('node:fs');
+      const readerServerCode = readFileSync('src/routes/ler/[id]/+page.server.ts', 'utf8');
+
+      // 1. Link header preload restrito às 2 primeiras páginas
+      expect(readerServerCode).toContain('firstPagePreloadHeader');
+      expect(readerServerCode).toContain('.slice(0, 2)');
+      expect(readerServerCode).toContain('rel=preload; as=image; fetchpriority=high');
+
+      // 2. Cache-Control diferenciado: público para obras gerais, estritamente private no-store para adult 18
+      expect(readerServerCode).toContain("content_rating === 'ADULT_18'");
+      expect(readerServerCode).toContain("'private, no-cache, no-store, must-revalidate'");
+      expect(readerServerCode).toContain("'public, max-age=30, s-maxage=60, stale-while-revalidate=120'");
+
+      // 3. Usuários autenticados nunca recebem cache-control público
+      expect(readerServerCode).toContain('if (!locals.user && !preview)');
+      expect(readerServerCode).toContain('userProgress');
+    });
+
+    it('comprova políticas de interceptação, TTL e evicção do Service Worker em src/service-worker.ts', async () => {
+      const { readFileSync } = await import('node:fs');
+      const swCode = readFileSync('src/service-worker.ts', 'utf8');
+
+      // 1. Isolamento de CacheStorage para mídia
+      expect(swCode).toContain("const CACHE_MEDIA = 'nox-media-v1';");
+      expect(swCode).toContain('MAX_MEDIA_ENTRIES = 2500');
+
+      // 2. TTL de 7 dias com carimbo X-Nox-Cached-At e descarte de entradas sem carimbo
+      expect(swCode).toContain('MAX_MEDIA_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000');
+      expect(swCode).toContain("headers.get('X-Nox-Cached-At')");
+      expect(swCode).toContain("headers.set('X-Nox-Cached-At'");
+
+      // 3. Proibição de armazenamento de conteúdo privado ou no-store
+      expect(swCode).toContain("!cc.includes('private') && !cc.includes('no-store')");
+
+      // 4. Evicção imediata ao receber status 401, 403 ou 404 da rede
+      expect(swCode).toContain('response.status === 401 || response.status === 403 || response.status === 404');
+      expect(swCode).toContain('await mediaCache.delete(event.request)');
+
+      // 5. Handlers de postMessage para purga dirigida
+      expect(swCode).toContain("event.data.type === 'PURGE_MEDIA'");
+      expect(swCode).toContain("event.data.type === 'CLEAR_MEDIA_CACHE'");
+    });
+
+    it('comprova fast-path de mídia e conformidade RFC 9110 em src/worker-wrapper.js', async () => {
+      const { readFileSync } = await import('node:fs');
+      const workerCode = readFileSync('src/worker-wrapper.js', 'utf8');
+
+      // 1. Canonicalização de URLs de mídia (thumb e hero normalizados para v3)
+      expect(workerCode).toContain("url.pathname.startsWith('/media/')");
+      expect(workerCode).toContain("canonicalMediaUrl");
+      expect(workerCode).toContain("canonicalMediaUrl = coverVariant");
+
+      // 2. Bypass obrigatório para sessões autenticadas
+      expect(workerCode).toContain("!req.headers.has('authorization') && !shouldBypassSharedCache(req)");
+
+      // 3. Range header RFC 9110: rejeição de Weak ETags em If-Range e suporte a 206 Partial Content
+      expect(workerCode).toContain("RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match");
+      expect(workerCode).toContain("status: 206");
+      expect(workerCode).toContain("status: 416");
+
+      // 4. Fail-closed em mídias revogadas
+      expect(workerCode).toContain("isRevoked = await checkMediaRevocationWorker");
+      expect(workerCode).toContain("status: 404");
+      expect(workerCode).toContain("'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'");
+    });
+
+    it('valida configuração de Static Assets e ausência de serviços pagos ou R2 em wrangler.jsonc', async () => {
+      const { readFileSync } = await import('node:fs');
+      const wrangler = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
+
+      // run_worker_first: false garante entrega gratuita de Static Assets pelo CDN
+      expect(wrangler.assets.run_worker_first).toBe(false);
+
+      // Workers Cache ativo para economia de CPU duration
+      expect(wrangler.cache.enabled).toBe(true);
+
+      // Conformidade estrita: ausência de buckets R2 configurados (previne custos variáveis não autorizados)
+      expect(wrangler.r2_buckets).toBeUndefined();
+    });
+  });
 });
