@@ -1,12 +1,12 @@
 # PROJECT NOX — AUDITORIA FINAL CLOUDFLARE ZERO WASTE
 ## RELATÓRIO CONSOLIDADO FORENSE DEFINITIVO: CAPACIDADE, SEGURANÇA, CONTABILIDADE E LIMITES FÍSICOS
 
-**Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)  
-**Versão Ativa em Produção:** `fb683114-2f80-4b17-b020-6cc70ef93315` (100% tráfego ativo e preservado)  
-**Baseline de Rollback:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`  
-**Branch:** `perf/nox-cloudflare-zero-waste` (ahead by 8 commits)  
-**Último Commit Base:** `0cf027a` (`docs: add definitive consolidated zero waste report and update test results`)  
-**Data da Auditoria:** 2026-11-08  
+**Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)
+**Versão Ativa em Produção:** `fb683114-2f80-4b17-b020-6cc70ef93315` (100% tráfego ativo e preservado)
+**Baseline de Rollback:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
+**Branch:** `perf/nox-cloudflare-zero-waste` (ahead by 8 commits)
+**Último Commit Base:** `0cf027a` (`docs: add definitive consolidated zero waste report and update test results`)
+**Data da Auditoria:** 2026-11-08
 **Status da Auditoria:** **CONCLUÍDA — 737 TESTES APROVADOS (100% GREEN) — DEPLOY NÃO EXECUTADO (CONFORME DIRETIVA DE GOVERNANÇA)**
 
 ---
@@ -28,7 +28,7 @@ Foram elucidados e resolvidos os pontos críticos:
 
 #### 1.1 Gargalo de 16, 31 ou 51 Requisições Faturáveis por Capítulo
 - **Sintoma:** No acesso inicial a um capítulo de 15, 30 ou 50 páginas por um novo leitor (ou leitor sem cache local), a Cloudflare registra 16, 31 ou 51 requisições debitadas da franquia diária.
-- **Causa Raiz Arquitetural:** 
+- **Causa Raiz Arquitetural:**
   O Project Nox utiliza **Cloudflare Workers Custom Domains** (`routes: [{ pattern: "projectnox.org", custom_domain: true }]`). Na arquitetura de roteamento da Cloudflare, todas as requisições que ingressam pelo domínio customizado são direcionadas ao pipeline do Worker. Mesmo com o Workers Caching (`cache: { enabled: true }`) ativo — onde o isolate não é instanciado e o consumo de CPU é 0 ms (Cache HIT) —, **a Cloudflare contabiliza cada requisição de ingresso na cota diária de 100.000 requisições do Free Tier**.
 - **Por que a rota `/media/*` não pode ser entregue como Static Asset (`run_worker_first: false`):**
   Static Assets na Cloudflare são embutidos durante o build em `.svelte-kit/cloudflare`. O plano Free impõe limites de **20.000 arquivos no total** e **25 MB por asset**, com bundle comprimido restrito. O acervo dinâmico do Project Nox possui centenas de gigabytes de imagens de mangá e cresce continuamente com uploads das Scans sem re-deploy do site.
@@ -46,7 +46,7 @@ Foram elucidados e resolvidos os pontos críticos:
 
 #### 1.3 Vazamento Potencial de Respostas Autenticadas e Omissão de `private, no-store` no Leitor e na Obra
 - **Sintoma:** No leitor (`/ler/[id]`) e na obra (`/obra/[slug]`), quando um usuário autenticado navegava, `setHeaders` não aplicava cabeçalho `Cache-Control: private, no-cache, no-store, must-revalidate` com `Vary: Cookie, Authorization`.
-- **Causa Raiz:** 
+- **Causa Raiz:**
   - Em `src/routes/ler/[id]/+page.server.ts`: no ramo de cache em memória (`readerCache.has(params.id)`), a verificação `if (!locals.user)` impedia que qualquer cabeçalho fosse emitido para usuários logados. No ramo de consulta ao banco, a condicional `if (!locals.user && !preview)` só emitia `link` no `else if (link)`, omitindo completamente o `Cache-Control` privado. Dados sensíveis do usuário (`progress`, `user.id`, `profile`) ficavam vulneráveis a caching por proxies intermediários.
   - Em `src/routes/obra/[slug]/+page.server.ts`: a condicional `if (!locals.user && setHeaders)` suprimia a configuração de cabeçalhos para usuários autenticados, deixando respostas personalizadas (favoritos, likes, progresso) sem sinalização explícita de privacidade.
 
@@ -107,7 +107,7 @@ Medições obtidas via execução real dos manipuladores de rota e do pipeline d
 | **Latência Real Medida (P95)** | 850 ms | 8,1 ms | 0,4 ms | < 0,2 ms | 0,4 ms | < 0,2 ms |
 | **Latência Real Medida (P99)** | 1.800 ms | 12,5 ms | 0,6 ms | < 0,5 ms | 0,6 ms | < 0,5 ms |
 
-*Detalhamento de consumo:*  
+*Detalhamento de consumo:*
 - Capítulos de 15 páginas: 1 HTML + 15 imagens = **16 requisições faturáveis** no primeiro acesso frio.
 - Capítulos de 30 páginas: 1 HTML + 30 imagens = **31 requisições faturáveis** no primeiro acesso frio.
 - Capítulos de 50 páginas: 1 HTML + 50 imagens = **51 requisições faturáveis** no primeiro acesso frio.
@@ -238,7 +238,7 @@ npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name ma
 **Veredito Técnico:** **APROVADO PARA HOMOLOGAÇÃO COM LIMITAÇÕES TÉCNICAS ESTRUTURAIS FORMALIZADAS.**
 
 **Recomendação de Deploy:**
-A engenharia de software da branch `perf/nox-cloudflare-zero-waste` está concluída, estável e tecnicamente madura. 
+A engenharia de software da branch `perf/nox-cloudflare-zero-waste` está concluída, estável e tecnicamente madura.
 Em cumprimento rigoroso à diretiva de governança:
 - **O deploy em produção NÃO foi executado nesta sessão.**
 - A versão de produção `fb683114-2f80-4b17-b020-6cc70ef93315` permanece 100% intacta.

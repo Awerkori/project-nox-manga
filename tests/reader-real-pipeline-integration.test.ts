@@ -438,7 +438,7 @@ describe('Real Reader Pipeline Integration & 7-Metric Resource Accounting', () =
         }
 
         const latencies: number[] = [12.4]; // Real measured 304 network latency
-        let totalBytes = 350; // 304 header size
+        const totalBytes = 350; // 304 header size
 
         // Client checks its HTTP disk cache: 0 network requests emitted for images
         let clientNetworkRequests = 0;

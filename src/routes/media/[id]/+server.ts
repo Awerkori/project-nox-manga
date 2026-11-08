@@ -117,7 +117,7 @@ async function downloadTelegramMedia(
   return downloadCoverWithTransientRetry(client, providerKey);
 }
 
-export const GET = async ({ locals, params, request, platform, cookies }: any) => {
+export const GET = async ({ locals: _locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
   // Preserve heavy 31MB uncompressed original and typo alias by redirecting to the 5.6MB optimized animated avatar
@@ -422,7 +422,6 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   }
 
   let body: BodyInit;
-  let downloadBotRef = media.bot_reference;
   if (media.provider === 'supabase') {
     return new Response(JSON.stringify({ error: 'Mídia legada descontinuada' }), {
       status: 502,
