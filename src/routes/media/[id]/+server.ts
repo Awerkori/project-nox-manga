@@ -422,6 +422,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   let body: BodyInit;
+  let downloadBotRef: string | undefined;
   if (media.provider === 'supabase') {
     return new Response(JSON.stringify({ error: 'Mídia legada descontinuada' }), {
       status: 502,
