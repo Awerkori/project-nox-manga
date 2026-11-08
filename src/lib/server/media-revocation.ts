@@ -890,47 +890,39 @@ export async function purgeMediaVariants(
       let hasPurgeError = false;
       let errorDetails = '';
 
-      if (purgeRes === undefined || purgeRes === true) {
-        // Native Cloudflare Workers Promise<void> or boolean true
-        hasPurgeError = false;
-      } else if (purgeRes && typeof purgeRes === 'object') {
-        const hasExplicitSuccess = purgeRes.success === true ||
-          purgeRes.ok === true ||
-          (typeof purgeRes.status === 'number' && purgeRes.status >= 200 && purgeRes.status < 400);
+      if (purgeRes && typeof purgeRes === 'object') {
+        const hasExplicitSuccess = purgeRes.success === true;
+        const hasErrorsArray = Array.isArray(purgeRes.errors);
+        const hasEmptyErrors = hasErrorsArray && purgeRes.errors.length === 0;
 
-        if (!hasExplicitSuccess || purgeRes.success === false || purgeRes.ok === false || (typeof purgeRes.status === 'number' && purgeRes.status >= 400)) {
+        if (!hasExplicitSuccess || !hasErrorsArray || !hasEmptyErrors || purgeRes.error) {
           hasPurgeError = true;
         }
+
         if (purgeRes.error) {
-          hasPurgeError = true;
           errorDetails = typeof purgeRes.error === 'object'
             ? (purgeRes.error.message || JSON.stringify(purgeRes.error))
             : String(purgeRes.error);
-        }
-        if (purgeRes.errors) {
-          const hasNonEmptyErrors = Array.isArray(purgeRes.errors)
-            ? purgeRes.errors.length > 0
-            : Boolean(purgeRes.errors);
-
-          if (hasNonEmptyErrors) {
-            hasPurgeError = true;
-            if (Array.isArray(purgeRes.errors)) {
-              errorDetails = purgeRes.errors
-                .map((e: any) => (e && typeof e === 'object' ? (e.message || JSON.stringify(e)) : String(e)))
-                .join('; ');
-            } else if (typeof purgeRes.errors === 'object') {
-              errorDetails = purgeRes.errors.message || JSON.stringify(purgeRes.errors);
-            } else {
-              errorDetails = String(purgeRes.errors);
-            }
+        } else if (purgeRes.errors) {
+          if (Array.isArray(purgeRes.errors)) {
+            errorDetails = purgeRes.errors
+              .map((e: any) => (e && typeof e === 'object' ? (e.message || JSON.stringify(e)) : String(e)))
+              .join('; ');
+          } else if (typeof purgeRes.errors === 'object') {
+            errorDetails = purgeRes.errors.message || JSON.stringify(purgeRes.errors);
+          } else {
+            errorDetails = String(purgeRes.errors);
           }
-        }
-        if (hasPurgeError && !errorDetails) {
-          errorDetails = 'Workers cache purge returned object without explicit success confirmation';
+        } else if (!hasErrorsArray) {
+          errorDetails = 'Workers cache purge returned object without explicit success confirmation: missing errors array (official CachePurgeResult { success: true, errors: [] } required)';
+        } else if (!hasExplicitSuccess) {
+          errorDetails = 'Workers cache purge returned object without explicit success confirmation: success !== true (official CachePurgeResult { success: true, errors: [] } required)';
         }
       } else {
         hasPurgeError = true;
-        errorDetails = `Workers cache purge returned invalid value: ${String(purgeRes)}`;
+        errorDetails = purgeRes === undefined
+          ? 'Workers cache purge returned undefined without explicit success confirmation'
+          : `Workers cache purge returned invalid non-object value: ${String(purgeRes)}`;
       }
 
       if (hasPurgeError) {

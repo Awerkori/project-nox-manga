@@ -31,5 +31,11 @@
     "serviceWorkerLocalMediaEviction": true,
     "orphanCoverFailClosed": true,
     "xpActionDatabaseErrorHttp500": true
+  },
+  "rollbackProcedure": {
+    "procedureDocument": "ROLLBACK_PROCEDURE.md",
+    "targetStableVersionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
+    "primaryRollbackCommand": "npx wrangler rollback 2cd46361-7eb7-4a0a-a84b-6647c8b75efd --name manga --message 'rollback approved'",
+    "versionsDeployCommand": "npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name manga --message 'traffic reverted to stable 2cd46361'"
   }
 }

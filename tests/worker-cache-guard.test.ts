@@ -11,17 +11,24 @@ describe('shared Worker cache guard', () => {
     expect(wrapper).toContain('!cacheBypassRequest && !pragma.includes("no-cache")');
   });
 
-  it('enforces canonical projectnox.org domain and preserves legacy API clients', () => {
+  it('enforces canonical projectnox.org domain and preserves legacy API clients with strict anti-collision headers', () => {
     const wrapper = readFileSync('src/worker-wrapper.js', 'utf8');
 
     // 1. Canonical redirect from www.projectnox.org to projectnox.org
     expect(wrapper).toContain("url.hostname === 'www.projectnox.org'");
     expect(wrapper).toContain("canonicalUrl.hostname = 'projectnox.org'");
+    // Cloudflare Workers Cache omits hostname from cache key: www redirect MUST NOT be public
+    expect(wrapper).not.toMatch(/url\.hostname === 'www\.projectnox\.org'[\s\S]*?'cache-control':\s*'public/);
+    expect(wrapper).toMatch(/url\.hostname === 'www\.projectnox\.org'[\s\S]*?'cache-control':\s*'private, no-cache, no-store, must-revalidate'/);
+    expect(wrapper).toMatch(/url\.hostname === 'www\.projectnox\.org'[\s\S]*?'cdn-cache-control':\s*'private, no-cache, no-store, must-revalidate'/);
+    expect(wrapper).toMatch(/url\.hostname === 'www\.projectnox\.org'[\s\S]*?'cloudflare-cdn-cache-control':\s*'private, no-cache, no-store, must-revalidate'/);
 
     // 2. Legacy workers.dev transition preserving /api/* and /_app/*
     expect(wrapper).toContain("url.hostname.endsWith('.workers.dev')");
     expect(wrapper).toContain("!url.pathname.startsWith('/api')");
     expect(wrapper).toContain("!url.pathname.startsWith('/_app')");
+    expect(wrapper).not.toMatch(/url\.hostname\.endsWith\('\.workers\.dev'\)[\s\S]*?'cache-control':\s*'public/);
+    expect(wrapper).toMatch(/url\.hostname\.endsWith\('\.workers\.dev'\)[\s\S]*?'cache-control':\s*'private, no-cache, no-store, must-revalidate'/);
 
     // 3. Fallback origin set to projectnox.org
     expect(wrapper).toContain("origin = 'https://projectnox.org'");

@@ -86,12 +86,7 @@ function getSharedCacheKey(req) {
   try {
     const url = new URL(req.url);
     const p = url.pathname;
-    const isPrivateApi = p.startsWith('/api/action') || p.startsWith('/api/admin') ||
-      p.startsWith('/api/auth') || p.startsWith('/api/internal') || p.startsWith('/api/media') ||
-      p.startsWith('/api/scan') || p.startsWith('/api/shop') || p.startsWith('/api/social') ||
-      p.startsWith('/api/staff') || p.startsWith('/api/upload') || p.startsWith('/api/comments') ||
-      p.startsWith('/api/invite') || p.startsWith('/api/banner') || p.startsWith('/api/avatar');
-    if (p.startsWith('/media/') || p.startsWith('/_app/') || isPrivateApi ||
+    if (p.startsWith('/api/') || p.startsWith('/media/') || p.startsWith('/_app/') ||
         p.startsWith('/admin') || p.startsWith('/me') || p.startsWith('/perfil') || 
         p.startsWith('/biblioteca') || p.startsWith('/scan') || p.startsWith('/auth') ||
         p.startsWith('/settings')) {
@@ -966,6 +961,7 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
     }
 
     // 1. Canonical domain enforcement: www.projectnox.org -> projectnox.org
+    // Hostname is not in Cloudflare Workers Cache key; redirect MUST NEVER be cached at edge (fail-closed against cross-domain cache collision)
     if (url.hostname === 'www.projectnox.org') {
       const canonicalUrl = new URL(req.url);
       canonicalUrl.hostname = 'projectnox.org';
@@ -974,7 +970,12 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         status: 308,
         headers: {
           'location': canonicalUrl.toString(),
-          'cache-control': 'public, max-age=86400'
+          'cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cloudflare-cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'vary': 'Host',
+          'pragma': 'no-cache',
+          'expires': '0'
         }
       });
     }
@@ -988,7 +989,12 @@ async function checkMediaRevocationWorker(mediaId, kv, options) {
         status: 308,
         headers: {
           'location': canonicalUrl.toString(),
-          'cache-control': 'public, max-age=86400'
+          'cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cloudflare-cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'vary': 'Host',
+          'pragma': 'no-cache',
+          'expires': '0'
         }
       });
     }

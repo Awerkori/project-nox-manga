@@ -200,6 +200,7 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
   // Static assets and media endpoints handle their own caching headers.
   if (!isMedia && !isStaticAsset) {
     const isHtml = response.headers.get('content-type')?.includes('text/html') || event.request.headers.get('accept')?.includes('text/html');
+    const isApi = event.url.pathname.startsWith('/api/');
     const hasHomePreference = Boolean(event.cookies.get('nox-age-status') || event.cookies.get('nox-blur-nsfw'));
     const isSharedAnonymousHome =
       isHtml &&
@@ -213,7 +214,14 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
     const isPrivateArea =
       user ||
       hasAuthCookie ||
+      Boolean(event.request.headers.get('authorization')) ||
       event.url.pathname.startsWith('/admin') ||
+      event.url.pathname.startsWith('/api/admin') ||
+      event.url.pathname.startsWith('/api/staff') ||
+      event.url.pathname.startsWith('/api/scan') ||
+      event.url.pathname.startsWith('/api/internal') ||
+      event.url.pathname.startsWith('/api/action') ||
+      event.url.pathname.startsWith('/api/auth') ||
       event.url.pathname.startsWith('/auth') ||
       event.url.pathname.startsWith('/me') ||
       event.url.pathname === '/scan' ||
@@ -234,20 +242,20 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
-      response.headers.set('Vary', 'Cookie, Accept');
+      response.headers.set('Vary', 'Cookie, Authorization, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
     } else if (isExplicitlyPublic) {
-      // Preserve explicit public caching configured by public routes (+page.server.ts)
-      // Edge pre-worker cache MUST NOT bypass worker guards for HTML documents; in-worker shared cache handles it.
-      if (isHtml) {
+      // Preserve explicit public caching configured by public routes (+page.server.ts / +server.ts)
+      // Edge pre-worker cache MUST NOT bypass worker guards for HTML documents or JSON APIs; in-worker shared cache handles it.
+      if (isHtml || isApi) {
         response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
         response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       }
       response.headers.set('Vary', 'Accept-Encoding');
     } else if (hasExplicitCache) {
       // Preserve explicit private max-age caching (e.g. for anonymous user with adult/blur preferences)
-      if (isHtml) {
+      if (isHtml || isApi) {
         response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
         response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       }
@@ -263,11 +271,11 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
       response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
-    } else if (isHtml) {
+    } else if (isHtml || isApi) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
-      response.headers.set('Vary', 'Cookie, Accept');
+      response.headers.set('Vary', 'Cookie, Authorization, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
     }

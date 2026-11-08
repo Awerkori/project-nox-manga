@@ -659,7 +659,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         caches: { default: mockCache },
         context: {
           cache: {
-            purge: vi.fn().mockResolvedValue({ success: true })
+            purge: vi.fn().mockResolvedValue({ success: true, errors: [] })
           }
         }
       },
@@ -840,7 +840,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
     const mockKv = createMockKv();
     const mockCtx = {
       cache: {
-        purge: vi.fn().mockResolvedValue(undefined)
+        purge: vi.fn().mockResolvedValue({ success: true, errors: [] })
       }
     };
 
@@ -1881,7 +1881,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const mockKv = createMockKv();
       const mockCtx = {
         cache: {
-          purge: vi.fn().mockResolvedValue({ success: true })
+          purge: vi.fn().mockResolvedValue({ success: true, errors: [] })
         }
       };
 
@@ -3738,7 +3738,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       // 2. revokeMedia com requirePurgeDispatch: true COM ctx.cache.purge funcional
       const mockCtx = {
         cache: {
-          purge: vi.fn().mockResolvedValue({ success: true })
+          purge: vi.fn().mockResolvedValue({ success: true, errors: [] })
         }
       };
       const resWithPurge = await revokeMedia(mediaId, {
@@ -3809,7 +3809,7 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       const waitUntilTasks: Promise<any>[] = [];
       const mockCtx = {
         cache: {
-          purge: vi.fn().mockResolvedValue({ success: true })
+          purge: vi.fn().mockResolvedValue({ success: true, errors: [] })
         },
         waitUntil: vi.fn((promise: Promise<any>) => {
           waitUntilTasks.push(promise);
@@ -3967,23 +3967,25 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(arbitraryObjRes.errors[0]).toContain('without explicit success confirmation');
       expect(arbitraryObjRes.globalPurgeDispatched).toBe(false);
 
-      // 10. purgeMediaVariants aceita Promise<void> (undefined - padrão nativo do Cloudflare Workers)
+      // 10. purgeMediaVariants rejeita Promise<void> (undefined) em modo estrito fail-closed
       const voidPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue(undefined) } };
       const voidRes = await purgeMediaVariants('77778888-9999-0000-eeee-111122223333', {
         ctx: voidPurgeCtx,
         requirePurgeDispatch: true
       });
-      expect(voidRes.errors.length).toBe(0);
-      expect(voidRes.globalPurgeDispatched).toBe(true);
+      expect(voidRes.errors.length).toBeGreaterThan(0);
+      expect(voidRes.errors[0]).toContain('without explicit success confirmation');
+      expect(voidRes.globalPurgeDispatched).toBe(false);
 
-      // 11. purgeMediaVariants aceita retorno com ok: true
+      // 11. purgeMediaVariants rejeita retorno HTTP { ok: true } sem success: true (estrito ao contrato oficial CachePurgeResult)
       const okPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue({ ok: true, status: 200 }) } };
       const okRes = await purgeMediaVariants('88889999-0000-1111-ffff-222233334444', {
         ctx: okPurgeCtx,
         requirePurgeDispatch: true
       });
-      expect(okRes.errors.length).toBe(0);
-      expect(okRes.globalPurgeDispatched).toBe(true);
+      expect(okRes.errors.length).toBeGreaterThan(0);
+      expect(okRes.errors[0]).toContain('without explicit success confirmation');
+      expect(okRes.globalPurgeDispatched).toBe(false);
 
       // 12. purgeMediaVariants aceita retorno com success: true e errors: [] (lista vazia não é falso erro)
       const emptyErrorsPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue({ success: true, errors: [] }) } };
@@ -4003,6 +4005,16 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(nonEmptyErrorsRes.errors.length).toBeGreaterThan(0);
       expect(nonEmptyErrorsRes.errors[0]).toContain('falha remota');
       expect(nonEmptyErrorsRes.globalPurgeDispatched).toBe(false);
+
+      // 14. purgeMediaVariants rejeita retorno com success: true mas sem o array errors (estrito a CachePurgeResult { success: true, errors: [] })
+      const missingErrorsPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue({ success: true }) } };
+      const missingErrorsRes = await purgeMediaVariants('1111cccc-dddd-eeee-2222-333344445555', {
+        ctx: missingErrorsPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(missingErrorsRes.errors.length).toBeGreaterThan(0);
+      expect(missingErrorsRes.errors[0]).toContain('missing errors array');
+      expect(missingErrorsRes.globalPurgeDispatched).toBe(false);
     });
   });
 });
