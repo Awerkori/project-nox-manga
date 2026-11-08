@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  download: vi.fn(),
-  resolveSessionData: vi.fn(),
-  extractFullAuthCookie: vi.fn(),
-  decodeSessionJwt: vi.fn(),
-  dbFrom: vi.fn(),
-  fetchMediaMetadataFromYugabyte: vi.fn(),
-  mediaRecord: null as any
-}));
+const mocks = vi.hoisted(() => {
+  const download = vi.fn();
+  const resolveBotClient = vi.fn((_botRef?: string) => ({ download }));
+  return {
+    download,
+    resolveBotClient,
+    resolveSessionData: vi.fn(),
+    extractFullAuthCookie: vi.fn(),
+    decodeSessionJwt: vi.fn(),
+    dbFrom: vi.fn(),
+    fetchMediaMetadataFromYugabyte: vi.fn(),
+    mediaRecord: null as any
+  };
+});
 
 vi.mock('$lib/server/db', () => ({
   privileged: () => ({
@@ -22,9 +27,7 @@ vi.mock('$lib/server/db', () => ({
 }));
 
 vi.mock('$lib/server/storage-router', () => ({
-  resolveBotDownloadClient: () => ({
-    download: mocks.download
-  }),
+  resolveBotDownloadClient: (botRef?: string) => mocks.resolveBotClient(botRef),
   normalizeBotReference: (x: string) => x,
   deduceMangaShardFromFileId: () => null
 }));
@@ -46,6 +49,7 @@ import { TelegramStorageError } from '../src/lib/server/telegram';
 describe('Media Security and Cache Guard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveBotClient.mockImplementation((_botRef?: string) => ({ download: mocks.download }));
     mocks.fetchMediaMetadataFromYugabyte.mockImplementation(async () => mocks.mediaRecord);
     // Default mock DB behavior
     mocks.dbFrom.mockReturnValue({
@@ -273,6 +277,60 @@ describe('Media Security and Cache Guard', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('X-Thumbnail-Strategy')).toBe('fallback-original');
     expect(mocks.download).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to healed altBotRef when thumbnail fails after bot mismatch (tg400)', async () => {
+    const mediaId = '57575757-5757-4757-8757-575757575757';
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_2',
+      mime: 'image/jpeg',
+      sha256: 'alt_bot_thumbnail_fallback',
+      provider_key: 'alt_bot_thumbnail_source_key',
+      bytes: 128,
+      width: 1000,
+      height: 1500
+    };
+
+    const clientsUsed: (string | undefined)[] = [];
+    mocks.resolveBotClient.mockImplementation((botRef?: string) => {
+      clientsUsed.push(botRef);
+      return {
+        download: mocks.download
+      };
+    });
+
+    const brokenStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new Error('broken stream on alt bot'));
+      }
+    });
+
+    // 1st call on MANGA_STORAGE_2 fails with tg400 (bot mismatch)
+    // 2nd call on MANGA_STORAGE_01 delivers stream that fails thumbnail decoder
+    // 3rd call is fallback to original: MUST use MANGA_STORAGE_01 (healed bot), not initial failing MANGA_STORAGE_2
+    mocks.download
+      .mockRejectedValueOnce(new TelegramStorageError('http', 400))
+      .mockResolvedValueOnce(brokenStream)
+      .mockResolvedValueOnce(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Thumbnail-Strategy')).toBe('fallback-original');
+    expect(mocks.download).toHaveBeenCalledTimes(3);
+    // The 3rd resolution (fallback download) must have used MANGA_STORAGE_01
+    expect(clientsUsed).toEqual(['MANGA_STORAGE_2', 'MANGA_STORAGE_01', 'MANGA_STORAGE_01']);
   });
 
   it('retries one transient Telegram download failure before returning an error', async () => {

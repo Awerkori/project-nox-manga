@@ -100,7 +100,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         scans: cached.scans,
         preview: false,
         user: locals.user ? { id: locals.user.id } : null,
-        profile: locals.sessionCache?.profile || null
+        profile: locals.sessionCache?.profile || null,
+        mediaBaseUrl
       };
     }
   }

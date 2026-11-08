@@ -5,15 +5,14 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 ## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Production Version:** `fb683114-2f80-4b17-b020-6cc70ef93315`
-- **Active Commit Base:** `8a443e0f4b60670949366f00afc61e1da0014de8`
-- **Active Asset Entrypoint:** `./_app/immutable/entry/start.CTDOMZ5Q.js`
+- **Active Production Version (Post-deploy):** `aeea116a-72b5-45bd-9824-1f4a045de9bf`
+- **Immediate Rollback Target Version:** `fb683114-2f80-4b17-b020-6cc70ef93315`
+- **Secondary Rollback Baseline:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
-- **Rollback Target Version (Pre-deploy Stable):** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd` (commit `f494bb9`, entrypoint `./_app/immutable/entry/start.BkvvmzpF.js`)
 
 ## 2. Critérios de Disparo de Rollback
 
-O rollback para a versão `2cd46361-7eb7-4a0a-a84b-6647c8b75efd` deve ser executado imediatamente se:
+O rollback para a versão `fb683114-2f80-4b17-b020-6cc70ef93315` (ou secundariamente `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`) deve ser executado imediatamente se:
 1. Sondas pós-deploy detectarem que `www.projectnox.org` ou `projectnox.org` retornam respostas com headers incorretos ou erro `ERR_TOO_MANY_REDIRECTS`.
 2. Taxa de erro HTTP 5xx em produção exceder 0.1% após deploy.
 3. Respostas de APIs privadas ou rotas administrativas retornarem `cf-cache-status: HIT`.
@@ -23,12 +22,16 @@ O rollback para a versão `2cd46361-7eb7-4a0a-a84b-6647c8b75efd` deve ser execut
 
 ### Opção A — Rollback Direto via Wrangler CLI (Tempo de convergência: < 5 segundos)
 ```bash
-npx wrangler rollback 2cd46361-7eb7-4a0a-a84b-6647c8b75efd --name manga --message "Rollback para versão homologada estável 2cd46361"
+# Rollback imediato para a versão pré-deploy confirmada:
+npx wrangler rollback fb683114-2f80-4b17-b020-6cc70ef93315 --name manga --message "Rollback para versao homologada estavel fb683114"
+
+# Fallback secundário (se necessário):
+npx wrangler rollback 2cd46361-7eb7-4a0a-a84b-6647c8b75efd --name manga --message "Rollback para baseline secundario 2cd46361"
 ```
 
 ### Opção B — Redirecionamento 100% de Tráfego de Versão (Alternativa oficial Cloudflare)
 ```bash
-npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name manga --message "Tráfego convergido 100% para 2cd46361"
+npx wrangler versions deploy fb683114-2f80-4b17-b020-6cc70ef93315@100% --name manga --message "Trafego convergido 100% para fb683114"
 ```
 
 ## 4. Pós-Rollback: Expurgo Seletivo de Borda

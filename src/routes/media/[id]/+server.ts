@@ -479,6 +479,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
           const stream = await downloadTelegramMedia(altClient, media.provider_key);
           body = stream;
           botRef = altBotRef;
+          downloadBotRef = altBotRef;
           // Self-heal DB mapping synchronously within request lifecycle
           try {
             await executeYugabyteSql(

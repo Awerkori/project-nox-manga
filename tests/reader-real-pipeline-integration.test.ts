@@ -304,6 +304,7 @@ describe('Real Reader Pipeline Integration & 7-Metric Resource Accounting', () =
       locals?: any;
       cookiesMap?: Record<string, string>;
       preview?: boolean;
+      env?: Record<string, any>;
     } = {}
   ): Promise<{ data: any; headersSet: Record<string, string>; executionTimeMs: number }> {
     const url = new URL(`https://projectnox.org/ler/${chapterId}${options.preview ? '?preview=1' : ''}`);
@@ -322,7 +323,7 @@ describe('Real Reader Pipeline Integration & 7-Metric Resource Accounting', () =
         Object.assign(headersSet, headers);
       },
       platform: {
-        env: { COVER_THUMBNAILS: kv }
+        env: { COVER_THUMBNAILS: kv, ...(options.env || {}) }
       }
     };
 
@@ -911,6 +912,35 @@ describe('Real Reader Pipeline Integration & 7-Metric Resource Accounting', () =
 
       expect(authRes.headersSet['cache-control']).toBe('private, no-cache, no-store, must-revalidate');
       expect(authRes.headersSet['vary']).toContain('Cookie');
+    });
+
+    it('preserves mediaBaseUrl parity across reader cache-miss and cache-hit', async () => {
+      const chapterId = 'c0000000-0000-4000-8000-000000000099';
+      mocks.chapterStore.set(chapterId, {
+        id: chapterId,
+        number: 99,
+        display_number: '99',
+        canonical_chapter_key: null,
+        chapter_order_key: null,
+        chapter_kind: 'chapter',
+        edition: 'standard',
+        language: 'pt-BR',
+        title: 'Capítulo com CDN',
+        work_id: 'work-cdn-001',
+        published_at: '2026-09-01T00:00:00Z',
+        works: { id: 'work-cdn-001', title: 'Obra CDN', slug: 'obra-cdn', kind: 'MANGA', published: true, content_rating: 'GENERAL' },
+        pagesData: [{ position: 1, media_id: '11111111-2222-4333-8444-555555555599', width: 800, height: 1200 }]
+      });
+
+      const cdnEnv = { MEDIA_CDN_URL: 'https://cdn.projectnox.org/' };
+
+      // 1. First load (cold cache-miss)
+      const missRes = await executeRealChapterLoad(chapterId, { env: cdnEnv });
+      expect(missRes.data.mediaBaseUrl).toBe('https://cdn.projectnox.org');
+
+      // 2. Second load (warm in-memory reader cache-hit)
+      const hitRes = await executeRealChapterLoad(chapterId, { env: cdnEnv });
+      expect(hitRes.data.mediaBaseUrl).toBe('https://cdn.projectnox.org');
     });
   });
 
