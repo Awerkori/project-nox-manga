@@ -1,14 +1,14 @@
 {
-  "activeVersionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
-  "created": "2026-11-07T21:01:50.000Z",
+  "activeVersionId": "fb683114-2f80-4b17-b020-6cc70ef93315",
+  "created": "2026-11-08T04:28:44.714Z",
   "trafficAllocation": "100%",
   "routes": [
     "projectnox.org/*",
     "www.projectnox.org/*"
   ],
-  "commit": "f494bb9",
-  "fullCommit": "f494bb9fcbff0e933c3fcdadfda335a255fd4e70",
-  "entrypoint": "./_app/immutable/entry/start.BkvvmzpF.js",
+  "commit": "8a443e0",
+  "fullCommit": "8a443e0f4b60670949366f00afc61e1da0014de8",
+  "entrypoint": "./_app/immutable/entry/start.CTDOMZ5Q.js",
   "author": "awerkori@gmail.com",
   "bindings": {
     "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
@@ -30,7 +30,15 @@
     "mihonGlobalKvRevocationTombstone": true,
     "serviceWorkerLocalMediaEviction": true,
     "orphanCoverFailClosed": true,
-    "xpActionDatabaseErrorHttp500": true
+    "xpActionDatabaseErrorHttp500": true,
+    "antiCollisionHeadersEnforced": true,
+    "chunkedSessionCookiesSupported": true,
+    "adultWorksPrivateNoStoreEnforced": true
+  },
+  "previousStableVersion": {
+    "versionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
+    "commit": "f494bb9",
+    "entrypoint": "./_app/immutable/entry/start.BkvvmzpF.js"
   },
   "rollbackProcedure": {
     "procedureDocument": "ROLLBACK_PROCEDURE.md",
