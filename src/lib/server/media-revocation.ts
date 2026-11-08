@@ -967,7 +967,7 @@ export async function purgeMediaVariants(
     if (currentUrl) {
       try {
         const parsedCurrent = new URL(currentUrl);
-        if (parsedCurrent.origin === org) {
+        if (parsedCurrent.origin === origin) {
           safeCurrentUrl = currentUrl;
           if (!urlsToPurge.includes(currentUrl)) {
             urlsToPurge.push(currentUrl);

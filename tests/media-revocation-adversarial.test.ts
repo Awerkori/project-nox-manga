@@ -4042,6 +4042,52 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         expect(calledUrl.origin).toBe('https://projectnox.org');
         expect(calledUrl.hostname).not.toBe('www.projectnox.org');
       }
+
+      // 16. purgeMediaVariants valida currentUrl: aceita same-origin e descarta cross-origin/malformado sem exceção
+      const sameOriginUrl = 'https://projectnox.org/media/2222dddd-eeee-ffff-3333-444455556666?size=custom&v=99';
+      const crossOriginUrl = 'https://www.projectnox.org/media/2222dddd-eeee-ffff-3333-444455556666?size=custom';
+      const malformedUrl = 'not-a-valid-url';
+
+      const currentUrlCache = {
+        delete: vi.fn(async (req: Request) => {
+          const u = new URL(req.url);
+          if (u.origin !== 'https://projectnox.org') {
+            throw new TypeError(`Unable to delete cached response: origin mismatch for ${u.origin}`);
+          }
+          return true;
+        }),
+        match: vi.fn().mockResolvedValue(null)
+      };
+
+      // Cenário A: same-origin currentUrl é incluído na deleção
+      const resSame = await purgeMediaVariants('2222dddd-eeee-ffff-3333-444455556666', {
+        origin: 'https://projectnox.org',
+        currentUrl: sameOriginUrl,
+        cache: currentUrlCache
+      });
+      expect(resSame.errors).toEqual([]);
+      const deletedUrlsSame = currentUrlCache.delete.mock.calls.map((c: any[]) => (c[0] as Request).url);
+      expect(deletedUrlsSame).toContain(sameOriginUrl);
+
+      // Cenário B: cross-origin currentUrl é ignorado e não dispara TypeError de origin mismatch
+      currentUrlCache.delete.mockClear();
+      const resCross = await purgeMediaVariants('2222dddd-eeee-ffff-3333-444455556666', {
+        origin: 'https://projectnox.org',
+        currentUrl: crossOriginUrl,
+        cache: currentUrlCache
+      });
+      expect(resCross.errors).toEqual([]);
+      const deletedUrlsCross = currentUrlCache.delete.mock.calls.map((c: any[]) => (c[0] as Request).url);
+      expect(deletedUrlsCross).not.toContain(crossOriginUrl);
+
+      // Cenário C: malformed currentUrl é ignorado sem exceção
+      currentUrlCache.delete.mockClear();
+      const resMalformed = await purgeMediaVariants('2222dddd-eeee-ffff-3333-444455556666', {
+        origin: 'https://projectnox.org',
+        currentUrl: malformedUrl,
+        cache: currentUrlCache
+      });
+      expect(resMalformed.errors).toEqual([]);
     });
   });
 });

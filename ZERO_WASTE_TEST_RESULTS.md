@@ -22,7 +22,10 @@
 - **Compilação de Produção (`npm run build`):** Exit code 0 (sucesso absoluto em 16,4s)
 
 #### Destaques de Cobertura de Testes:
-1. `tests/zero-waste-optimizations.test.ts` (NOVO):
+1. `tests/media-revocation-adversarial.test.ts` (118 testes):
+   - Teste Adversarial 15: Invalidação de Cache API com origin-matching estrito, sem chamadas cross-origin para www.
+   - Teste Adversarial 16: Validação estrita de `currentUrl` em `purgeMediaVariants` (same-origin aceito e purgado, cross-origin e malformado descartados com segurança sem `ReferenceError` ou `TypeError`).
+2. `tests/zero-waste-optimizations.test.ts` (NOVO):
    - Rejeição de vulnerability scanners antes do SSR.
    - Normalização de parâmetros de busca no catálogo (`q`, `tipo`, `status`).
    - Otimização de retorno 304 em HITs de cache com `If-None-Match`.
