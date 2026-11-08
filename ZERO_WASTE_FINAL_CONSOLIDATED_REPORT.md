@@ -2,12 +2,13 @@
 ## RELATÓRIO CONSOLIDADO FORENSE DEFINITIVO: CAPACIDADE, SEGURANÇA, CONTABILIDADE E LIMITES FÍSICOS
 
 **Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)
-**Versão Ativa em Produção:** `fb683114-2f80-4b17-b020-6cc70ef93315` (100% tráfego ativo e preservado)
-**Baseline de Rollback:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
-**Branch:** `perf/nox-cloudflare-zero-waste` (ahead by 8 commits)
-**Último Commit Base:** `0cf027a` (`docs: add definitive consolidated zero waste report and update test results`)
-**Data da Auditoria:** 2026-11-08
-**Status da Auditoria:** **CONCLUÍDA — 737 TESTES APROVADOS (100% GREEN) — DEPLOY NÃO EXECUTADO (CONFORME DIRETIVA DE GOVERNANÇA)**
+**Versão Ativa em Produção:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` (100% tráfego ativo e homologado)
+**Baseline de Rollback Imediato:** `fb683114-2f80-4b17-b020-6cc70ef93315`
+**Baseline Secundário:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
+**Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
+**Último Commit Publicado:** `58f4b13` (`docs(rollback): update active production version to fafe6ae8`)
+**Data da Homologação:** 2026-11-08
+**Status da Operação:** **DEPLOY CONCLUÍDO COM SUCESSO — 739 TESTES APROVADOS (100% GREEN) — 22 SMOKE TESTS EM PRODUÇÃO VALIDADOS**
 
 ---
 
@@ -233,13 +234,57 @@ npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name ma
 
 ---
 
-### 10. RECOMENDAÇÃO FUNDAMENTADA
+### 10. RESULTADO DA PUBLICAÇÃO E HOMOLOGAÇÃO EM PRODUÇÃO
 
-**Veredito Técnico:** **APROVADO PARA HOMOLOGAÇÃO COM LIMITAÇÕES TÉCNICAS ESTRUTURAIS FORMALIZADAS.**
+**Situação Final:** **DEPLOY CONCLUÍDO COM SUCESSO E HOMOLOGADO.**
 
-**Recomendação de Deploy:**
-A engenharia de software da branch `perf/nox-cloudflare-zero-waste` está concluída, estável e tecnicamente madura.
-Em cumprimento rigoroso à diretiva de governança:
-- **O deploy em produção NÃO foi executado nesta sessão.**
-- A versão de produção `fb683114-2f80-4b17-b020-6cc70ef93315` permanece 100% intacta.
-- Os 8 commits locais estão preparados para publicação quando autorizados formalmente pela governança do projeto.
+#### 10.1 Versão e Commits Publicados
+- **Versão Ativa na Cloudflare:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
+- **Commits Publicados em `origin/perf/nox-cloudflare-zero-waste`:**
+  - `58f4b13` — docs(rollback): update active production version to fafe6ae8
+  - `46973e1` — fix(zero-waste): heal downloadBotRef in thumbnail fallback and restore mediaBaseUrl on reader cache hit
+  - `1d67d13` — fix(media): declare downloadBotRef and resolve ReferenceError in fallback retry
+  - `0c04971` — fix(lint): resolve unused args, unused assignment and trim report whitespaces
+  - `7daf081` — fix(zero-waste): enforce private response headers for authenticated readers and route-level integration tests
+  - `0cf027a` — docs: add definitive consolidated zero waste report and update test results
+  - `7b1f20f` — fix(reader): suppress adult media preload for unverified readers and add real pipeline integration suite
+  - `c8b1e18` — fix(lint): resolve no-useless-assignment and unused imports across modified files
+  - `fb8f1f5` — fix(purge): normalize trailing slash origin and add adversarial code contract tests
+  - `5772ee9` — test(reader): add adversarial reader consumption suite covering 15/30/50 images and scale projections
+  - `1deccad` — fix(purge): resolve ReferenceError in currentUrl origin-matching and add adversarial test 16
+  - `7c352dc` — fix(zero-waste): enforce origin-matching on currentUrl purge, update shop TTL to 300s, and align rollback baseline
+  - `02745ba` — fix(purge): strictly enforce request origin in Cache API deletions and add adversarial test 15
+
+#### 10.2 Resultado dos Smoke Tests HTTP Reais em Produção (22 Sondas)
+
+| # | Rota / Método | Status HTTP | Latência Real | Comportamento de Cache & Segurança | Veredito |
+| :---: | :--- | :---: | :---: | :--- | :---: |
+| 1 | `GET /` (Home) | 200 OK | 635 ms (frio) / 6 ms (quente) | `public, max-age=30, s-maxage=30`, chunk novo `start.Be2PfOWp.js` | APROVADO |
+| 2 | `GET https://www.projectnox.org/` | 308 Perm. Redirect | 231 ms | Redirecionamento canônico seguro para `https://projectnox.org/` | APROVADO |
+| 3 | `GET /catalogo` | 200 OK | 331 ms | `public, max-age=60, s-maxage=120`, SSR limpo | APROVADO |
+| 4 | `GET /lancamentos` | 200 OK | 201 ms | `public, max-age=60, s-maxage=120`, frontier query otimizada | APROVADO |
+| 5 | `GET /ranking` | 200 OK | 115 ms | `public, max-age=30, s-maxage=60`, agregação eficiente | APROVADO |
+| 6 | `GET /loja` | 200 OK | 283 ms | `public, max-age=60, s-maxage=120`, catálogo cosmético preservado | APROVADO |
+| 7 | `GET /sobre` | 200 OK | 40 ms | `cf-cache-status: HIT`, Static Asset via Cloudflare Cache | APROVADO |
+| 8 | `GET /privacidade` | 200 OK | 48 ms | `cf-cache-status: HIT`, Static Asset via Cloudflare Cache | APROVADO |
+| 9 | `GET /obra/o-mestre-gu` | 200 OK | 141 ms | `public, max-age=60, s-maxage=120`, ETag presente | APROVADO |
+| 10 | `GET /ler/5a0783ba-edcd-4598-8597-3c7b47d4cf4a` | 200 OK | 285 ms (frio) / 10 ms (quente) | `link: </media/...>; rel=preload; fetchpriority=high`, `s-maxage=60` | APROVADO |
+| 11 | `GET /media/94181ccf-8115-4cd6-bff8-aaa69f11e43d` | 200 OK | 37 ms | `cf-cache-status: HIT`, `public, max-age=31536000, immutable` | APROVADO |
+| 12 | `GET /media/...` com `If-None-Match` | 304 Not Modified | 28 ms | `cf-cache-status: HIT`, 0 bytes de dados baixados | APROVADO |
+| 13 | `GET /api/mihon/catalog` | 200 OK | 255 ms | 18.527 obras agregadas em 1 query, `public, s-maxage=300` | APROVADO |
+| 14 | `GET /api/mihon/work/o-mestre-gu` | 200 OK | 40 ms | `render;dur=0`, resposta instantânea da memória | APROVADO |
+| 15 | `GET /api/mihon/work/...` com `If-None-Match` | 304 Not Modified | 25 ms | `render;dur=0`, 0 ms CPU, zero consulta ao banco | APROVADO |
+| 16 | `GET /api/mihon/chapter/.../pages` | 200 OK | 76 ms | `json_agg` em query única, isolate memory cache | APROVADO |
+| 17 | `GET /api/health` | 200 OK | 36 ms | `private, no-cache, no-store`, status de saúde íntegro | APROVADO |
+| 18 | `GET /api/v1/catalog` | 200 OK | 209 ms | API REST pública funcional | APROVADO |
+| 19 | `GET /api/v1/history` (anônimo) | 401 Unauthorized | 43 ms | Bloqueio de rota privada verificado | APROVADO |
+| 20 | `GET /admin` (anônimo) | 303 See Other | 36 ms | Redirecionamento para login administrativo | APROVADO |
+| 21 | `POST /api/action` sem Origin | 403 Forbidden | 35 ms | CSRF guard ativo e protegendo mutações | APROVADO |
+| 22 | `POST /api/action` com Origin (anônimo) | 401 Unauthorized | 38 ms | Autenticação backend RBAC exigida | APROVADO |
+
+#### 10.3 Procedimento de Rollback Imediato
+Caso seja detectada qualquer anomalia operacional imprevista:
+```bash
+# Rollback imediato para a versão pré-deploy (convergência em < 5 segundos):
+npx wrangler rollback fb683114-2f80-4b17-b020-6cc70ef93315 --name manga --message "Rollback imediato de seguranca"
+```
