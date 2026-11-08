@@ -59,8 +59,9 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
 
       if (!locals.user) {
         const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
-        const link = firstPagePreloadHeader(cached.pages, mediaBaseUrl);
         const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
+        const isAdultAuthorized = userAgeStatus === 'ADULT';
+        const link = !isAdultCached || isAdultAuthorized ? firstPagePreloadHeader(cached.pages, mediaBaseUrl) : undefined;
         setHeaders({
           'cache-control': isAdultCached
             ? 'private, no-cache, no-store, must-revalidate'
@@ -288,8 +289,9 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   }
 
   const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
-  const link = firstPagePreloadHeader(pagesData, mediaBaseUrl);
   const isAdultChapter = (chapter.works as any)?.content_rating === 'ADULT_18';
+  const isAdultAuthorized = userAgeStatus === 'ADULT';
+  const link = !isAdultChapter || isAdultAuthorized ? firstPagePreloadHeader(pagesData, mediaBaseUrl) : undefined;
   if (!locals.user && !preview) {
     setHeaders({
       'cache-control': isAdultChapter
