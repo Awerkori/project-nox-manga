@@ -890,8 +890,15 @@ export async function purgeMediaVariants(
       let hasPurgeError = false;
       let errorDetails = '';
 
-      if (purgeRes && typeof purgeRes === 'object') {
-        if (purgeRes.success === false) {
+      if (purgeRes === undefined || purgeRes === true) {
+        // Standard Cloudflare Workers Promise<void> or explicit boolean true
+        hasPurgeError = false;
+      } else if (purgeRes && typeof purgeRes === 'object') {
+        const hasExplicitSuccess = purgeRes.success === true ||
+          purgeRes.ok === true ||
+          (typeof purgeRes.status === 'number' && purgeRes.status >= 200 && purgeRes.status < 400);
+
+        if (!hasExplicitSuccess || purgeRes.success === false || purgeRes.ok === false || (typeof purgeRes.status === 'number' && purgeRes.status >= 400)) {
           hasPurgeError = true;
         }
         if (purgeRes.error) {
@@ -912,6 +919,12 @@ export async function purgeMediaVariants(
             errorDetails = String(purgeRes.errors);
           }
         }
+        if (hasPurgeError && !errorDetails) {
+          errorDetails = 'Workers cache purge returned object without explicit success confirmation';
+        }
+      } else {
+        hasPurgeError = true;
+        errorDetails = `Workers cache purge returned invalid value: ${String(purgeRes)}`;
       }
 
       if (hasPurgeError) {

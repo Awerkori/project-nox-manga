@@ -3928,6 +3928,62 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(purgeResObj.errors.length).toBeGreaterThan(0);
       expect(purgeResObj.errors[0]).toContain('falha estruturada');
       expect(purgeResObj.globalPurgeDispatched).toBe(false);
+
+      // 6. purgeMediaVariants fail-closed em retorno null ou false
+      const nullPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue(null) } };
+      const nullRes = await purgeMediaVariants('33334444-5555-6666-aaaa-777788889999', {
+        ctx: nullPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(nullRes.errors.length).toBeGreaterThan(0);
+      expect(nullRes.globalPurgeDispatched).toBe(false);
+
+      // 7. purgeMediaVariants fail-closed em retorno com status >= 400 ou ok: false
+      const httpErrorCtx = { cache: { purge: vi.fn().mockResolvedValue({ status: 502, ok: false }) } };
+      const httpErrRes = await purgeMediaVariants('44445555-6666-7777-bbbb-888899990000', {
+        ctx: httpErrorCtx,
+        requirePurgeDispatch: true
+      });
+      expect(httpErrRes.errors.length).toBeGreaterThan(0);
+      expect(httpErrRes.globalPurgeDispatched).toBe(false);
+
+      // 8. purgeMediaVariants fail-closed em retorno de objeto sem confirmação explícita ({})
+      const emptyObjCtx = { cache: { purge: vi.fn().mockResolvedValue({}) } };
+      const emptyObjRes = await purgeMediaVariants('55556666-7777-8888-cccc-999900001111', {
+        ctx: emptyObjCtx,
+        requirePurgeDispatch: true
+      });
+      expect(emptyObjRes.errors.length).toBeGreaterThan(0);
+      expect(emptyObjRes.errors[0]).toContain('without explicit success confirmation');
+      expect(emptyObjRes.globalPurgeDispatched).toBe(false);
+
+      // 9. purgeMediaVariants fail-closed em retorno de objeto arbitrário sem flags de sucesso ({ unconfirmed: true })
+      const arbitraryObjCtx = { cache: { purge: vi.fn().mockResolvedValue({ unconfirmed: true }) } };
+      const arbitraryObjRes = await purgeMediaVariants('66667777-8888-9999-dddd-000011112222', {
+        ctx: arbitraryObjCtx,
+        requirePurgeDispatch: true
+      });
+      expect(arbitraryObjRes.errors.length).toBeGreaterThan(0);
+      expect(arbitraryObjRes.errors[0]).toContain('without explicit success confirmation');
+      expect(arbitraryObjRes.globalPurgeDispatched).toBe(false);
+
+      // 10. purgeMediaVariants aceita Promise<void> (undefined - padrão nativo do Cloudflare Workers)
+      const voidPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue(undefined) } };
+      const voidRes = await purgeMediaVariants('77778888-9999-0000-eeee-111122223333', {
+        ctx: voidPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(voidRes.errors.length).toBe(0);
+      expect(voidRes.globalPurgeDispatched).toBe(true);
+
+      // 11. purgeMediaVariants aceita retorno com ok: true
+      const okPurgeCtx = { cache: { purge: vi.fn().mockResolvedValue({ ok: true, status: 200 }) } };
+      const okRes = await purgeMediaVariants('88889999-0000-1111-ffff-222233334444', {
+        ctx: okPurgeCtx,
+        requirePurgeDispatch: true
+      });
+      expect(okRes.errors.length).toBe(0);
+      expect(okRes.globalPurgeDispatched).toBe(true);
     });
   });
 });

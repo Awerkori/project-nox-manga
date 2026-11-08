@@ -232,24 +232,41 @@ async function handleRequest(event: any, resolve: any, reqStart: number) {
 
     if (isPrivateArea) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Vary', 'Cookie, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
     } else if (isExplicitlyPublic) {
       // Preserve explicit public caching configured by public routes (+page.server.ts)
+      // Edge pre-worker cache MUST NOT bypass worker guards for HTML documents; in-worker shared cache handles it.
+      if (isHtml) {
+        response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+        response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      }
       response.headers.set('Vary', 'Accept-Encoding');
     } else if (hasExplicitCache) {
       // Preserve explicit private max-age caching (e.g. for anonymous user with adult/blur preferences)
+      if (isHtml) {
+        response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+        response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      }
       response.headers.set('Vary', 'Cookie, Accept');
     } else if (isSharedAnonymousHome) {
       response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=30, stale-while-revalidate=60');
+      response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Vary', 'Accept-Encoding');
     } else if (response.status >= 400) {
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      response.headers.set('CDN-Cache-Control', 'no-store');
+      response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
     } else if (isHtml) {
       response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      response.headers.set('Cloudflare-CDN-Cache-Control', 'private, no-cache, no-store, must-revalidate');
       response.headers.set('Vary', 'Cookie, Accept');
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
