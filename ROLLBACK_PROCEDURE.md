@@ -5,8 +5,8 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 ## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Production Version (Post-deploy):** `aeea116a-72b5-45bd-9824-1f4a045de9bf`
-- **Immediate Rollback Target Version:** `fb683114-2f80-4b17-b020-6cc70ef93315`
+- **Active Production Version (Post-deploy):** `fafe6ae8-cd04-4f93-8125-bc7a02774619`
+- **Immediate Rollback Target Version:** `fb683114-2f80-4b17-b020-6cc70ef93315` (ou intermediária `aeea116a-72b5-45bd-9824-1f4a045de9bf`)
 - **Secondary Rollback Baseline:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
 
