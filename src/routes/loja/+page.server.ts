@@ -3,7 +3,7 @@ import { CURATED_COSMETIC_ITEMS, LEGACY_UNREFURBISHED_IDS } from '$lib/cosmetics
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 let cachedShopItems: { timestamp: number; data: any[] } | null = null;
-const SHOP_CACHE_TTL_MS = 120_000;
+const SHOP_CACHE_TTL_MS = 300_000;
 
 export const load = async ({ locals, setHeaders, platform }: any) => {
   let items: any[];

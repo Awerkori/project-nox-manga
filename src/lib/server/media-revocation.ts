@@ -963,8 +963,19 @@ export async function purgeMediaVariants(
       );
     }
 
-    if (currentUrl && !urlsToPurge.includes(currentUrl)) {
-      urlsToPurge.push(currentUrl);
+    let safeCurrentUrl: string | undefined;
+    if (currentUrl) {
+      try {
+        const parsedCurrent = new URL(currentUrl);
+        if (parsedCurrent.origin === org) {
+          safeCurrentUrl = currentUrl;
+          if (!urlsToPurge.includes(currentUrl)) {
+            urlsToPurge.push(currentUrl);
+          }
+        }
+      } catch {
+        // Ignore invalid URL formatting
+      }
     }
 
     const deleteResults = await Promise.allSettled(
@@ -993,7 +1004,7 @@ export async function purgeMediaVariants(
           `${origin}/media/${mediaId}`,
           `${origin}/media/${mediaId}?size=thumb&v=3`,
           `${origin}/media/${mediaId}?size=hero&v=3`,
-          ...(currentUrl ? [currentUrl] : [])
+          ...(safeCurrentUrl ? [safeCurrentUrl] : [])
         ];
         for (const variantUrl of variantsToCheck) {
           const match = await cache.match(variantUrl);

@@ -493,6 +493,7 @@
           height="392"
           class="work-cover-img"
           fetchpriority="high"
+          loading="eager"
           decoding="async"
         />
         {#if isAdult}

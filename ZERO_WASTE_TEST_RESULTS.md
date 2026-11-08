@@ -1,22 +1,25 @@
 # PROJECT NOX — RELATÓRIO DE EXECUÇÃO DE TESTES
 ## Baterias Funcionais, Testes Integrados e Suíte Automatizada
 
-**Data:** 2026-11-06  
+**Data:** 2026-11-08
 **Ambiente de Teste:**
 1. Testes Automatizados Locais: `/home/awerkori/nox-site-cloudflare` (Vitest v5.0.0)
-2. Sondas Funcionais em Produção: `https://projectnox.org` (Version ID `b820ec33`)
+2. Compilação de Produção: `@sveltejs/adapter-cloudflare` + `vite build` (Exit code: 0)
+3. Sondas Funcionais e Produção Ativa: `https://projectnox.org` (Version ID `fb683114-2f80-4b17-b020-6cc70ef93315`, commit `8a443e0` / `02745ba`)
 
 ---
 
 ### 1. RESULTADOS DA SUÍTE AUTOMATIZADA
 
-- **Comando Executado:** `npx vitest run`
-- **Total de Arquivos de Teste:** 107 arquivos
-- **Arquivos Aprovados:** 107 arquivos (**100% de sucesso**)
-- **Total de Testes Individuais:** 527 testes
-- **Testes Aprovados:** 527 testes (**100% de sucesso**)
-- **Testes com Falha:** 0
-- **Duração Total da Suíte:** 20,14 segundos
+- **Comando Executado:** `npx vitest run` / `npm test`
+- **Total de Arquivos de Teste:** 114 arquivos
+- **Arquivos Aprovados:** 114 arquivos (**100% de sucesso**)
+- **Total de Testes Individuais:** 682 testes
+- **Testes Aprovados:** 680 testes (**100% dos testes executados**)
+- **Testes Ignorados (Skipped por design):** 2 testes (integração runtime que dependem de credenciais live)
+- **Testes com Falha:** 0 falhas
+- **Duração Total da Suíte:** 20,48 segundos
+- **Compilação de Produção (`npm run build`):** Exit code 0 (sucesso absoluto em 16,4s)
 
 #### Destaques de Cobertura de Testes:
 1. `tests/zero-waste-optimizations.test.ts` (NOVO):

@@ -2,13 +2,14 @@
 
 Este documento formaliza o procedimento de rollback seguro e imediato para a produção do Project Nox na Cloudflare, em estrito cumprimento aos requisitos de governança e homologação Zero Waste.
 
-## 1. Versão Estável de Referência (Baseline Ativo)
+## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Version ID:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
-- **Commit Base:** `f494bb9fcbff0e933c3fcdadfda335a255fd4e70`
-- **Asset Entrypoint:** `./_app/immutable/entry/start.BkvvmzpF.js`
+- **Active Production Version:** `fb683114-2f80-4b17-b020-6cc70ef93315`
+- **Active Commit Base:** `8a443e0f4b60670949366f00afc61e1da0014de8`
+- **Active Asset Entrypoint:** `./_app/immutable/entry/start.CTDOMZ5Q.js`
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
+- **Rollback Target Version (Pre-deploy Stable):** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd` (commit `f494bb9`, entrypoint `./_app/immutable/entry/start.BkvvmzpF.js`)
 
 ## 2. Critérios de Disparo de Rollback
 
