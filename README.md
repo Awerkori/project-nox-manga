@@ -171,7 +171,7 @@ As configurações da aplicação são gerenciadas via variáveis de ambiente no
 
 ---
 
-## ⚖️ Licenciamento e Avisos Legais
+## ⚖️ Licença e Copyright
 
 Este projeto é software livre licenciado sob os termos da **GNU Affero General Public License versão 3.0** (`AGPL-3.0-only`). Consulte o arquivo [LICENSE](LICENSE) para obter o texto integral inalterado da licença e o arquivo [NOTICE](NOTICE) para informações detalhadas de autoria, dependências e governança.
 
