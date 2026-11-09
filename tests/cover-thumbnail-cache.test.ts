@@ -10,12 +10,12 @@ import {
 const mediaId = '11111111-1111-4111-8111-111111111111';
 
 function memoryKv() {
-  const records = new Map<string, { value: ArrayBuffer; metadata: Record<string, string> }>();
+  const records = new Map<string, { value: ArrayBuffer; metadata: Record<string, string>; expirationTtl?: number }>();
   return {
     records,
     getWithMetadata: vi.fn(async (key: string) => records.get(key) || null),
-    put: vi.fn(async (key: string, value: ArrayBuffer, options: { metadata: Record<string, string> }) => {
-      records.set(key, { value, metadata: options.metadata });
+    put: vi.fn(async (key: string, value: ArrayBuffer, options: { metadata: Record<string, string>; expirationTtl?: number }) => {
+      records.set(key, { value, metadata: options.metadata, expirationTtl: options.expirationTtl });
     })
   };
 }
@@ -61,12 +61,13 @@ describe('cover thumbnail KV', () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
-  it('persists an already-produced valid cover without another fetch', async () => {
+  it('persists an already-produced valid cover without another fetch and sets 30-day expiration TTL', async () => {
     const kv = memoryKv();
     await expect(persistCoverThumbnail(kv, mediaId, new Uint8Array([3, 2, 1]).buffer, {
       contentType: 'image/jpeg', etag: '"hero"'
     }, 'hero')).resolves.toBe('stored');
     expect(kv.records.get(coverThumbnailKey(mediaId, 'hero'))?.metadata.contentLength).toBe('3');
+    expect(kv.records.get(coverThumbnailKey(mediaId, 'hero'))?.expirationTtl).toBe(30 * 86400);
   });
 
   it('does not retain an unknown-length image beyond the cover budget', async () => {

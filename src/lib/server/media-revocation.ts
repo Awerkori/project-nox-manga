@@ -1028,30 +1028,26 @@ export async function purgeMediaVariants(
     }
   }
 
-  // 3. Purge from KV COVER_THUMBNAILS
+  // 3. Purge from KV COVER_THUMBNAILS (best-effort derivative cleanup)
   if (kv && typeof kv.delete === 'function') {
     const kvKeysToPurge = [
       `cover-thumb:v1:${mediaId}`,
-      `cover-hero:v1:${mediaId}`,
-      `cover-thumb:v1:${mediaId}:warm`,
-      `cover-hero:v1:${mediaId}:warm`
+      `cover-hero:v1:${mediaId}`
     ];
 
-    const kvResults = await Promise.allSettled(
+    await Promise.allSettled(
       kvKeysToPurge.map(async (key) => {
         try {
           await kv.delete(key);
           kvPurged++;
         } catch (err: any) {
-          throw new Error(`KV_DELETE_FAILED for ${key}: ${err?.message || err}`, { cause: err });
+          // Failure to delete thumbnail from KV (e.g. 429 quota exceeded) is non-fatal for security
+          // because the persistent KV tombstone and manifest prevent any reader from serving it.
+          // Logging as warning prevents retry storms / infinite loops in admin/revoke endpoints.
+          console.warn(`[KV_PURGE_WARN] Failed to delete thumbnail key ${key}:`, err?.message || err);
         }
       })
     );
-    for (const kr of kvResults) {
-      if (kr.status === 'rejected') {
-        errors.push(kr.reason?.message || 'KV_DELETE_REJECTED');
-      }
-    }
   }
 
   // 4. Global purge verifier (if custom verifier provided)
@@ -1564,12 +1560,11 @@ export async function unrevokeMedia(
     knownRevocations.delete(mediaId);
   }
 
-  // Purge any negative (404) cache entries from Workers Caching and Cache API
+  // Purge any negative (404) cache entries from Workers Caching and Cache API (without deleting KV thumbnails)
   const purgeRes = await purgeMediaVariants(mediaId, {
     cache: options.cache,
     ctx: options.ctx,
-    origin: options.origin,
-    kv: options.kv
+    origin: options.origin
   }).catch((err) => ({ errors: [err?.message || 'PURGE_FAILED'] }));
 
   if (purgeRes?.errors && purgeRes.errors.length > 0) {

@@ -4184,6 +4184,97 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
       expect(thumbRes).toBeNull();
       expect(mockKv.delete).toHaveBeenCalledTimes(0);
     });
+
+    // 19. Zero Waste Incident Fix: purgeMediaVariants purges only real thumbnail keys and never calls kv.delete on phantom :warm keys
+    it('19. Zero Waste Incident Fix: purgeMediaVariants purga apenas chaves reais de thumbnail sem deletar :warm fantasma', async () => {
+      const mediaId = '99990000-aaaa-4bbb-8ccc-111122223333';
+      const deletedKeys: string[] = [];
+      const mockKv = {
+        get: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(async (key: string) => {
+          deletedKeys.push(key);
+        })
+      };
+
+      const res = await purgeMediaVariants(mediaId, {
+        kv: mockKv,
+        allowLocalOnly: true
+      });
+
+      expect(res.kvPurged).toBe(2);
+      expect(mockKv.delete).toHaveBeenCalledTimes(2);
+      expect(deletedKeys).toEqual([
+        `cover-thumb:v1:${mediaId}`,
+        `cover-hero:v1:${mediaId}`
+      ]);
+      expect(deletedKeys.some(k => k.includes(':warm'))).toBe(false);
+    });
+
+    // 20. Zero Waste Incident Fix: unrevokeMedia does NOT delete cover thumbnails from KV
+    it('20. Zero Waste Incident Fix: unrevokeMedia NÃO deleta miniaturas de capa do KV', async () => {
+      const mediaId = 'aaaa1111-bbbb-4ccc-8ddd-333344445555';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${mediaId}`, JSON.stringify({
+        mediaId,
+        revokedAt: Date.now() - 10000,
+        reason: 'REVOKED'
+      }));
+      await mockKv.put(REVOCATION_MANIFEST_KEY, JSON.stringify({
+        version: 1,
+        updatedAt: Date.now() - 10000,
+        revokedIds: [mediaId],
+        revocations: { [mediaId]: Date.now() - 10000 }
+      }));
+      await mockKv.put(`cover-thumb:v1:${mediaId}`, 'thumb_content');
+      await mockKv.put(`cover-hero:v1:${mediaId}`, 'hero_content');
+
+      mockKv.delete.mockClear();
+
+      const res = await unrevokeMedia(mediaId, { kv: mockKv });
+      expect(res.success).toBe(true);
+
+      // Only tombstone was deleted; cover thumbnail keys remain intact in KV
+      expect(mockKv.delete).toHaveBeenCalledTimes(1);
+      expect(mockKv.delete).toHaveBeenCalledWith(`${REVOCATION_KEY_PREFIX}${mediaId}`);
+      expect(await mockKv.get(`cover-thumb:v1:${mediaId}`)).toBe('thumb_content');
+      expect(await mockKv.get(`cover-hero:v1:${mediaId}`)).toBe('hero_content');
+    });
+
+    // 21. Zero Waste Incident Fix: kv.delete 429 rate-limit on thumbnail purge is non-fatal and avoids infinite retry loops
+    it('21. Zero Waste Incident Fix: 429 de exclusão no KV em miniaturas não aborta revokeMedia nem causa loops de retry', async () => {
+      const mediaId = 'bbbb2222-cccc-4ddd-8eee-444455556666';
+      clearMemoryRevocationCache();
+      const mockKv = createMockKv();
+
+      // Custom KV where tombstone write/manifest succeed, but thumbnail delete throws 429 Quota Exceeded
+      const rateLimitedKv = {
+        get: vi.fn(async (key: string, opts?: any) => mockKv.get(key, opts)),
+        put: vi.fn(async (key: string, val: any, opts?: any) => mockKv.put(key, val, opts)),
+        delete: vi.fn(async (key: string) => {
+          if (key.startsWith('cover-')) {
+            throw new Error('KV 429: Daily rate limit or delete quota exceeded (1000 deletes/day)');
+          }
+          return mockKv.delete(key);
+        })
+      };
+
+      const res = await revokeMedia(mediaId, { kv: rateLimitedKv });
+      // Revocation must succeed: tombstone written + manifest updated + fail-closed guarantees active
+      expect(res.tombstoneWritten).toBe(true);
+      expect(res.manifestUpdated).toBe(true);
+      expect(res.state).toBe('REVOCATION_COMPLETED');
+      expect(res.success).toBe(true);
+      expect(res.errors.length).toBe(0);
+
+      // Confirm media is authoritatively marked revoked
+      expect(await isMediaRevoked(mediaId, mockKv, { checkTombstone: true })).toBe(true);
+      // Confirm thumbnail reader rejects access even if key still exists
+      await mockKv.put(`cover-thumb:v1:${mediaId}`, 'cached_bytes');
+      const readRes = await readCoverThumbnail(mockKv as any, mediaId, null, 'thumb');
+      expect(readRes).toBeNull();
+    });
   });
 });
 

@@ -209,17 +209,18 @@ Para total transparência com os avaliadores externos, registram-se as fronteira
 
 Em estrita conformidade com `ROLLBACK_PROCEDURE.md`:
 
-- **Versão Ativa de Produção:** `fb683114-2f80-4b17-b020-6cc70ef93315` (100% de tráfego atribuído em `projectnox.org` e `www.projectnox.org`).
-- **Baseline de Rollback Imediato:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`.
+- **Versão Ativa de Produção:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (100% de tráfego atribuído em `projectnox.org` e `www.projectnox.org`).
+- **Baseline de Rollback Imediato:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
+- **Baseline Secundário:** `fb683114-2f80-4b17-b020-6cc70ef93315`.
 - **Tempo Estimado de Convergência do Rollback:** < 5 segundos via Cloudflare API.
 
 #### Comandos Oficiais de Rollback:
 ```bash
 # Opção A: Rollback via Wrangler
-npx wrangler rollback 2cd46361-7eb7-4a0a-a84b-6647c8b75efd --name manga --message "Rollback de contingência para baseline 2cd46361"
+npx wrangler rollback fafe6ae8-cd04-4f93-8125-bc7a02774619 --name manga --message "Rollback de contingência para baseline fafe6ae8"
 
 # Opção B: Roteamento de Versão 100%
-npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name manga --message "Tráfego convergido 100% para 2cd46361"
+npx wrangler versions deploy fafe6ae8-cd04-4f93-8125-bc7a02774619@100% --name manga --message "Tráfego convergido 100% para fafe6ae8"
 ```
 
 ---

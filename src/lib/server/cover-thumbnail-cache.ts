@@ -11,12 +11,14 @@ type ThumbnailMetadata = {
 
 export type CoverVariant = 'thumb' | 'hero';
 
+export const COVER_THUMBNAIL_EXPIRATION_TTL_SECONDS = 30 * 86400; // 30 days automatic expiration (0 delete ops consumed)
+
 type ThumbnailKv = {
   getWithMetadata(key: string, options: { type: 'arrayBuffer' }): Promise<{
     value: ArrayBuffer | null;
     metadata: ThumbnailMetadata | null;
   } | null>;
-  put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata }): Promise<void>;
+  put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata; expirationTtl?: number }): Promise<void>;
   delete?(key: string): Promise<void>;
 };
 
@@ -54,7 +56,8 @@ export async function persistCoverThumbnail(
       contentType: metadata.contentType,
       contentLength: String(bytes.byteLength),
       etag: metadata.etag
-    }
+    },
+    expirationTtl: COVER_THUMBNAIL_EXPIRATION_TTL_SECONDS
   });
   return 'stored';
 }
