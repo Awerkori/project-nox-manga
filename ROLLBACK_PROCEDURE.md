@@ -5,8 +5,8 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 ## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Production Version (Post-deploy):** `400bc8b8-89b5-4ab5-b461-a07edfb7167b` (Correção da corrida de revogação via public.media.status = DELETED pré-purge e verificação em MISS)
-- **Immediate Rollback Target Version:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf`
+- **Active Production Version (Post-deploy):** `bbba5c8b-7ba2-49d7-a7dd-81e828b09b00` (Correção da corrida de revogação, supressão de escrita in-flight no KV, guarda em /api/media e rejeição de status inativos)
+- **Immediate Rollback Target Versions:** `400bc8b8-89b5-4ab5-b461-a07edfb7167b` / `398d1735-ef8d-4c0c-9831-cc2b82752bcf`
 - **Foundational Safe Rollback Baseline:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 - **Versões Anteriores Deprecadas:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` e anteriores NÃO DEVEM ser utilizadas para rollback pois contêm a causa raiz do incidente de estouro de deleções no Workers KV.
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
