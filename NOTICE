@@ -1,0 +1,48 @@
+Project Nox · Plataforma Web de Mangá
+Copyright (C) 2026 Project Nox Contributors & Awerkori
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License (GPL-3.0-only).
+
+SPDX-License-Identifier: GPL-3.0-only
+
+================================================================================
+1. ESCLARECIMENTO SOBRE LICENCIAMENTO (GPL-3.0 vs. AGPL-3.0)
+================================================================================
+Este repositório está oficialmente licenciado sob a GNU General Public
+License versão 3.0 (GPL-3.0-only).
+
+Sinalização expressa de escopo copyleft:
+A GNU GPL versão 3.0 não contém a cláusula de interação remota presente na
+Seção 13 da GNU Affero General Public License (AGPL-3.0). Em conformidade com
+os termos da GPLv3, a execução modificada desta plataforma web exclusivamente
+como serviço de rede (SaaS) sem distribuição direta de cópias executáveis ou
+de código-fonte para terceiros não aciona a exigência de liberação obrigatória
+do código-fonte das modificações de servidor. A escolha da GPL 3.0 preserva
+as quatro liberdades essenciais de software livre para redistribuição e estudo,
+mantendo a paridade de copyleft da distribuição.
+
+================================================================================
+2. COMPONENTES E DEPENDÊNCIAS DE TERCEIROS
+================================================================================
+Este software faz uso de bibliotecas de código aberto permissivas compatíveis
+com a GNU GPLv3:
+- SvelteKit / Svelte (@sveltejs/kit) — Licença MIT (Copyright (c) Svelte Contributors)
+- Lucide Icons (@lucide/svelte) — Licença ISC (Copyright (c) Lucide Contributors)
+- Node Postgres (pg, @types/pg) — Licença MIT (Copyright (c) Brian Carlson)
+- Zod (zod) — Licença MIT (Copyright (c) Colin McDonnell)
+- fflate — Licença MIT (Copyright (c) 101arrowz)
+- fast-png — Licença MIT (Copyright (c) Luc Patiny)
+- @jsquash/webp / jpeg-js — Licença Apache 2.0
+- TailwindCSS — Licença MIT (Copyright (c) Tailwind Labs, Inc.)
+
+================================================================================
+3. RESERVA DE MARCA E IDENTIDADE VISUAL
+================================================================================
+A concessão da licença de código-fonte aberto GPL 3.0 aplica-se exclusivamente
+aos direitos autorais de software. NENHUM direito sobre marcas registradas,
+nomes comerciais, logotipos oficiais, identidade visual distintiva ou insígnias
+do "Project Nox" ou de "Awerkori" é concedido por esta licença. É estritamente
+vedada a utilização dessas marcas para sugerir endosso, afiliação oficial ou
+para se passar pelo Project Nox.

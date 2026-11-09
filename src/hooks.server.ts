@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Project Nox Contributors & Awerkori
+
 import { error } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
 import { withYugabyteReadSession } from '$lib/server/yugabyte';

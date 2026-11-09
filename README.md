@@ -92,4 +92,26 @@ npm run build         # Build de produção para Cloudflare Workers
 
 ## ⚖️ Licença e Responsabilidade
 
-O **Project Nox** desenvolve e disponibiliza ferramentas para estudo e uso comunitário. Não hospedamos materiais protegidos de terceiros de forma centralizada. Consulte os termos e diretrizes na documentação interna.
+Este projeto é software livre licenciado sob os termos da **GNU General Public License versão 3.0** (`GPL-3.0-only`). Consulte o arquivo [LICENSE](LICENSE) para obter o texto integral inalterado da licença e o arquivo [NOTICE](NOTICE) para informações detalhadas de autoria, componentes de terceiros e termos de governança.
+
+```
+Copyright (C) 2026 Project Nox Contributors & Awerkori
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+```
+
+### 📌 Nota sobre GPL-3.0 e AGPL-3.0
+O Project Nox adota oficialmente a licença **GNU GPL versão 3.0**. Diferentemente da licença GNU AGPLv3, a GPLv3 não contém a cláusula de interação remota por rede (Seção 13 da AGPL). Consequentemente, o uso ou execução desta plataforma em servidores remotos sem distribuição de cópias do software a terceiros não impõe contratualmente a obrigação de compartilhamento do código-fonte modificado sob a GPL 3.0.
+
+### 🛡️ Autenticidade e Marca
+A concessão da licença GPL 3.0 refere-se estritamente aos direitos autorais do software. Ela **não concede** autorização ou licença para uso de marcas, logotipos oficiais ou da denominação "Project Nox" para insinuar homologação, endosso ou representação oficial do projeto.
+
+### ⚖️ Isenção de Responsabilidade
+O **Project Nox** desenvolve e disponibiliza ferramentas exclusivamente para estudo, interoperabilidade técnica e pesquisa de agregação. O projeto não hospeda, gerencia nem armazena arquivos protegidos de terceiros em seus servidores centrais.
