@@ -15,7 +15,7 @@ import {
   readBoundedCoverResponse,
   readCoverThumbnail
 } from '$lib/server/cover-thumbnail-cache';
-import { isMediaRevoked, revokeMedia, purgeMediaVariants, classifyMediaAccess } from '$lib/server/media-revocation';
+import { isMediaRevoked, purgeMediaVariants, classifyMediaAccess } from '$lib/server/media-revocation';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -171,7 +171,6 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
             cache,
             ctx: platform?.context || platform?.ctx,
             origin: url.origin,
-            kv: platform?.env?.COVER_THUMBNAILS,
             currentUrl: request.url,
             requirePurgeDispatch: true
           };
@@ -217,7 +216,6 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         cache,
         ctx: platform?.context || platform?.ctx,
         origin: url.origin,
-        kv: platform?.env?.COVER_THUMBNAILS,
         currentUrl: request.url,
         requirePurgeDispatch: true
       };
@@ -250,18 +248,17 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    if (media && media.status === 'DELETED' && platform?.env?.COVER_THUMBNAILS) {
-      const purgeTask = revokeMedia(params.id, {
-        kv: platform.env.COVER_THUMBNAILS,
-        cache,
-        ctx: platform?.context || platform?.ctx,
-        origin: url.origin,
-        reason: 'DELETED',
-        status: 'DELETED',
-        requirePurgeDispatch: true
-      }).catch(() => {});
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(purgeTask);
+    if (media && media.status === 'DELETED') {
+      if (cache || platform?.context?.cache) {
+        const purgeTask = purgeMediaVariants(params.id, {
+          cache,
+          ctx: platform?.context || platform?.ctx,
+          origin: url.origin,
+          requirePurgeDispatch: true
+        }).catch(() => {});
+        if (platform?.context?.waitUntil) {
+          platform.context.waitUntil(purgeTask);
+        }
       }
     }
     return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Mídia não encontrada' }), {
@@ -331,7 +328,6 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
           cache,
           ctx: platform?.context || platform?.ctx,
           origin: url.origin,
-          kv: platform?.env?.COVER_THUMBNAILS,
           currentUrl: request.url,
           requirePurgeDispatch: true
         }).catch(() => {});

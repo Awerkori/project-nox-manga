@@ -893,14 +893,6 @@ var worker_default = {
                   } else if (cache && typeof cache.purge === 'function') {
                     deleteTasks.push(cache.purge({ tags: [`media-${mediaId}`], pathPrefixes: [`/media/${mediaId}`] }).catch(() => {}));
                   }
-                  if (env2?.COVER_THUMBNAILS && typeof env2.COVER_THUMBNAILS.delete === 'function') {
-                    deleteTasks.push(
-                      env2.COVER_THUMBNAILS.delete(`cover-thumb:v1:${mediaId}`).catch(() => {}),
-                      env2.COVER_THUMBNAILS.delete(`cover-hero:v1:${mediaId}`).catch(() => {}),
-                      env2.COVER_THUMBNAILS.delete(`cover-thumb:v1:${mediaId}:warm`).catch(() => {}),
-                      env2.COVER_THUMBNAILS.delete(`cover-hero:v1:${mediaId}:warm`).catch(() => {})
-                    );
-                  }
                   const deletePromise = Promise.allSettled(deleteTasks);
                   if (ctx && typeof ctx.waitUntil === 'function') {
                     ctx.waitUntil(deletePromise);

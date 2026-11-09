@@ -7,9 +7,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
-import { classifyMediaAccess, revokeMedia } from '$lib/server/media-revocation';
-
-const PRIVATE_MEDIA_IDLE_TIMEOUT_MS = 12_000;
+import { classifyMediaAccess, purgeMediaVariants } from '$lib/server/media-revocation';
 
 async function downloadWithTransientRetry(
   client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> },
@@ -32,25 +30,24 @@ async function downloadWithTransientRetry(
  * Intentionally outside /media/* to guarantee that Cloudflare zone Cache Rules
  * NEVER cache, store, or distribute private/staff/internal images on edge.
  */
-export const GET = async ({ locals, params, request, platform, cookies }: any) => {
+export const GET = async ({ locals: _locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) error(404);
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    if (media && media.status === 'DELETED' && platform?.env?.COVER_THUMBNAILS) {
+    if (media && media.status === 'DELETED') {
       const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
-      const reqUrl = new URL(request.url);
-      const purgeTask = revokeMedia(params.id, {
-        kv: platform.env.COVER_THUMBNAILS,
-        cache,
-        ctx: platform?.context || platform?.ctx,
-        origin: reqUrl.origin,
-        reason: 'DELETED',
-        status: 'DELETED',
-        requirePurgeDispatch: true
-      }).catch(() => {});
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(purgeTask);
+      if (cache || platform?.context?.cache) {
+        const reqUrl = new URL(request.url);
+        const purgeTask = purgeMediaVariants(params.id, {
+          cache,
+          ctx: platform?.context || platform?.ctx,
+          origin: reqUrl.origin,
+          requirePurgeDispatch: true
+        }).catch(() => {});
+        if (platform?.context?.waitUntil) {
+          platform.context.waitUntil(purgeTask);
+        }
       }
     }
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
@@ -148,7 +145,7 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   } else {
     let botRef = media.bot_reference;
-    let shardId = media.storage_shard_id;
+    const shardId = media.storage_shard_id;
 
     if (shardId && (!botRef || botRef === 'primary')) {
       const shardRes = await executeYugabyteSql(
@@ -165,7 +162,6 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
       const deduced = deduceMangaShardFromFileId(media.provider_key);
       if (deduced) {
         botRef = deduced.botRef;
-        shardId = shardId || deduced.shardId;
       }
     }
 

@@ -4104,6 +4104,86 @@ describe('Project Nox — Mandatory Adversarial Tests: Media Revocation & Cache 
         expect(dUrl.startsWith('https://projectnox.org/media/')).toBe(true);
       }
     });
+
+    // 18. Zero Waste Incident Fix: Read GET endpoints execute ZERO mutations on Workers KV (RFC 9110 §9.2.1)
+    it('18. Zero Waste Incident Fix: Read GET endpoints executam ZERO mutações no KV em mídias DELETED ou REVOKED', async () => {
+      const deletedMediaId = '77778888-9999-4aaa-8bbb-ccccddddeeee';
+      const mockKv = createMockKv();
+      const mockCache = createMockCache();
+      const waitUntilTasks: Promise<any>[] = [];
+      const mockCtx = {
+        cache: { purge: vi.fn().mockResolvedValue({ success: true, errors: [] }) },
+        waitUntil: vi.fn((p: Promise<any>) => waitUntilTasks.push(p))
+      };
+
+      mocks.fetchMediaMetadataFromYugabyte.mockResolvedValueOnce({
+        id: deletedMediaId,
+        status: 'DELETED',
+        storage_ready: false,
+        access_class: 'PUBLIC'
+      });
+
+      // 1. GET /media/[id] com mídia DELETED
+      const resPublic = await getPublicMediaRoute({
+        locals: {},
+        params: { id: deletedMediaId },
+        request: new Request(`https://projectnox.org/media/${deletedMediaId}`),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(resPublic.status).toBe(404);
+      expect(resPublic.headers.get('Cache-Control')).toContain('no-store');
+      await Promise.all(waitUntilTasks);
+
+      // KV delete and put MUST NOT have been called on read path
+      expect(mockKv.delete).toHaveBeenCalledTimes(0);
+      expect(mockKv.put).toHaveBeenCalledTimes(0);
+
+      // 2. GET /api/media/[id] com mídia DELETED
+      mocks.fetchMediaMetadataFromYugabyte.mockResolvedValueOnce({
+        id: deletedMediaId,
+        status: 'DELETED',
+        storage_ready: false,
+        access_class: 'PUBLIC'
+      });
+
+      const resPrivate = await getPrivateMediaRoute({
+        locals: {},
+        params: { id: deletedMediaId },
+        request: new Request(`https://projectnox.org/api/media/${deletedMediaId}`),
+        platform: {
+          env: { COVER_THUMBNAILS: mockKv },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(resPrivate.status).toBe(404);
+      expect(resPrivate.headers.get('Cache-Control')).toContain('no-store');
+      await Promise.all(waitUntilTasks);
+
+      expect(mockKv.delete).toHaveBeenCalledTimes(0);
+      expect(mockKv.put).toHaveBeenCalledTimes(0);
+
+      // 3. readCoverThumbnail para mídia revogada não invoca kv.delete()
+      const revokedCoverId = '88889999-aaaa-4bbb-8ccc-ddddeeeeffff';
+      await mockKv.put(`${REVOCATION_KEY_PREFIX}${revokedCoverId}`, JSON.stringify({
+        mediaId: revokedCoverId,
+        revokedAt: Date.now(),
+        reason: 'REVOKED'
+      }));
+      mockKv.delete.mockClear();
+
+      const thumbRes = await readCoverThumbnail(mockKv as any, revokedCoverId, null, 'thumb');
+      expect(thumbRes).toBeNull();
+      expect(mockKv.delete).toHaveBeenCalledTimes(0);
+    });
   });
 });
 

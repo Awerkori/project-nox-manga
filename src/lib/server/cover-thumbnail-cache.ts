@@ -113,9 +113,6 @@ export async function readCoverThumbnail(
 ): Promise<Response | null> {
   if (!kv || !isMediaId(mediaId)) return null;
   if (await isMediaRevoked(mediaId, kv)) {
-    if (typeof (kv as any).delete === 'function') {
-      void (kv as any).delete(coverThumbnailKey(mediaId, variant)).catch(() => {});
-    }
     return null;
   }
   const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
