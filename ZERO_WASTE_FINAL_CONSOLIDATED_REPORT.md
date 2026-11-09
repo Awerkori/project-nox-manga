@@ -2,13 +2,13 @@
 ## RELATÓRIO CONSOLIDADO FORENSE DEFINITIVO: CAPACIDADE, SEGURANÇA, CONTABILIDADE E LIMITES FÍSICOS
 
 **Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)
-**Versão Ativa em Produção:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` (100% tráfego ativo e homologado)
-**Baseline de Rollback Imediato:** `fb683114-2f80-4b17-b020-6cc70ef93315`
-**Baseline Secundário:** `2cd46361-7eb7-4a0a-a84b-6647c8b75efd`
+**Versão Ativa em Produção:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (100% tráfego ativo e homologado)
+**Baseline de Rollback Imediato:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`
+**Baseline Secundário:** `fb683114-2f80-4b17-b020-6cc70ef93315`
 **Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
-**Último Commit Publicado:** `58f4b13` (`docs(rollback): update active production version to fafe6ae8`)
-**Data da Homologação:** 2026-11-08
-**Status da Operação:** **DEPLOY CONCLUÍDO COM SUCESSO — 739 TESTES APROVADOS (100% GREEN) — 22 SMOKE TESTS EM PRODUÇÃO VALIDADOS**
+**Último Commit:** `ccfad07` (`fix(kv-incident): eliminate unsafe KV deletions on HTTP GET read paths and preserve safe method semantics`)
+**Data da Homologação:** 2026-11-09
+**Status da Operação:** **INCIDENTE KV CORRIGIDO — DEPLOY REALIZADO — 740 TESTES APROVADOS (100% GREEN) — SMOKE TESTS EM PRODUÇÃO VALIDADOS**
 
 ---
 
@@ -239,8 +239,11 @@ npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name ma
 **Situação Final:** **DEPLOY CONCLUÍDO COM SUCESSO E HOMOLOGADO.**
 
 #### 10.1 Versão e Commits Publicados
-- **Versão Ativa na Cloudflare:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
+- **Versão Ativa na Cloudflare:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
+- **Baseline de Rollback Imediato:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
+- **Baseline Secundário:** `fb683114-2f80-4b17-b020-6cc70ef93315`.
 - **Commits Publicados em `origin/perf/nox-cloudflare-zero-waste`:**
+  - `ccfad07` — fix(kv-incident): eliminate unsafe KV deletions on HTTP GET read paths and preserve safe method semantics
   - `58f4b13` — docs(rollback): update active production version to fafe6ae8
   - `46973e1` — fix(zero-waste): heal downloadBotRef in thumbnail fallback and restore mediaBaseUrl on reader cache hit
   - `1d67d13` — fix(media): declare downloadBotRef and resolve ReferenceError in fallback retry
@@ -281,10 +284,12 @@ npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name ma
 | 20 | `GET /admin` (anônimo) | 303 See Other | 36 ms | Redirecionamento para login administrativo | APROVADO |
 | 21 | `POST /api/action` sem Origin | 403 Forbidden | 35 ms | CSRF guard ativo e protegendo mutações | APROVADO |
 | 22 | `POST /api/action` com Origin (anônimo) | 401 Unauthorized | 38 ms | Autenticação backend RBAC exigida | APROVADO |
+| 23 | `GET /media/00000000-...` (deletada/inexistente) | 404 Not Found | 28 ms | `no-store`, 0 chamadas a `kv.delete()` | APROVADO |
+| 24 | `GET /api/media/00000000-...` (deletada privada) | 404 Not Found | 30 ms | `no-store`, 0 chamadas a `kv.delete()` | APROVADO |
 
 #### 10.3 Procedimento de Rollback Imediato
 Caso seja detectada qualquer anomalia operacional imprevista:
 ```bash
 # Rollback imediato para a versão pré-deploy (convergência em < 5 segundos):
-npx wrangler rollback fb683114-2f80-4b17-b020-6cc70ef93315 --name manga --message "Rollback imediato de seguranca"
+npx wrangler rollback fafe6ae8-cd04-4f93-8125-bc7a02774619 --name manga --message "Rollback imediato de seguranca"
 ```
