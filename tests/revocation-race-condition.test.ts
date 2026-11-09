@@ -55,6 +55,11 @@ function createMockKv(initialData: Record<string, any> = {}) {
       }
       return val;
     }),
+    getWithMetadata: vi.fn(async (key: string, opts?: any) => {
+      const val = store.get(key);
+      if (!val) return { value: null, metadata: null };
+      return { value: val, metadata: null };
+    }),
     put: vi.fn(async (key: string, val: string) => {
       store.set(key, val);
     }),
@@ -94,6 +99,11 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     mocks.mediaStore.clear();
 
     mocks.executeYugabyteSql.mockImplementation(async (sql: string, params: any[]) => {
+      if (sql.includes('SELECT status FROM public.media') || sql.includes('SELECT status FROM media')) {
+        const id = params?.[0];
+        const item = mocks.mediaStore.get(id);
+        return { rows: item ? [{ status: item.status }] : [], rowCount: item ? 1 : 0 };
+      }
       if (sql.includes('UPDATE public.media') || sql.includes('UPDATE media')) {
         const statusMatch = sql.match(/SET status = \$1/);
         if (statusMatch && params?.[0] && params?.[1]) {
@@ -291,7 +301,7 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
 
   it('4. Concurrent in-flight request started before revocation completes after revocation: stops before cache.put and returns 404', async () => {
     // Scenario: Request starts when media was ACTIVE.
-    // Download takes time. During download, admin revokes media.
+    // Download takes time. During download, admin revokes media (updating DB status = 'DELETED' and writing KV tombstone).
     mocks.mediaStore.set(testMediaId, {
       id: testMediaId,
       provider: 'telegram',
@@ -307,7 +317,7 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     const mockKv = createMockKv();
     const mockCache = createMockCache();
 
-    // Hook download to trigger revocation in the middle of download
+    // Hook download to trigger revocation in DB and KV while download is in-flight
     mocks.download.mockImplementationOnce(async () => {
       // Simulate admin revocation completing while download was in-flight
       mocks.mediaStore.get(testMediaId).status = 'DELETED';
@@ -326,7 +336,8 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
       request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
       platform: {
         env: {
-          COVER_THUMBNAILS: mockKv
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
         },
         caches: { default: mockCache },
         context: {
@@ -336,7 +347,7 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
       cookies: { getAll: () => [] }
     } as any);
 
-    // In-flight request must NOT return 200, it must return 404!
+    // In-flight request must detect revocation, NOT return 200, and must return 404!
     expect(res.status).toBe(404);
     expect(res.headers.get('Cache-Control')).toContain('no-store');
 
@@ -397,5 +408,151 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
 
     // Verify tombstone was deleted from KV
     expect(await mockKv.get(`revoked:v1:${testMediaId}`)).toBeNull();
+  });
+
+  it('6. In-flight cover warm request: admin revokes during download -> suppresses KV thumbnail write and returns 404', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_cov',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const mockKv = createMockKv();
+    const mockCache = createMockCache();
+
+    // Hook download to trigger revocation in DB and KV while download is in-flight
+    mocks.download.mockImplementationOnce(async () => {
+      mocks.mediaStore.get(testMediaId).status = 'DELETED';
+      await mockKv.put(`revoked:v1:${testMediaId}`, JSON.stringify({ mediaId: testMediaId, reason: 'REVOKED', revokedAt: Date.now() }));
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${bridgeToken}`
+        }
+      }),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+        },
+        caches: { default: mockCache },
+        context: {
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(404);
+    // CRITICAL: Thumbnail must NOT have been written to KV!
+    expect(mockKv.put).not.toHaveBeenCalledWith(expect.stringContaining(`cover:v3:thumb:${testMediaId}`), expect.anything());
+    // CRITICAL: Cache must NOT have been populated!
+    expect(mockCache._map.size).toBe(0);
+  });
+
+  it('7. Dedicated private endpoint /api/media/[id]: in-flight revocation during download returns 404 no-store', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_priv',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'STAFF_ONLY',
+      purpose: 'staff_manual',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'tok' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-1' } });
+
+    const mockKv = createMockKv();
+    mocks.download.mockImplementationOnce(async () => {
+      mocks.mediaStore.get(testMediaId).status = 'DELETED';
+      await mockKv.put(`revoked:v1:${testMediaId}`, JSON.stringify({ mediaId: testMediaId, reason: 'REVOKED', revokedAt: Date.now() }));
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const res = await getPrivateMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/api/media/${testMediaId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer valid-staff-token`
+        }
+      }),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+        },
+        context: {
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it('8. Media with non-active status (e.g. DISABLED) returns 404 on Cache MISS without download', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_dis',
+      storage_ready: true,
+      status: 'DISABLED',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const mockKv = createMockKv();
+    const mockCache = createMockCache();
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv
+        },
+        caches: { default: mockCache },
+        context: {
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+    expect(mocks.download).not.toHaveBeenCalled();
+    expect(mockCache._map.size).toBe(0);
   });
 });

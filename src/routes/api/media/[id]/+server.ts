@@ -7,7 +7,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { fetchMediaMetadataFromYugabyte, executeYugabyteSql, invalidateMediaMetadataCache } from '$lib/server/yugabyte';
-import { classifyMediaAccess, purgeMediaVariants } from '$lib/server/media-revocation';
+import { classifyMediaAccess, purgeMediaVariants, isMediaRevoked } from '$lib/server/media-revocation';
 
 async function downloadWithTransientRetry(
   client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> },
@@ -34,8 +34,8 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) error(404);
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
-  if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    if (media && media.status === 'DELETED') {
+  if (!media || media.storage_ready !== true || media.status !== 'ACTIVE') {
+    if (media && media.status !== 'ACTIVE') {
       invalidateMediaMetadataCache(params.id);
       const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
       if (cache || platform?.context?.cache) {
@@ -52,6 +52,20 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
       }
     }
     return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
+      status: 404,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
+  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+    return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -180,6 +194,23 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         }
       });
     }
+  }
+
+  // Re-verify authoritative revocation status after download to prevent leaking in-flight revoked media
+  const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+
+  if (isRevoked) {
+    return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+      status: 404,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   }
 
   if (media.bytes && Number(media.bytes) > 0) {

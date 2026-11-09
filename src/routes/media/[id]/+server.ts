@@ -247,8 +247,8 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
-  if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    if (media && media.status === 'DELETED') {
+  if (!media || media.storage_ready !== true || media.status !== 'ACTIVE') {
+    if (media && media.status !== 'ACTIVE') {
       invalidateMediaMetadataCache(params.id);
       if (cache || platform?.context?.cache) {
         const purgeTask = purgeMediaVariants(params.id, {
@@ -640,29 +640,11 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   const response = new Response(body, { status: 200, headers });
 
-  // Only the authenticated publication event may create a global KV entry.
-  // Interactive requests still read a hot entry, but never write one: that
-  // prevents a cold edge or concurrent browser views from exhausting the KV
-  // free-tier write budget. Large/full reader pages never enter this path.
-  const kv = platform?.env?.COVER_THUMBNAILS;
-  const responseBytes = Number(headers['Content-Length'] || 0);
-  if (internalCoverWarm && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
-    const persist = readBoundedCoverResponse(response.clone())
-      .then((bytes) => bytes && persistCoverThumbnail(kv, params.id, bytes, {
-        contentType: headers['Content-Type'],
-        etag: headers['ETag'],
-        contentLength: headers['Content-Length']
-      }, coverVariant))
-      .catch(() => 'skipped');
-    // The event endpoint observes a completed warm only after this single KV
-    // write is done; user-facing media never waits for it.
-    const persisted = await persist;
-    response.headers.set('X-Cover-Warm', persisted === 'stored' ? 'stored' : 'skipped');
-  }
+  // 1. Authoritative re-verification BEFORE internal cover warm and edge cache.put:
+  // Checks KV tombstone and in-memory revocation sets to ensure that any request in-flight
+  // during revocation does not commit to KV or edge cache.
+  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
 
-  // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
-  const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);
-  const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
   if (isRevoked) {
     if (cache || platform?.context?.cache) {
       const purgeTask = purgeMediaVariants(params.id, {
@@ -688,6 +670,29 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     });
   }
 
+  // 2. Only the authenticated publication event may create a global KV entry.
+  // Interactive requests still read a hot entry, but never write one: that
+  // prevents a cold edge or concurrent browser views from exhausting the KV
+  // free-tier write budget. Large/full reader pages never enter this path.
+  // Executed ONLY IF verified not revoked.
+  const kv = platform?.env?.COVER_THUMBNAILS;
+  const responseBytes = Number(headers['Content-Length'] || 0);
+  if (internalCoverWarm && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
+    const persist = readBoundedCoverResponse(response.clone())
+      .then((bytes) => bytes && persistCoverThumbnail(kv, params.id, bytes, {
+        contentType: headers['Content-Type'],
+        etag: headers['ETag'],
+        contentLength: headers['Content-Length']
+      }, coverVariant))
+      .catch(() => 'skipped');
+    // The event endpoint observes a completed warm only after this single KV
+    // write is done; user-facing media never waits for it.
+    const persisted = await persist;
+    response.headers.set('X-Cover-Warm', persisted === 'stored' ? 'stored' : 'skipped');
+  }
+
+  // 3. Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
+  const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);
   if (cache && isPublic && isCachableAtEdge && !isRevoked) {
     try {
       const cacheResponse = response.clone();
