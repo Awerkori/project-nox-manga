@@ -25,11 +25,11 @@ vi.mock('$lib/server/session-cache', () => ({
 }));
 
 vi.mock('$lib/server/yugabyte', () => ({
-  fetchMediaMetadataFromYugabyte: vi.fn(async (id: string, _env?: any, options?: { forceFresh?: boolean }) => {
+  fetchMediaMetadataFromYugabyte: vi.fn(async (id: string, _env?: any, _options?: { forceFresh?: boolean }) => {
     return mocks.mediaStore.get(id) || null;
   }),
   executeYugabyteSql: mocks.executeYugabyteSql,
-  invalidateMediaMetadataCache: vi.fn((id: string) => {
+  invalidateMediaMetadataCache: vi.fn((_id: string) => {
     // Invalidate local in-memory store if needed
   }),
   invalidateYugabyteLkgPrefix: vi.fn()
@@ -38,33 +38,44 @@ vi.mock('$lib/server/yugabyte', () => ({
 import { GET as getPublicMediaRoute } from '../src/routes/media/[id]/+server';
 import { POST as revokeMediaEndpoint } from '../src/routes/api/internal/media/revoke/+server';
 import { GET as getPrivateMediaRoute } from '../src/routes/api/media/[id]/+server';
-import { revokeMedia, unrevokeMedia, isMediaRevoked, clearMemoryRevocationCache } from '../src/lib/server/media-revocation';
+import { revokeMedia, isMediaRevoked, clearMemoryRevocationCache } from '../src/lib/server/media-revocation';
 
-function createMockKv(initialData: Record<string, any> = {}) {
-  const store = new Map<string, string>();
+function createMockKv(initialData: Record<string, any> = {}, initialMetadata: Record<string, any> = {}) {
+  const store = new Map<string, any>();
+  const metaStore = new Map<string, any>();
   for (const [k, v] of Object.entries(initialData)) {
-    store.set(k, typeof v === 'string' ? v : JSON.stringify(v));
+    store.set(k, v);
+  }
+  for (const [k, v] of Object.entries(initialMetadata)) {
+    metaStore.set(k, v);
   }
   return {
     _store: store,
+    _metaStore: metaStore,
     get: vi.fn(async (key: string, opts?: any) => {
       const val = store.get(key);
       if (!val) return null;
       if (opts?.type === 'json') {
-        try { return JSON.parse(val); } catch { return null; }
+        try { return typeof val === 'string' ? JSON.parse(val) : val; } catch { return null; }
       }
-      return val;
+      return typeof val === 'string' ? val : JSON.stringify(val);
     }),
-    getWithMetadata: vi.fn(async (key: string, opts?: any) => {
+    getWithMetadata: vi.fn(async (key: string, _opts?: any) => {
       const val = store.get(key);
       if (!val) return { value: null, metadata: null };
-      return { value: val, metadata: null };
+      const meta = metaStore.get(key) || null;
+      const buffer = val instanceof ArrayBuffer ? val : (val instanceof Uint8Array ? val.buffer : new TextEncoder().encode(String(val)).buffer);
+      return { value: buffer, metadata: meta };
     }),
-    put: vi.fn(async (key: string, val: string) => {
+    put: vi.fn(async (key: string, val: any, opts?: any) => {
       store.set(key, val);
+      if (opts?.metadata) {
+        metaStore.set(key, opts.metadata);
+      }
     }),
     delete: vi.fn(async (key: string) => {
       store.delete(key);
+      metaStore.delete(key);
     })
   };
 }
@@ -754,5 +765,264 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     // CRITICAL PROOF: Newly privatized media must NEVER be cached in public edge cache!
     expect(remoteCache.put).not.toHaveBeenCalled();
     expect(remoteCache._map.size).toBe(0);
+  });
+
+  it('13. Adversarial KV Thumbnail: media revoked in YSQL while remote KV is lagging -> cache MISS validates DB fresh, prevents early KV return, and returns 404 no-store', async () => {
+    // Stale cover thumbnail exists in remote KV
+    const staleBytes = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+    const remoteLaggingKv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: staleBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/jpeg', etag: '"stale_thumb_etag"', contentLength: '10' } }
+    );
+    const remoteCache = createMockCache();
+
+    // Media was revoked in YSQL (status = DELETED), but KV tombstone is lagging / absent
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_revoked_cover_123',
+      storage_ready: true,
+      status: 'DELETED',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/jpeg',
+      bytes: 10
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    // CRITICAL: Must validate against authoritative DB and return 404, NEVER returning stale KV bytes
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+    expect(res.headers.get('X-Media-Cache')).toBeNull();
+    expect(remoteCache.put).not.toHaveBeenCalled();
+  });
+
+  it('14. Adversarial KV Thumbnail: media privatized in YSQL while remote KV is lagging -> cache MISS validates DB fresh and blocks stale KV thumbnail return', async () => {
+    const staleBytes = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+    const remoteLaggingKv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: staleBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/jpeg', etag: '"stale_thumb_etag"', contentLength: '10' } }
+    );
+    const remoteCache = createMockCache();
+
+    // Media changed to PRIVATE in YSQL, but remote KV has no tombstone
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatized_cover_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PRIVATE',
+      purpose: 'cover',
+      mime: 'image/jpeg',
+      bytes: 10
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    // Anonymous request must be denied with 404 no-store, not served from lagging KV
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+    expect(remoteCache.put).not.toHaveBeenCalled();
+  });
+
+  it('15. Controlled Race Condition: post-download check confirms ACTIVE -> revocation finishes before cache.put -> pre/post-put guard prevents stale cache resurrection', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_race_control_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    // Deferred execution control for cache.put:
+    let resolvePut: () => void = () => {};
+    const putTrigger = new Promise<void>((resolve) => {
+      resolvePut = resolve;
+    });
+
+    const originalPut = cache.put;
+    cache.put = vi.fn(async (req: any, res: Response) => {
+      // Suspend cache.put until explicit release signal
+      await putTrigger;
+      return originalPut(req, res);
+    });
+
+    let backgroundTask: Promise<any> | null = null;
+    const waitUntilMock = vi.fn((promise: Promise<any>) => {
+      backgroundTask = promise;
+    });
+
+    // 1. Initial GET request: download and post-download DB re-verification succeed (ACTIVE)
+    const initialRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: waitUntilMock }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(initialRes.status).toBe(200);
+
+    // 2. While cache.put is suspended in background, administrative revocation executes:
+    // updates YSQL to DELETED, writes KV tombstone, and executes cache.delete
+    const revokeResult = await revokeMedia(testMediaId, {
+      kv,
+      cache,
+      origin: 'https://projectnox.org',
+      reason: 'ADMIN_TAKEDOWN'
+    });
+    expect(revokeResult.success).toBe(true);
+    expect(mocks.mediaStore.get(testMediaId).status).toBe('DELETED');
+    expect(await isMediaRevoked(testMediaId, kv)).toBe(true);
+
+    // 3. Now release cache.put to finish after revocation and purge have completed
+    resolvePut();
+    if (backgroundTask) {
+      await backgroundTask;
+    }
+
+    // 4. Verify post-put guard: cache must NOT contain resurrected stale entry
+    const cachedEntry = await cache.match(new Request(`https://projectnox.org/media/${testMediaId}`));
+    expect(cachedEntry).toBeNull();
+
+    // 5. Subsequent request must return 404 no-store
+    const subsequentRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(subsequentRes.status).toBe(404);
+    expect(subsequentRes.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it('16. Restricted & +18 Content Headers: delivers strictly no-store Cache-Control (no max-age=86400) and permits self-declared age cookie without JWT', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_adult_page_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12,
+      work_content_rating: 'ADULT_18'
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    // Request with self-declared age cookie nox-age-status=ADULT (no JWT session)
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: {
+        getAll: () => [{ name: 'nox-age-status', value: 'ADULT' }],
+        get: (name: string) => (name === 'nox-age-status' ? 'ADULT' : undefined)
+      }
+    } as any);
+
+    expect(res.status).toBe(200);
+
+    // CRITICAL SECURITY PROOFS for Restricted Delivery:
+    const cacheControl = res.headers.get('Cache-Control') || '';
+    expect(cacheControl).toContain('no-store');
+    expect(cacheControl).not.toContain('max-age=86400');
+    expect(res.headers.get('CDN-Cache-Control')).toBe('no-store');
+    expect(res.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');
+    expect(res.headers.get('Pragma')).toBe('no-cache');
+    expect(res.headers.get('Cache-Tag')).toBeNull();
+
+    // Edge cache must NEVER store restricted delivery
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('17. Active Public Cover: prewarming benefits strictly preserved with 0 Telegram calls when verified ACTIVE and PUBLIC in DB', async () => {
+    const thumbBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const kv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: thumbBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/webp', etag: '"valid_thumb_etag"', contentLength: '12' } }
+    );
+    const cache = createMockCache();
+
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_active_cover_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    let backgroundTask: Promise<any> | null = null;
+    const waitUntilMock = vi.fn((promise: Promise<any>) => {
+      backgroundTask = promise;
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: waitUntilMock }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Media-Cache')).toBe('COVER_THUMBNAIL_KV');
+    // Telegram download was skipped completely (0 calls)
+    expect(mocks.download).not.toHaveBeenCalled();
+
+    if (backgroundTask) {
+      await backgroundTask;
+    }
+    // Prewarmed response was populated into edge cache
+    expect(cache.put).toHaveBeenCalled();
   });
 });

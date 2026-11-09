@@ -260,46 +260,6 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     }
   }
 
-  // Cover thumbnails are derived public media. Unlike the per-PoP Worker cache,
-  // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
-  // on another region/device. Never use it for full pages or private media.
-  if (coverVariant && platform?.env?.COVER_THUMBNAILS) {
-    const isRevoked = await isMediaRevoked(params.id, platform.env.COVER_THUMBNAILS, { failClosed: true });
-    if (isRevoked) {
-      const purgeOptions = {
-        cache,
-        ctx: platform?.context || platform?.ctx,
-        origin: url.origin,
-        currentUrl: request.url,
-        requirePurgeDispatch: true
-      };
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(purgeMediaVariants(params.id, purgeOptions));
-      } else {
-        await purgeMediaVariants(params.id, purgeOptions);
-      }
-      return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
-        status: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-          'CDN-Cache-Control': 'no-store',
-          'Cloudflare-CDN-Cache-Control': 'no-store',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-    }
-
-    const prewarmed = await readCoverThumbnail(
-      platform?.env?.COVER_THUMBNAILS,
-      params.id,
-      request.headers.get('if-none-match'),
-      coverVariant
-    );
-    if (prewarmed) return prewarmed;
-  }
-
   const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
   if (!media || media.storage_ready !== true || media.status !== 'ACTIVE') {
     if (media && media.status !== 'ACTIVE') {
@@ -418,12 +378,50 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   };
 
   if (isPrivateDelivery) {
-    headers['Cache-Control'] = 'private, max-age=86400, no-transform';
+    headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate, max-age=0';
+    headers['Pragma'] = 'no-cache';
+    headers['Expires'] = '0';
     headers['CDN-Cache-Control'] = 'no-store';
     headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
     headers['Vary'] = 'Cookie, Authorization';
     delete headers['Cache-Tag'];
     delete headers['X-Cache-Tag'];
+  }
+
+  // Cover thumbnails are derived public media. When verified active and public via authoritative DB,
+  // prewarmed KV thumbnails eliminate cold Telegram round-trips and CPU resize operations.
+  // Never serve KV thumbnails for private, restricted, or unverified media.
+  if (coverVariant && isPublic && platform?.env?.COVER_THUMBNAILS) {
+    const prewarmed = await readCoverThumbnail(
+      platform.env.COVER_THUMBNAILS,
+      params.id,
+      request.headers.get('if-none-match'),
+      coverVariant
+    );
+    if (prewarmed) {
+      if (request.method === 'HEAD') {
+        return new Response(null, { status: prewarmed.status, headers: prewarmed.headers });
+      }
+      // Populate edge cache so subsequent requests hit Worker edge cache with 0 KV reads and 0 YSQL queries
+      if (cache && prewarmed.status === 200 && !internalCoverWarm) {
+        const cacheResponse = prewarmed.clone();
+        const cachePutTask = async () => {
+          if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+            return;
+          }
+          await cache.put(cacheKey, cacheResponse);
+          if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+            await cache.delete(cacheKey);
+          }
+        };
+        if (platform?.context?.waitUntil) {
+          platform.context.waitUntil(cachePutTask());
+        } else {
+          await cachePutTask();
+        }
+      }
+      return prewarmed;
+    }
   }
 
   if (media.bytes && Number(media.bytes) > 0) {
@@ -750,10 +748,22 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   if (cache && isPublic && isCachableAtEdge && !isRevoked) {
     try {
       const cacheResponse = response.clone();
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(cache.put(cacheKey, cacheResponse));
-      } else {
+      const putTask = async () => {
+        // Pre-put guard: check if media was revoked while the response was preparing
+        if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+          return;
+        }
         await cache.put(cacheKey, cacheResponse);
+        // Post-put guard: if an administrative revocation occurred concurrently during cache.put,
+        // purge the entry immediately so the late-completing put cannot resurrect stale public cache
+        if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+          await cache.delete(cacheKey);
+        }
+      };
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(putTask());
+      } else {
+        await putTask();
       }
     } catch (cacheErr) {
       console.warn('Edge cache put failed:', cacheErr);
