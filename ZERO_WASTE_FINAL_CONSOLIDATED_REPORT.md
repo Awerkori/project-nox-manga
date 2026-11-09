@@ -3,8 +3,8 @@
 
 **Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)
 **Versão Ativa em Produção:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf` (100% tráfego ativo e homologado)
-**Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652`
-**Baseline Secundário:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`
+**Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
+**Aviso de Rollback:** Versões anteriores a `fcd51c68` (incluindo `fafe6ae8`) estão DEPRECADAS para rollback pois reintroduziriam o incidente de deleções em GET.
 **Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
 **Último Commit:** `8ee18e5` (`docs(rollback): update active production version to 398d1735 with fcd51c68 as immediate baseline`)
 **Data da Homologação:** 2026-11-09
