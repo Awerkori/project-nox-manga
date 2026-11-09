@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { matchesETag } from '$lib/server/mihon';
 import {
   resolveBotDownloadClient,
   normalizeBotReference,
@@ -118,8 +119,8 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     });
   }
 
-  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
-    return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true, allowActivePrivate: true })) {
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -139,7 +140,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   if (!isPublic) {
     const authCheck = await isAuthorizedForMedia(media, accessClassification, cookies, request, platform?.env);
     if (!authCheck.allowed) {
-      return new Response(JSON.stringify({
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({
         error: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
         age_restricted: authCheck.isAdultRestricted
       }), {
@@ -166,13 +167,29 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     'Pragma': 'no-cache',
     'Expires': '0',
     'Vary': 'Cookie, Authorization',
+    'Accept-Ranges': 'bytes',
     'ETag': `"${media.sha256}"`,
     'Content-Security-Policy': "default-src 'none'; sandbox",
     'X-Media-Privacy': isPublic ? 'PUBLIC' : 'PRIVATE-AUTHENTICATED'
   };
 
-  if (request.headers.get('if-none-match') === headers.ETag) {
+  if (matchesETag(request.headers.get('if-none-match'), headers.ETag)) {
     return new Response(null, { status: 304, headers });
+  }
+
+  const ifMatch = request.headers.get('if-match');
+  if (ifMatch && ifMatch !== '*' && headers.ETag) {
+    const matchEtags = ifMatch.split(',').map((s: string) => s.trim());
+    if (!matchEtags.includes(headers.ETag.trim()) || headers.ETag.startsWith('W/')) {
+      return new Response(null, { status: 412, headers });
+    }
+  }
+
+  if (request.method === 'HEAD') {
+    if (media.bytes && Number(media.bytes) > 0) {
+      headers['Content-Length'] = String(media.bytes);
+    }
+    return new Response(null, { status: 200, headers });
   }
 
   let body: BodyInit;
@@ -223,7 +240,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   // Re-verify authoritative revocation status after download to prevent leaking in-flight revoked media
-  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true, allowActivePrivate: true });
 
   if (!isRevoked) {
     try {
@@ -247,7 +264,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   if (isRevoked) {
-    return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -264,5 +281,84 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     headers['Content-Length'] = String(media.bytes);
   }
 
+  const rangeHeader = request.headers.get('range');
+  const ifRange = request.headers.get('if-range');
+  const currentEtag = headers['ETag'] ? String(headers['ETag']).trim() : null;
+  let evaluateRange = Boolean(rangeHeader && request.method === 'GET');
+  if (evaluateRange && ifRange) {
+    // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+    if (!currentEtag || ifRange.trim().startsWith('W/') || ifRange.trim() !== currentEtag) {
+      evaluateRange = false;
+    }
+  }
+
+  if (evaluateRange && rangeHeader) {
+    const toUint8Array = async (b: BodyInit): Promise<Uint8Array> => {
+      if (b instanceof Uint8Array) return b;
+      if (b instanceof ArrayBuffer) return new Uint8Array(b);
+      if (b && typeof (b as any).getReader === 'function') {
+        const reader = (b as ReadableStream<Uint8Array>).getReader();
+        const chunks: Uint8Array[] = [];
+        let totalLen = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            totalLen += value.length;
+          }
+        }
+        const combined = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const c of chunks) {
+          combined.set(c, offset);
+          offset += c.length;
+        }
+        return combined;
+      }
+      return new Uint8Array();
+    };
+
+    const bytes = body instanceof Uint8Array ? body : await toUint8Array(body);
+    const total = bytes.byteLength;
+    const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+    if (match) {
+      let start: number;
+      let end: number;
+      if (match[1] === '' && match[2] !== '') {
+        const suffixLen = parseInt(match[2], 10);
+        if (suffixLen === 0 || total === 0) {
+          return new Response(null, {
+            status: 416,
+            headers: { ...headers, 'Content-Range': `bytes */${total}` }
+          });
+        }
+        start = Math.max(0, total - suffixLen);
+        end = total - 1;
+      } else {
+        start = match[1] ? parseInt(match[1], 10) : 0;
+        end = match[2] ? parseInt(match[2], 10) : total - 1;
+      }
+
+      if (start >= total || start > end || total === 0) {
+        return new Response(null, {
+          status: 416,
+          headers: { ...headers, 'Content-Range': `bytes */${total}` }
+        });
+      }
+
+      const actualEnd = Math.min(end, total - 1);
+      const sliced = bytes.subarray(start, actualEnd + 1);
+      const rangeHeaders = {
+        ...headers,
+        'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
+        'Content-Length': String(sliced.byteLength)
+      };
+      return new Response(sliced, { status: 206, headers: rangeHeaders });
+    }
+  }
+
   return new Response(body, { status: 200, headers });
 };
+
+export const HEAD = GET;

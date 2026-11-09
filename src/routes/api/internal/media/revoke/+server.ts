@@ -70,6 +70,24 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
   const kv = platform?.env?.COVER_THUMBNAILS;
 
   const isUnrevoke = body?.action === 'unrevoke' || body?.action === 'restore';
+  const isPrivatizeAction = body?.action === 'privatize' || body?.action === 'restrict';
+  const hasExplicitStatus = typeof body?.status === 'string' && body.status.trim().length > 0;
+  const isPrivatization = !isUnrevoke && (isPrivatizeAction || Boolean(body?.accessClass));
+
+  // Determine target status and target access class with strict semantic separation:
+  // If status is explicitly passed, honor it.
+  // Otherwise, privatization/restriction preserves status = 'ACTIVE'.
+  // Revocation/deletion sets status = 'DELETED'.
+  const targetStatus = hasExplicitStatus
+    ? body.status.trim()
+    : isPrivatization
+    ? 'ACTIVE'
+    : 'DELETED';
+
+  const targetAccessClass = typeof body?.accessClass === 'string' && body.accessClass.trim()
+    ? body.accessClass.trim()
+    : (isPrivatizeAction ? 'PRIVATE' : undefined);
+
   const processedIds: string[] = [];
   const revokedIds: string[] = [];
   const restoredIds: string[] = [];
@@ -90,12 +108,11 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
 
     // 1. Authoritative persistence in public.media.status BEFORE KV write and Cache purge
     if (!isUnrevoke) {
-      const targetStatus = typeof body?.status === 'string' && body.status.trim() ? body.status.trim() : 'DELETED';
       try {
-        if (body?.accessClass) {
+        if (targetAccessClass) {
           await executeYugabyteSql(
             `UPDATE public.media SET status = $1, access_class = $2 WHERE id = $3;`,
-            [targetStatus, body.accessClass, id],
+            [targetStatus, targetAccessClass, id],
             platform?.env
           );
         } else {
@@ -140,9 +157,9 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
             cache,
             ctx: platform?.context || platform?.ctx,
             origin: url.origin,
-            reason: body.reason || 'MANUAL_REVOCATION',
-            accessClass: body.accessClass,
-            status: body.status,
+            reason: body.reason || (isPrivatization ? 'MANUAL_PRIVATIZATION' : 'MANUAL_REVOCATION'),
+            accessClass: targetAccessClass,
+            status: targetStatus,
             requirePurgeDispatch: true,
             skipDb: true,
             platformEnv: platform?.env
@@ -169,7 +186,7 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
 
   return json({
     success: allSucceeded,
-    action: isUnrevoke ? 'unrevoke' : 'revoke',
+    action: isUnrevoke ? 'unrevoke' : (isPrivatization ? 'privatize' : 'revoke'),
     revokedCount: revokedIds.length,
     restoredCount: restoredIds.length,
     totalRequested: rawIds.length,

@@ -2,13 +2,11 @@
 ## RELATÓRIO CONSOLIDADO FORENSE DEFINITIVO: CAPACIDADE, SEGURANÇA, CONTABILIDADE E LIMITES FÍSICOS
 
 **Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)
-**Versão Ativa em Produção:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf` (100% tráfego ativo e homologado)
+**Versão Ativa em Produção:** `322d46b9-71ed-4e14-a03a-bbc48f356bac` (100% tráfego ativo e homologado)
 **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 **Aviso de Rollback:** Versões anteriores a `fcd51c68` (incluindo `fafe6ae8`) estão DEPRECADAS para rollback pois reintroduziriam o incidente de deleções em GET.
 **Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
-**Último Commit:** `8ee18e5` (`docs(rollback): update active production version to 398d1735 with fcd51c68 as immediate baseline`)
-**Data da Homologação:** 2026-11-09
-**Status da Operação:** **INCIDENTE KV CORRIGIDO — DEPLOY REALIZADO — 743 TESTES APROVADOS (100% GREEN) — SMOKE TESTS EM PRODUÇÃO VALIDADOS**
+**Status da Operação:** **CONCLUÍDO TECNICAMENTE — AGUARDANDO AUTORIZAÇÃO DE DEPLOY — 779 TESTES APROVADOS (100% GREEN)**
 
 ---
 
@@ -237,10 +235,10 @@ npx wrangler versions deploy fcd51c68-3fa5-4d63-b867-d7d557554652@100% --name ma
 
 ### 10. RESULTADO DA PUBLICAÇÃO E HOMOLOGAÇÃO EM PRODUÇÃO
 
-**Situação Final:** **DEPLOY CONCLUÍDO COM SUCESSO E HOMOLOGADO.**
+**Situação Final:** **CONCLUÍDO TECNICAMENTE — AGUARDANDO AUTORIZAÇÃO DE DEPLOY.**
 
-#### 10.1 Versão e Commits Publicados
-- **Versão Ativa na Cloudflare:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
+#### 10.1 Versão e Baseline de Produção
+- **Versão Ativa na Cloudflare (Identificada no Ambiente):** `322d46b9-71ed-4e14-a03a-bbc48f356bac` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
 - **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652`.
 - **Baseline Secundário:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
 - **Commits Publicados em `origin/perf/nox-cloudflare-zero-waste`:**

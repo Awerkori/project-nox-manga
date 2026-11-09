@@ -37,8 +37,8 @@ vi.mock('$lib/server/yugabyte', () => ({
 
 import { GET as getPublicMediaRoute } from '../src/routes/media/[id]/+server';
 import { POST as revokeMediaEndpoint } from '../src/routes/api/internal/media/revoke/+server';
-import { GET as getPrivateMediaRoute } from '../src/routes/api/media/[id]/+server';
-import { revokeMedia, isMediaRevoked, clearMemoryRevocationCache } from '../src/lib/server/media-revocation';
+import { GET as getPrivateMediaRoute, HEAD as headPrivateMediaRoute } from '../src/routes/api/media/[id]/+server';
+import { revokeMedia, privatizeMedia, isMediaRevoked, clearMemoryRevocationCache } from '../src/lib/server/media-revocation';
 
 function createMockKv(initialData: Record<string, any> = {}, initialMetadata: Record<string, any> = {}) {
   const store = new Map<string, any>();
@@ -1854,5 +1854,501 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     } as any);
 
     expect(revalRes.status).toBe(304);
+  });
+
+  it('21. Administrative Endpoint /api/internal/media/revoke: Sending accessClass: "PRIVATE" WITHOUT status updates access_class = "PRIVATE" and maintains status = "ACTIVE" (does NOT delete!)', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatize_preserve_active_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    // Admin sends accessClass: 'PRIVATE' WITHOUT passing status
+    const req = new Request('https://projectnox.org/api/internal/media/revoke', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${bridgeToken}`
+      },
+      body: JSON.stringify({
+        mediaId: testMediaId,
+        accessClass: 'PRIVATE',
+        reason: 'CONTENT_PRIVATIZATION'
+      })
+    });
+
+    const res = await revokeMediaEndpoint({
+      request: req,
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: bridgeToken },
+        context: {
+          cache: {
+            purge: vi.fn(async () => ({ success: true, errors: [] }))
+          },
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.action).toBe('privatize');
+
+    // CRITICAL REQUIREMENT: Status MUST remain ACTIVE (not DELETED!)
+    const stored = mocks.mediaStore.get(testMediaId);
+    expect(stored.status).toBe('ACTIVE');
+    expect(stored.access_class).toBe('PRIVATE');
+
+    // 1. Anonymous visitor to /media/[id] receives 404 with strictly private headers
+    const anonRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [], get: () => undefined }
+    } as any);
+    expect(anonRes.status).toBe(404);
+    expect(anonRes.headers.get('Cache-Control')).toContain('no-store');
+
+    // 2. Authorized staff visitor to /api/media/[id] receives HTTP 200 with strictly private headers
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    const staffRes = await getPrivateMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/api/media/${testMediaId}`, {
+        method: 'GET',
+        headers: { Authorization: 'Bearer valid-staff-token' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    expect(staffRes.status).toBe(200);
+    expect(staffRes.headers.get('Cache-Control')).toContain('private');
+    expect(staffRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(staffRes.headers.get('Cache-Tag')).toBeNull();
+  });
+
+  it('22. Administrative Endpoint /api/internal/media/revoke: Revocation without accessClass and without status defaults status to "DELETED" (exclusão administrativa prevista)', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_delete_default_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+
+    // Revocation request without accessClass and without status -> administrative deletion
+    const req = new Request('https://projectnox.org/api/internal/media/revoke', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${bridgeToken}`
+      },
+      body: JSON.stringify({
+        mediaId: testMediaId,
+        reason: 'DMCA_TAKEDOWN'
+      })
+    });
+
+    const res = await revokeMediaEndpoint({
+      request: req,
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: bridgeToken },
+        context: {
+          cache: {
+            purge: vi.fn(async () => ({ success: true, errors: [] }))
+          },
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.action).toBe('revoke');
+
+    // Expected: status = 'DELETED'
+    const stored = mocks.mediaStore.get(testMediaId);
+    expect(stored.status).toBe('DELETED');
+  });
+
+  it('23. Dedicated Private Endpoint /api/media/[id]: HEAD request returns HTTP 200 with headers without executing Telegram download', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_head_test_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PRIVATE',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 42,
+      sha256: 'head-sha256-test'
+    });
+
+    const kv = createMockKv();
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    // Send HEAD request via exported HEAD handler
+    const headRes = await headPrivateMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/api/media/${testMediaId}`, {
+        method: 'HEAD',
+        headers: { Authorization: 'Bearer valid-staff-token' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    expect(headRes.status).toBe(200);
+    expect(headRes.body).toBeNull();
+    expect(headRes.headers.get('Content-Length')).toBe('42');
+    expect(headRes.headers.get('Content-Type')).toBe('image/webp');
+    expect(headRes.headers.get('ETag')).toBe('"head-sha256-test"');
+    expect(headRes.headers.get('Cache-Control')).toContain('private');
+    expect(headRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(headRes.headers.get('Accept-Ranges')).toBe('bytes');
+
+    // CRITICAL: Telegram download stream MUST NOT be opened for HEAD requests
+    expect(mocks.download).not.toHaveBeenCalled();
+  });
+
+  it('24. Dedicated Private Endpoint /api/media/[id]: Conditional Revalidation (If-None-Match) returns HTTP 304 with strictly private headers', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_reval_test_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PRIVATE',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 42,
+      sha256: 'reval-sha256-test'
+    });
+
+    const kv = createMockKv();
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    const revalRes = await getPrivateMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/api/media/${testMediaId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer valid-staff-token',
+          'If-None-Match': '"reval-sha256-test"'
+        }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    expect(revalRes.status).toBe(304);
+    expect(revalRes.body).toBeNull();
+    expect(revalRes.headers.get('Cache-Control')).toContain('private');
+    expect(revalRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(revalRes.headers.get('Cache-Control')).not.toContain('public');
+    expect(revalRes.headers.get('CDN-Cache-Control')).toBe('no-store');
+  });
+
+  it('25. Dedicated Private Endpoint /api/media/[id]: If-Match mismatch returns HTTP 412 Precondition Failed', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_ifmatch_test_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PRIVATE',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 42,
+      sha256: 'valid-etag-123'
+    });
+
+    const kv = createMockKv();
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    const matchRes = await getPrivateMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/api/media/${testMediaId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer valid-staff-token',
+          'If-Match': '"mismatched-etag-456"'
+        }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    expect(matchRes.status).toBe(412);
+  });
+
+  it('26. Dedicated Private Endpoint /api/media/[id]: HTTP Range request by authorized staff returns HTTP 206 Partial Content with strictly private headers', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_range_private_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PRIVATE',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12,
+      sha256: 'range-etag-123'
+    });
+
+    const kv = createMockKv();
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    // Download mock returning 12 bytes
+    mocks.download.mockResolvedValueOnce(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      })
+    );
+
+    const rangeRes = await getPrivateMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/api/media/${testMediaId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer valid-staff-token',
+          Range: 'bytes=0-3'
+        }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    expect(rangeRes.status).toBe(206);
+    expect(rangeRes.headers.get('Content-Range')).toBe('bytes 0-3/12');
+    expect(rangeRes.headers.get('Content-Length')).toBe('4');
+    expect(rangeRes.headers.get('Cache-Control')).toContain('private');
+    expect(rangeRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(rangeRes.headers.get('Cache-Control')).not.toContain('public');
+    expect(rangeRes.headers.get('CDN-Cache-Control')).toBe('no-store');
+  });
+
+  it('27. Edge Cache HIT on /media/[id]: If-Match mismatch returns 412, HEAD strips body, Range returns 206 Partial Content', async () => {
+    const rawImageBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const cache = createMockCache();
+    const kv = createMockKv();
+
+    const cachedHeaders = new Headers({
+      'Content-Type': 'image/webp',
+      'Content-Length': '12',
+      'ETag': '"edge-hit-etag-123"',
+      'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
+      'CDN-Cache-Control': 'public, max-age=31536000',
+      'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
+      'Accept-Ranges': 'bytes'
+    });
+
+    const canonicalUrl = `https://projectnox.org/media/${testMediaId}`;
+    cache._map.set(canonicalUrl, new Response(rawImageBytes, { status: 200, headers: cachedHeaders }));
+
+    // 1. If-Match mismatch on Cache HIT returns 412
+    const ifMatchRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(canonicalUrl, {
+        method: 'GET',
+        headers: { 'If-Match': '"different-etag"' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+    expect(ifMatchRes.status).toBe(412);
+
+    // 2. HEAD on Cache HIT returns null body with status 200
+    const headRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(canonicalUrl, { method: 'HEAD' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+    expect(headRes.status).toBe(200);
+    expect(headRes.body).toBeNull();
+    expect(headRes.headers.get('X-Media-Cache')).toBe('HIT');
+
+    // 3. Range on Cache HIT returns 206 Partial Content
+    const rangeRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(canonicalUrl, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-3' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+    expect(rangeRes.status).toBe(206);
+    expect(rangeRes.headers.get('Content-Range')).toBe('bytes 0-3/12');
+    expect(rangeRes.headers.get('Content-Length')).toBe('4');
+    expect(rangeRes.headers.get('X-Media-Cache')).toBe('HIT');
+  });
+
+  it('28. Prewarmed KV Thumbnail on /media/[id]?size=thumb: If-Match mismatch returns 412, Range returns 206 Partial Content', async () => {
+    const thumbBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const kv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: thumbBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/webp', etag: '"thumb-kv-etag-789"', contentLength: '12' } }
+    );
+    const cache = createMockCache();
+
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_kv_range_match_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const thumbUrl = `https://projectnox.org/media/${testMediaId}?size=thumb`;
+
+    // 1. If-Match mismatch returns 412
+    const ifMatchRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(thumbUrl, {
+        method: 'GET',
+        headers: { 'If-Match': '"wrong-etag"' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+    expect(ifMatchRes.status).toBe(412);
+
+    // 2. Range request on prewarmed KV thumbnail returns 206 Partial Content
+    const rangeRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(thumbUrl, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-3' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+    expect(rangeRes.status).toBe(206);
+    expect(rangeRes.headers.get('Content-Range')).toBe('bytes 0-3/12');
+    expect(rangeRes.headers.get('Content-Length')).toBe('4');
+  });
+
+  it('29. Programmatic privatizeMedia(): authoritatively updates status = "ACTIVE", access_class = "PRIVATE", purges public edge cache', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_prog_privatize_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    // Call privatizeMedia
+    const res = await privatizeMedia(testMediaId, {
+      kv,
+      cache,
+      origin: 'https://projectnox.org',
+      accessClass: 'PRIVATE'
+    });
+
+    expect(res.success).toBe(true);
+
+    // Verifies status is ACTIVE and access_class is PRIVATE in database
+    const item = mocks.mediaStore.get(testMediaId);
+    expect(item.status).toBe('ACTIVE');
+    expect(item.access_class).toBe('PRIVATE');
   });
 });

@@ -195,7 +195,7 @@ const isVitest = typeof process !== 'undefined' && Boolean(process.env?.VITEST);
 export const REVOCATION_SYNC_INTERVAL_MS = isVitest ? 0 : 10000;
 
 const memoryRevokedSet = new Set<string>();
-const knownRevocations = new Map<string, { timestamp: number; version: number; isLegacy?: boolean }>();
+const knownRevocations = new Map<string, { timestamp: number; version: number; isLegacy?: boolean; status?: string; accessClass?: string }>();
 const knownRestorations = new Map<string, { timestamp: number; version: number }>();
 let lastManifestRevokedSet = new Set<string>();
 const inFlightRevocations = new Set<string>();
@@ -584,7 +584,7 @@ async function syncManifest(kv: any): Promise<boolean> {
 export async function isMediaRevoked(
   mediaId: string,
   kv?: any,
-  options?: { forceFresh?: boolean; checkTombstone?: boolean; failClosed?: boolean }
+  options?: { forceFresh?: boolean; checkTombstone?: boolean; failClosed?: boolean; allowActivePrivate?: boolean }
 ): Promise<boolean> {
   if (!mediaId || typeof mediaId !== 'string') return false;
 
@@ -595,6 +595,12 @@ export async function isMediaRevoked(
 
   // 1. Instant in-memory check (only if caller did not explicitly request fresh sync or authoritative tombstone)
   if (!options?.checkTombstone && !options?.forceFresh && memoryRevokedSet.has(mediaId)) {
+    if (options?.allowActivePrivate) {
+      const known = knownRevocations.get(mediaId);
+      if (known?.status === 'ACTIVE' && known?.accessClass) {
+        return false;
+      }
+    }
     return true;
   }
 
@@ -627,11 +633,16 @@ export async function isMediaRevoked(
       const tombstone = await kv.get(REVOCATION_KEY_PREFIX + mediaId);
       if (tombstone) {
         let tombstoneTs = Date.now();
+        let parsed: any = null;
         try {
-          const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+          parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
           if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
         } catch {
           // Ignore malformed tombstone JSON
+        }
+
+        if (options?.allowActivePrivate && parsed?.status === 'ACTIVE' && parsed?.accessClass) {
+          return false;
         }
 
         let isStaleTombstone = false;
@@ -1091,9 +1102,22 @@ export async function revokeMedia(
     let manifestUpdated = false;
     let purgeState: RevocationPurgeState = 'PURGE_REQUESTED';
 
+    const isPrivatizeAction = options.status === 'ACTIVE' || (Boolean(options.accessClass) && !options.status);
+    const targetStatus = typeof options.status === 'string' && options.status.trim()
+      ? options.status.trim()
+      : (options.accessClass ? 'ACTIVE' : 'DELETED');
+    const targetAccessClass = typeof options.accessClass === 'string' && options.accessClass.trim()
+      ? options.accessClass.trim()
+      : (isPrivatizeAction ? 'PRIVATE' : undefined);
+
     // 1. Instantly update in-memory set in current isolate
     memoryRevokedSet.add(mediaId);
-    knownRevocations.set(mediaId, { timestamp: revokedAt, version: currentManifestVersion + 1 });
+    knownRevocations.set(mediaId, {
+      timestamp: revokedAt,
+      version: currentManifestVersion + 1,
+      status: targetStatus,
+      accessClass: targetAccessClass
+    });
     perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
     try {
       invalidateMediaMetadataCache(mediaId);
@@ -1110,12 +1134,11 @@ export async function revokeMedia(
         (typeof process !== 'undefined' && (executeYugabyteSql as any)?._isMockFunction)
       );
       if (hasDbConfig) {
-        const targetStatus = options.status || 'DELETED';
         try {
-          if (options.accessClass) {
+          if (targetAccessClass) {
             await executeYugabyteSql(
               `UPDATE public.media SET status = $1, access_class = $2 WHERE id = $3;`,
-              [targetStatus, options.accessClass, mediaId],
+              [targetStatus, targetAccessClass, mediaId],
               options.platformEnv
             );
           } else {
@@ -1148,12 +1171,13 @@ export async function revokeMedia(
     }
 
   // 2. Write authoritative tombstone to KV BEFORE purge to ensure durable revocation
+  const isPrivatize = targetStatus === 'ACTIVE' || (Boolean(targetAccessClass) && targetStatus !== 'DELETED');
   const initialMetadata: RevocationMetadata = {
     mediaId,
     revokedAt,
-    reason: options.reason || 'REVOKED',
-    accessClass: options.accessClass,
-    status: options.status,
+    reason: options.reason || (isPrivatize ? 'PRIVATE' : 'REVOKED'),
+    accessClass: targetAccessClass,
+    status: targetStatus,
     purgeState: 'PURGE_REQUESTED',
     state: 'REVOCATION_PARTIAL',
     version: 1
@@ -1371,6 +1395,24 @@ export async function revokeMedia(
   } finally {
     inFlightRevocations.delete(mediaId);
   }
+}
+
+/**
+ * Explicitly privatizes media (status = 'ACTIVE', access_class = 'PRIVATE').
+ * Separates privatization from deletion/revocation (status = 'DELETED').
+ * Authoritatively updates YSQL, invalidates local metadata, purges all public edge cache variants,
+ * and records durable KV state without deleting the underlying active asset.
+ */
+export async function privatizeMedia(
+  mediaId: string,
+  options: Omit<RevokeMediaOptions, 'status'> & { accessClass?: string; status?: string } = {}
+): Promise<RevokeMediaResult> {
+  return revokeMedia(mediaId, {
+    ...options,
+    status: options.status || 'ACTIVE',
+    accessClass: options.accessClass || 'PRIVATE',
+    reason: options.reason || 'MANUAL_PRIVATIZATION'
+  });
 }
 
 /**

@@ -176,9 +176,10 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   // Preserve heavy 31MB uncompressed original and typo alias by redirecting to the 5.6MB optimized animated avatar
   if (params.id === 'bdaa2c94-260c-4f9c-85dc-edfc196815f1' || params.id === '4c812f93-6bb1-40f9-9151-dc2d20e86e5e') {
-    const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+    const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS) ||
+      await isMediaRevoked('4c86bd8d-1ad8-4142-a660-55fc0824b22a', platform?.env?.COVER_THUMBNAILS);
     if (isRevoked) {
-      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
         status: 404,
         headers: {
           'Content-Type': 'application/json',
@@ -248,11 +249,78 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
           });
         }
         const etag = cached.headers.get('ETag');
-        if (etag && request.headers.get('if-none-match') === etag) {
+        if (etag && matchesETag(request.headers.get('if-none-match'), etag)) {
           const res = new Response(null, { status: 304, headers: cached.headers });
           res.headers.set('X-Media-Cache', 'HIT');
           return res;
         }
+
+        const ifMatch = request.headers.get('if-match');
+        if (ifMatch && ifMatch !== '*' && etag) {
+          const matchEtags = ifMatch.split(',').map((s: string) => s.trim());
+          if (!matchEtags.includes(etag.trim()) || etag.startsWith('W/')) {
+            const res = new Response(null, { status: 412, headers: cached.headers });
+            res.headers.set('X-Media-Cache', 'HIT');
+            return res;
+          }
+        }
+
+        if (request.method === 'HEAD') {
+          const res = new Response(null, { status: 200, headers: cached.headers });
+          res.headers.set('X-Media-Cache', 'HIT');
+          return res;
+        }
+
+        const rangeHeader = request.headers.get('range');
+        const ifRange = request.headers.get('if-range');
+        let evaluateRange = Boolean(rangeHeader && request.method === 'GET');
+        if (evaluateRange && ifRange) {
+          // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+          if (!etag || ifRange.trim().startsWith('W/') || ifRange.trim() !== etag.trim()) {
+            evaluateRange = false;
+          }
+        }
+
+        if (evaluateRange && rangeHeader) {
+          const ab = await cached.arrayBuffer();
+          const total = ab.byteLength;
+          const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+          if (match) {
+            let start: number;
+            let end: number;
+            if (match[1] === '' && match[2] !== '') {
+              const suffixLen = parseInt(match[2], 10);
+              if (suffixLen === 0 || total === 0) {
+                const rangeErrHeaders = new Headers(cached.headers);
+                rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+                rangeErrHeaders.set('X-Media-Cache', 'HIT');
+                return new Response(null, { status: 416, headers: rangeErrHeaders });
+              }
+              start = Math.max(0, total - suffixLen);
+              end = total - 1;
+            } else {
+              start = match[1] ? parseInt(match[1], 10) : 0;
+              end = match[2] ? parseInt(match[2], 10) : total - 1;
+            }
+
+            if (start >= total || start > end || total === 0) {
+              const rangeErrHeaders = new Headers(cached.headers);
+              rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+              rangeErrHeaders.set('X-Media-Cache', 'HIT');
+              return new Response(null, { status: 416, headers: rangeErrHeaders });
+            }
+
+            const actualEnd = Math.min(end, total - 1);
+            const rangeLen = actualEnd - start + 1;
+            const rangeHeaders = new Headers(cached.headers);
+            rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+            rangeHeaders.set('Content-Length', String(rangeLen));
+            rangeHeaders.set('X-Media-Cache', 'HIT');
+            const sliced = ab.slice(start, actualEnd + 1);
+            return new Response(sliced, { status: 206, headers: rangeHeaders });
+          }
+        }
+
         const res = new Response(cached.body, cached);
         res.headers.set('X-Media-Cache', 'HIT');
         return res;
@@ -291,7 +359,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     });
   }
 
-  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true, allowActivePrivate: hasAuth })) {
     return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
       status: 404,
       headers: {
@@ -401,9 +469,65 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
       coverVariant
     );
     if (prewarmed) {
+      const etag = prewarmed.headers.get('ETag');
+      const ifMatch = request.headers.get('if-match');
+      if (ifMatch && ifMatch !== '*' && etag) {
+        const matchEtags = ifMatch.split(',').map((s) => s.trim());
+        if (!matchEtags.includes(etag.trim()) || etag.startsWith('W/')) {
+          return new Response(null, { status: 412, headers: prewarmed.headers });
+        }
+      }
+
       if (request.method === 'HEAD') {
         return new Response(null, { status: prewarmed.status, headers: prewarmed.headers });
       }
+
+      const rangeHeader = request.headers.get('range');
+      const ifRange = request.headers.get('if-range');
+      let evaluateRange = Boolean(rangeHeader && request.method === 'GET' && prewarmed.status === 200);
+      if (evaluateRange && ifRange) {
+        if (!etag || ifRange.trim().startsWith('W/') || ifRange.trim() !== etag.trim()) {
+          evaluateRange = false;
+        }
+      }
+
+      if (evaluateRange && rangeHeader) {
+        const ab = await prewarmed.arrayBuffer();
+        const total = ab.byteLength;
+        const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+        if (match) {
+          let start: number;
+          let end: number;
+          if (match[1] === '' && match[2] !== '') {
+            const suffixLen = parseInt(match[2], 10);
+            if (suffixLen === 0 || total === 0) {
+              const rangeErrHeaders = new Headers(prewarmed.headers);
+              rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+              return new Response(null, { status: 416, headers: rangeErrHeaders });
+            }
+            start = Math.max(0, total - suffixLen);
+            end = total - 1;
+          } else {
+            start = match[1] ? parseInt(match[1], 10) : 0;
+            end = match[2] ? parseInt(match[2], 10) : total - 1;
+          }
+
+          if (start >= total || start > end || total === 0) {
+            const rangeErrHeaders = new Headers(prewarmed.headers);
+            rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+            return new Response(null, { status: 416, headers: rangeErrHeaders });
+          }
+
+          const actualEnd = Math.min(end, total - 1);
+          const rangeLen = actualEnd - start + 1;
+          const rangeHeaders = new Headers(prewarmed.headers);
+          rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+          rangeHeaders.set('Content-Length', String(rangeLen));
+          const sliced = ab.slice(start, actualEnd + 1);
+          return new Response(sliced, { status: 206, headers: rangeHeaders });
+        }
+      }
+
       // Populate edge cache so subsequent requests hit Worker edge cache with 0 KV reads and 0 YSQL queries
       if (cache && prewarmed.status === 200 && !internalCoverWarm) {
         const cacheResponse = prewarmed.clone();
