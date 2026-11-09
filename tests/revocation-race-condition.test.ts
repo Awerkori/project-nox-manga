@@ -97,6 +97,7 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     vi.clearAllMocks();
     clearMemoryRevocationCache();
     mocks.mediaStore.clear();
+    mocks.extractFullAuthCookie.mockReturnValue(null);
 
     mocks.executeYugabyteSql.mockImplementation(async (sql: string, params: any[]) => {
       if (sql.includes('SELECT status FROM public.media') || sql.includes('SELECT status FROM media')) {
@@ -554,5 +555,106 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     expect(res.headers.get('Cache-Control')).toContain('no-store');
     expect(mocks.download).not.toHaveBeenCalled();
     expect(mockCache._map.size).toBe(0);
+  });
+
+  it('9. Mandatory Scenario: In-flight download starts ACTIVE, admin updates YSQL to DELETED, remote KV remains outdated -> post-download guard prevents cache.put() and returns 404', async () => {
+    // 1. Initial state: media is ACTIVE in DB
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_in_flight_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    // Remote PoP has EMPTY / lagging KV (tombstone has NOT replicated here)
+    const remoteLaggingKv = createMockKv(); // NO TOMBSTONE IN KV!
+    const remoteCache = createMockCache();
+
+    // Hook download to simulate in-flight Telegram download delay
+    // While download is in progress, admin alters YSQL status to 'DELETED'
+    mocks.download.mockImplementationOnce(async () => {
+      // Admin alters media in YSQL to DELETED
+      mocks.mediaStore.get(testMediaId).status = 'DELETED';
+      // KV remains outdated at this remote PoP (remoteLaggingKv is NOT updated!)
+
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: remoteLaggingKv // Remote lagging KV without tombstone!
+        },
+        caches: { default: remoteCache },
+        context: {
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    // Must return 404 Not Found with no-store headers
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+
+    // CRITICAL FORENSIC PROOF:
+    // Despite remote KV lagging, post-download guard checked authoritative YSQL,
+    // recognized status = DELETED, and PREVENTED cache.put() from executing!
+    expect(remoteCache.put).not.toHaveBeenCalled();
+    expect(remoteCache._map.size).toBe(0);
+  });
+
+  it('10. Cache HITs do NOT execute SQL queries (0 SQL calls on warm hit)', async () => {
+    const mockKv = createMockKv({
+      'media-revocation-manifest:v1': { version: 1, updatedAt: Date.now(), revokedIds: [] }
+    });
+    const mockCache = createMockCache();
+
+    // Seed cache with a valid 200 response
+    const cachedResponse = new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/webp',
+        'Cache-Control': 'public, max-age=31536000',
+        'ETag': '"active-sha256"'
+      }
+    });
+    mockCache._map.set(`https://projectnox.org/media/${testMediaId}`, cachedResponse);
+
+    mocks.executeYugabyteSql.mockClear();
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv
+        },
+        caches: { default: mockCache },
+        context: {
+          waitUntil: (p: Promise<any>) => p
+        }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Media-Cache')).toBe('HIT');
+
+    // ZERO SQL queries executed on Cache HIT!
+    expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+    expect(mocks.download).not.toHaveBeenCalled();
   });
 });

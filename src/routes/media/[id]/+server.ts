@@ -641,9 +641,24 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   const response = new Response(body, { status: 200, headers });
 
   // 1. Authoritative re-verification BEFORE internal cover warm and edge cache.put:
-  // Checks KV tombstone and in-memory revocation sets to ensure that any request in-flight
-  // during revocation does not commit to KV or edge cache.
+  // Checks KV tombstone and in-memory revocation sets first, then re-verifies authoritative
+  // Yugabyte metadata to ensure that if public.media.status was changed to DELETED while
+  // download was in-flight but remote PoP KV is lagging/outdated, the media is NEVER cached.
   let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+
+  if (!isRevoked) {
+    try {
+      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
+      if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
+        isRevoked = true;
+        invalidateMediaMetadataCache(params.id);
+      }
+    } catch {
+      // Fail closed for caching: if database status cannot be re-verified after download,
+      // fail closed by treating as revoked to strictly prevent committing stale media to cache
+      isRevoked = true;
+    }
+  }
 
   if (isRevoked) {
     if (cache || platform?.context?.cache) {

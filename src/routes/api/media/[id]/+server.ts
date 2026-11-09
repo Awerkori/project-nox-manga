@@ -197,7 +197,19 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   // Re-verify authoritative revocation status after download to prevent leaking in-flight revoked media
-  const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+
+  if (!isRevoked) {
+    try {
+      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
+      if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
+        isRevoked = true;
+        invalidateMediaMetadataCache(params.id);
+      }
+    } catch {
+      isRevoked = true;
+    }
+  }
 
   if (isRevoked) {
     return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
