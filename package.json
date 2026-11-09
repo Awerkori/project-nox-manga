@@ -61,5 +61,5 @@
     "esbuild@0.28.1": true,
     "workerd@1.20260903.1": true
   },
-  "license": "GPL-3.0-only"
+  "license": "AGPL-3.0-only"
 }

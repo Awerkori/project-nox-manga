@@ -2,32 +2,30 @@ Project Nox · Plataforma Web de Mangá
 Copyright (C) 2026 Project Nox Contributors & Awerkori
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, version 3 of the License (GPL-3.0-only).
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3 of the License (AGPL-3.0-only).
 
-SPDX-License-Identifier: GPL-3.0-only
+SPDX-License-Identifier: AGPL-3.0-only
 
 ================================================================================
-1. ESCLARECIMENTO SOBRE LICENCIAMENTO (GPL-3.0 vs. AGPL-3.0)
+1. ESCLARECIMENTO SOBRE LICENCIAMENTO (GNU AGPLv3)
 ================================================================================
-Este repositório está oficialmente licenciado sob a GNU General Public
-License versão 3.0 (GPL-3.0-only).
+Este repositório está oficialmente licenciado sob a GNU Affero General Public
+License versão 3.0 (AGPL-3.0-only).
 
-Sinalização expressa de escopo copyleft:
-A GNU GPL versão 3.0 não contém a cláusula de interação remota presente na
-Seção 13 da GNU Affero General Public License (AGPL-3.0). Em conformidade com
-os termos da GPLv3, a execução modificada desta plataforma web exclusivamente
-como serviço de rede (SaaS) sem distribuição direta de cópias executáveis ou
-de código-fonte para terceiros não aciona a exigência de liberação obrigatória
-do código-fonte das modificações de servidor. A escolha da GPL 3.0 preserva
-as quatro liberdades essenciais de software livre para redistribuição e estudo,
-mantendo a paridade de copyleft da distribuição.
+Cláusula de Interação Remota de Rede (Seção 13):
+Em cumprimento aos termos da GNU Affero General Public License versão 3.0,
+qualquer operador ou desenvolvedor que execute esta plataforma web em servidores
+ou instâncias de rede e permita a interação remota de usuários fica obrigado a
+promover a entrega proeminente do Código-Fonte Correspondente (Corresponding Source)
+de sua versão modificada a todos os usuários que com ela interajam, sem cobrança,
+através de meio habitual de disponibilização de software em rede.
 
 ================================================================================
 2. COMPONENTES E DEPENDÊNCIAS DE TERCEIROS
 ================================================================================
-Este software faz uso de bibliotecas de código aberto permissivas compatíveis
-com a GNU GPLv3:
+Este software faz uso de bibliotecas e ferramentas de código aberto permissivas
+totalmente compatíveis com a GNU AGPLv3:
 - SvelteKit / Svelte (@sveltejs/kit) — Licença MIT (Copyright (c) Svelte Contributors)
 - Lucide Icons (@lucide/svelte) — Licença ISC (Copyright (c) Lucide Contributors)
 - Node Postgres (pg, @types/pg) — Licença MIT (Copyright (c) Brian Carlson)
@@ -38,11 +36,21 @@ com a GNU GPLv3:
 - TailwindCSS — Licença MIT (Copyright (c) Tailwind Labs, Inc.)
 
 ================================================================================
-3. RESERVA DE MARCA E IDENTIDADE VISUAL
+3. ARQUITETURA OPERACIONAL E SERVIÇOS EM PRODUÇÃO
 ================================================================================
-A concessão da licença de código-fonte aberto GPL 3.0 aplica-se exclusivamente
-aos direitos autorais de software. NENHUM direito sobre marcas registradas,
-nomes comerciais, logotipos oficiais, identidade visual distintiva ou insígnias
-do "Project Nox" ou de "Awerkori" é concedido por esta licença. É estritamente
-vedada a utilização dessas marcas para sugerir endosso, afiliação oficial ou
-para se passar pelo Project Nox.
+- Runtime de Borda: Cloudflare Workers (SSR com renderização de baixa latência).
+- Banco Principal: YugabyteDB / YSQL (banco PostgreSQL distribuído para
+  histórico de leitura, sessões, catálogo e transações de banco).
+- Armazenamento de Mídia: Telegram Bot API para guarda e entrega otimizada de páginas.
+- Serviços Legados: Supabase mantido para suporte a transição de autenticação e
+  compatibilidade legada, sem alterar o funcionamento de produção.
+
+================================================================================
+4. PROTEÇÃO DE IDENTIDADE E MARCA (AGPLv3 Seção 7(e))
+================================================================================
+A concessão da licença de código aberto AGPLv3 aplica-se exclusivamente aos
+direitos autorais de software. Os nomes "Project Nox" e "Awerkori", bem como
+logotipos e identidade visual, identificam a procedência e origem do projeto.
+Em conformidade com a Seção 7(e) da GNU AGPLv3, esta licença NÃO confere
+autorização para o uso de tais elementos de identificação com o objetivo de insinuar
+homologação, endosso ou representação oficial sem autorização prévia por escrito.
