@@ -1,4 +1,5 @@
 import { isMediaRevoked } from '$lib/server/media-revocation';
+import { matchesETag } from '$lib/server/mihon';
 
 export const MAX_COVER_THUMBNAIL_BYTES = 2 * 1024 * 1024;
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
@@ -126,13 +127,19 @@ export async function readCoverThumbnail(
     'Content-Type': metadata.contentType || 'image/jpeg',
     'Content-Length': metadata.contentLength || String(cached.value.byteLength),
     'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
+    'CDN-Cache-Control': 'public, max-age=31536000',
+    'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
+    'Cache-Tag': `media-${mediaId},media-public`,
+    'X-Cache-Tag': `media-${mediaId},media-public`,
+    'Access-Control-Allow-Origin': '*',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
     'X-Content-Type-Options': 'nosniff',
     'X-Media-Cache': 'COVER_THUMBNAIL_KV',
     'X-Thumbnail-Strategy': 'prewarmed',
     'X-Cover-Variant': variant
   });
   if (metadata.etag) headers.set('ETag', metadata.etag);
-  if (metadata.etag && ifNoneMatch === metadata.etag) return new Response(null, { status: 304, headers });
+  if (metadata.etag && matchesETag(ifNoneMatch, metadata.etag)) return new Response(null, { status: 304, headers });
   return new Response(cached.value, { status: 200, headers });
 }
 

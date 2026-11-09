@@ -215,6 +215,8 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
   const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
   const hasAuth = Boolean(auth) || Boolean(extractFullAuthCookie(cookies.getAll()));
+  const ctx = platform?.context || platform?.ctx;
+  const waitUntil = typeof ctx?.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : undefined;
   if (cache && !internalCoverWarm && !hasAuth) {
     try {
       const cached = await cache.match(cacheKey);
@@ -223,13 +225,13 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         if (isRevoked) {
           const purgeOptions = {
             cache,
-            ctx: platform?.context || platform?.ctx,
+            ctx,
             origin: url.origin,
             currentUrl: request.url,
             requirePurgeDispatch: true
           };
-          if (platform?.context?.waitUntil) {
-            platform.context.waitUntil(purgeMediaVariants(params.id, purgeOptions));
+          if (waitUntil) {
+            waitUntil(purgeMediaVariants(params.id, purgeOptions));
           } else {
             await purgeMediaVariants(params.id, purgeOptions);
           }
@@ -267,12 +269,12 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
       if (cache || platform?.context?.cache) {
         const purgeTask = purgeMediaVariants(params.id, {
           cache,
-          ctx: platform?.context || platform?.ctx,
+          ctx,
           origin: url.origin,
           requirePurgeDispatch: true
         }).catch(() => {});
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(purgeTask);
+        if (waitUntil) {
+          waitUntil(purgeTask);
         }
       }
     }
@@ -315,13 +317,13 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
       if (cache || platform?.context?.cache) {
         const purgePromise = purgeMediaVariants(params.id, {
           cache,
-          ctx: platform?.context || platform?.ctx,
+          ctx,
           origin: url.origin,
           currentUrl: request.url,
           requirePurgeDispatch: true
         }).catch(() => {});
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(purgePromise);
+        if (waitUntil) {
+          waitUntil(purgePromise);
         }
       }
       return new Response(request.method === 'HEAD' ? null : JSON.stringify({
@@ -414,8 +416,8 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
             await cache.delete(cacheKey);
           }
         };
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(cachePutTask());
+        if (waitUntil) {
+          waitUntil(cachePutTask());
         } else {
           await cachePutTask();
         }
@@ -647,12 +649,12 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     if (cache || platform?.context?.cache) {
       const purgeTask = purgeMediaVariants(params.id, {
         cache,
-        ctx: platform?.context || platform?.ctx,
+        ctx,
         origin: url.origin,
         requirePurgeDispatch: true
       }).catch(() => {});
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(purgeTask);
+      if (waitUntil) {
+        waitUntil(purgeTask);
       }
     }
     return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
@@ -760,8 +762,8 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
           await cache.delete(cacheKey);
         }
       };
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(putTask());
+      if (waitUntil) {
+        waitUntil(putTask());
       } else {
         await putTask();
       }

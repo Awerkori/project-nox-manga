@@ -1025,4 +1025,231 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     // Prewarmed response was populated into edge cache
     expect(cache.put).toHaveBeenCalled();
   });
+
+  it('18. Controlled Race Condition on Prewarmed KV Thumbnail: revocation finishes before deferred thumbnail cache.put -> post-put guard purges entry', async () => {
+    const thumbBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const kv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: thumbBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/webp', etag: '"race_thumb_etag"', contentLength: '12' } }
+    );
+    const cache = createMockCache();
+
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_race_thumb_cover_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    let resolvePut: () => void = () => {};
+    const putTrigger = new Promise<void>((resolve) => {
+      resolvePut = resolve;
+    });
+
+    const originalPut = cache.put;
+    cache.put = vi.fn(async (req: any, res: Response) => {
+      await putTrigger;
+      return originalPut(req, res);
+    });
+
+    let backgroundTask: Promise<any> | null = null;
+    const waitUntilMock = vi.fn((promise: Promise<any>) => {
+      backgroundTask = promise;
+    });
+
+    // 1. Initial GET thumbnail request: verified ACTIVE & PUBLIC, KV read succeeds
+    const initialRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: waitUntilMock }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(initialRes.status).toBe(200);
+    expect(initialRes.headers.get('X-Media-Cache')).toBe('COVER_THUMBNAIL_KV');
+
+    // 2. While cache.put is suspended in background, administrative revocation executes
+    const revokeResult = await revokeMedia(testMediaId, {
+      kv,
+      cache,
+      origin: 'https://projectnox.org',
+      reason: 'ADMIN_TAKEDOWN'
+    });
+    expect(revokeResult.success).toBe(true);
+    expect(mocks.mediaStore.get(testMediaId).status).toBe('DELETED');
+
+    // 3. Release cache.put to finish after revocation and purge have completed
+    resolvePut();
+    if (backgroundTask) {
+      await backgroundTask;
+    }
+
+    // 4. Verify post-put guard: edge cache must NOT contain resurrected stale entry
+    const canonicalThumbUrl = `https://projectnox.org/media/${testMediaId}?size=thumb&v=3`;
+    const cachedEntry = await cache.match(new Request(canonicalThumbUrl));
+    expect(cachedEntry).toBeNull();
+
+    // 5. Subsequent request must return 404 no-store
+    const subsequentRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(subsequentRes.status).toBe(404);
+    expect(subsequentRes.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it('19. Controlled Race Condition on Privatization: media privatized after post-download check -> deferred cache.put finishes -> post-put guard deletes entry', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatize_race_ctrl_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    let resolvePut: () => void = () => {};
+    const putTrigger = new Promise<void>((resolve) => {
+      resolvePut = resolve;
+    });
+
+    const originalPut = cache.put;
+    cache.put = vi.fn(async (req: any, res: Response) => {
+      await putTrigger;
+      return originalPut(req, res);
+    });
+
+    let backgroundTask: Promise<any> | null = null;
+    const waitUntilMock = vi.fn((promise: Promise<any>) => {
+      backgroundTask = promise;
+    });
+
+    const initialRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: waitUntilMock }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(initialRes.status).toBe(200);
+
+    // Administrative action marks content as PRIVATE
+    const revokeResult = await revokeMedia(testMediaId, {
+      kv,
+      cache,
+      origin: 'https://projectnox.org',
+      reason: 'CONTENT_PRIVATIZATION',
+      accessClass: 'PRIVATE'
+    });
+    expect(revokeResult.success).toBe(true);
+
+    // Release deferred cache.put
+    resolvePut();
+    if (backgroundTask) {
+      await backgroundTask;
+    }
+
+    // Cache must not contain the privatized media
+    const cachedEntry = await cache.match(new Request(`https://projectnox.org/media/${testMediaId}`));
+    expect(cachedEntry).toBeNull();
+
+    // Subsequent request returns 404 no-store for anonymous public visitor
+    const subsequentRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(subsequentRes.status).toBe(404);
+    expect(subsequentRes.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it('20. Prewarmed KV Thumbnail Edge Cache Headers & Conditional ETag Parity: full parity with public CDN caching and RFC 9110 revalidation', async () => {
+    const thumbBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const kv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: thumbBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/webp', etag: '"thumb_etag_xyz"', contentLength: '12' } }
+    );
+    const cache = createMockCache();
+
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_headers_parity_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    // 1. Initial 200 GET
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Tag')).toBe(`media-${testMediaId},media-public`);
+    expect(res.headers.get('X-Cache-Tag')).toBe(`media-${testMediaId},media-public`);
+    expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=31536000');
+    expect(res.headers.get('Cloudflare-CDN-Cache-Control')).toBe('public, max-age=31536000');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Content-Security-Policy')).toBe("default-src 'none'; sandbox");
+
+    // 2. Conditional Revalidation via weak ETag: If-None-Match: W/"thumb_etag_xyz" returns 304
+    const revalRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}?size=thumb`, {
+        method: 'GET',
+        headers: { 'If-None-Match': 'W/"thumb_etag_xyz"' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(revalRes.status).toBe(304);
+  });
 });
