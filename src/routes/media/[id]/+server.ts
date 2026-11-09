@@ -618,8 +618,9 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   // Checks KV tombstone and in-memory revocation sets first, then re-verifies authoritative
   // Yugabyte metadata to ensure that if public.media.status was changed to DELETED or if access_class
   // was changed to PRIVATE/RESTRICTED while download was in-flight but remote PoP KV is lagging/outdated,
-  // the media is NEVER returned (neither 200 nor 206) and NEVER cached.
+  // the media is NEVER returned with public headers (neither 200 nor 206) and NEVER cached at edge.
   let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+  let authDeniedInfo: { status: number; message: string; isAdultRestricted: boolean } | null = null;
 
   if (!isRevoked) {
     try {
@@ -629,12 +630,45 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         invalidateMediaMetadataCache(params.id);
       } else {
         const freshClassification = classifyMediaAccess(freshMeta);
+        const wasPublic = isPublic;
         isPublic = isPublic && freshClassification.isPublic;
-        if (!freshClassification.isPublic) {
+        const isFreshPrivateDelivery = !isPublic || freshClassification.category === 'RESTRICTED';
+
+        if (isFreshPrivateDelivery) {
           const authCheck = await isAuthorizedForMedia(freshMeta, freshClassification, cookies, request, platform?.env);
           if (!authCheck.allowed) {
             isRevoked = true;
+            authDeniedInfo = {
+              status: authCheck.isAdultRestricted ? 403 : 404,
+              message: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+              isAdultRestricted: authCheck.isAdultRestricted
+            };
             invalidateMediaMetadataCache(params.id);
+          } else {
+            // Authorized delivery of newly privatized or restricted media:
+            // CRITICAL: Recompute headers so private content NEVER inherits public/immutable cache headers.
+            headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate, max-age=0';
+            headers['Pragma'] = 'no-cache';
+            headers['Expires'] = '0';
+            headers['CDN-Cache-Control'] = 'no-store';
+            headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
+            headers['Vary'] = 'Cookie, Authorization';
+            delete headers['Cache-Tag'];
+            delete headers['X-Cache-Tag'];
+
+            // Purge edge cache to invalidate any prior public variant that might have been cached
+            if (wasPublic && (cache || platform?.context?.cache)) {
+              const purgeTask = purgeMediaVariants(params.id, {
+                cache,
+                ctx,
+                origin: url.origin,
+                currentUrl: request.url,
+                requirePurgeDispatch: true
+              }).catch(() => {});
+              if (waitUntil) {
+                waitUntil(purgeTask);
+              }
+            }
           }
         }
       }
@@ -657,15 +691,22 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         waitUntil(purgeTask);
       }
     }
-    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
-      status: 404,
+    const statusCode = authDeniedInfo ? authDeniedInfo.status : 404;
+    const errorMessage = authDeniedInfo ? authDeniedInfo.message : 'Acesso não autorizado';
+    const isAdult = Boolean(authDeniedInfo?.isAdultRestricted);
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({
+      error: errorMessage,
+      ...(isAdult ? { age_restricted: true } : {})
+    }), {
+      status: statusCode,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         'CDN-Cache-Control': 'no-store',
         'Cloudflare-CDN-Cache-Control': 'no-store',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'Vary': 'Cookie, Authorization'
       }
     });
   }

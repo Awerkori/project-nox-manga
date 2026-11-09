@@ -38,7 +38,9 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
           if (['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(session?.role || '')) {
             isAuthorized = true;
           }
-        } catch {}
+        } catch {
+          // Authentication resolution failure
+        }
       }
     }
   }
@@ -90,11 +92,19 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
     if (!isUnrevoke) {
       const targetStatus = typeof body?.status === 'string' && body.status.trim() ? body.status.trim() : 'DELETED';
       try {
-        await executeYugabyteSql(
-          `UPDATE public.media SET status = $1 WHERE id = $2;`,
-          [targetStatus, id],
-          platform?.env
-        );
+        if (body?.accessClass) {
+          await executeYugabyteSql(
+            `UPDATE public.media SET status = $1, access_class = $2 WHERE id = $3;`,
+            [targetStatus, body.accessClass, id],
+            platform?.env
+          );
+        } else {
+          await executeYugabyteSql(
+            `UPDATE public.media SET status = $1 WHERE id = $2;`,
+            [targetStatus, id],
+            platform?.env
+          );
+        }
       } catch (dbErr: any) {
         pendingIds.push(id);
         errors.push({ mediaId: id, error: `DB_UPDATE_FAILED: ${dbErr?.message || dbErr}` });

@@ -117,19 +117,28 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
         return { rows: item ? [{ status: item.status }] : [], rowCount: item ? 1 : 0 };
       }
       if (sql.includes('UPDATE public.media') || sql.includes('UPDATE media')) {
-        const statusMatch = sql.match(/SET status = \$1/);
-        if (statusMatch && params?.[0] && params?.[1]) {
-          const item = mocks.mediaStore.get(params[1]);
+        if (sql.includes('access_class = $2') && params?.[0] && params?.[1] && params?.[2]) {
+          const item = mocks.mediaStore.get(params[2]);
           if (item) {
             item.status = params[0];
-            mocks.mediaStore.set(params[1], item);
+            item.access_class = params[1];
+            mocks.mediaStore.set(params[2], item);
           }
-        } else if (sql.includes("SET status = 'ACTIVE'")) {
-          const id = params?.[0];
-          const item = mocks.mediaStore.get(id);
-          if (item) {
-            item.status = 'ACTIVE';
-            mocks.mediaStore.set(id, item);
+        } else {
+          const statusMatch = sql.match(/SET status = \$1/);
+          if (statusMatch && params?.[0] && params?.[1]) {
+            const item = mocks.mediaStore.get(params[1]);
+            if (item) {
+              item.status = params[0];
+              mocks.mediaStore.set(params[1], item);
+            }
+          } else if (sql.includes("SET status = 'ACTIVE'")) {
+            const id = params?.[0];
+            const item = mocks.mediaStore.get(id);
+            if (item) {
+              item.status = 'ACTIVE';
+              mocks.mediaStore.set(id, item);
+            }
           }
         }
         return { rows: [], rowCount: 1 };
@@ -1114,7 +1123,298 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     expect(subsequentRes.headers.get('Cache-Control')).toContain('no-store');
   });
 
-  it('19. Controlled Race Condition on Privatization: media privatized after post-download check -> deferred cache.put finishes -> post-put guard deletes entry', async () => {
+  it('19a. Adversarial Deterministic Privatization: in-flight transition from PUBLIC to PRIVATE with status = ACTIVE -> anonymous visitor blocked with 404 no-store, 0 cache commits', async () => {
+    // 1. Media starts as ACTIVE and PUBLIC
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatize_anon_race_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    // Simulated remote PoP KV has NO tombstone (outdated replication)
+    const remoteLaggingKv = createMockKv();
+    const remoteCache = createMockCache();
+
+    // Controlled async barrier to interrupt execution during in-flight download
+    let resumeDownload: (() => void) | null = null;
+    const downloadBarrier = new Promise<void>((resolve) => {
+      resumeDownload = resolve;
+    });
+
+    mocks.download.mockImplementationOnce(async () => {
+      await downloadBarrier;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    // 2. Begin real HTTP request to the public media handler
+    const requestPromise = getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [], get: () => undefined }
+    } as any);
+
+    // Give microtask time to reach download barrier
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // 3. Modifie efetivamente o registro para status = ACTIVE e access_class = PRIVATE (NOT DELETED!)
+    const currentItem = mocks.mediaStore.get(testMediaId);
+    currentItem.status = 'ACTIVE';
+    currentItem.access_class = 'PRIVATE';
+    expect(mocks.mediaStore.get(testMediaId).status).toBe('ACTIVE');
+    expect(mocks.mediaStore.get(testMediaId).access_class).toBe('PRIVATE');
+
+    // 4. Resume download execution
+    resumeDownload!();
+    const res = await requestPromise;
+
+    // 5. Assert: Anonymous public visitor does NOT receive private bytes (HTTP 404)
+    expect(res.status).toBe(404);
+    const bodyText = await res.text();
+    expect(bodyText).toContain('Acesso não autorizado');
+    expect(bodyText).not.toContain('RIFF');
+
+    // 6. Assert: Cache headers are strictly private/no-store
+    const cacheControl = res.headers.get('Cache-Control') || '';
+    expect(cacheControl).toContain('no-store');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('immutable');
+    expect(res.headers.get('Cache-Tag')).toBeNull();
+
+    // 7. Assert: Response is NEVER stored in edge cache
+    expect(remoteCache.put).not.toHaveBeenCalled();
+    expect(remoteCache._map.size).toBe(0);
+  });
+
+  it('19b. Adversarial Deterministic Privatization: in-flight transition from PUBLIC to PRIVATE with status = ACTIVE -> authorized staff receives 200 with strictly private headers (NO public/immutable headers)', async () => {
+    // 1. Media starts as ACTIVE and PUBLIC
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatize_auth_race_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    // Outdated remote KV without tombstone
+    const remoteLaggingKv = createMockKv();
+    const remoteCache = createMockCache();
+
+    // Setup authorized staff credentials
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    // Controlled barrier
+    let resumeDownload: (() => void) | null = null;
+    const downloadBarrier = new Promise<void>((resolve) => {
+      resumeDownload = resolve;
+    });
+
+    mocks.download.mockImplementationOnce(async () => {
+      await downloadBarrier;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    // 2. Begin HTTP request with staff authorization
+    const requestPromise = getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, {
+        method: 'GET',
+        headers: { Authorization: 'Bearer valid-staff-token' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // 3. Admin alters media to PRIVATE in YSQL while maintaining status = ACTIVE
+    const currentItem = mocks.mediaStore.get(testMediaId);
+    currentItem.status = 'ACTIVE';
+    currentItem.access_class = 'PRIVATE';
+    expect(mocks.mediaStore.get(testMediaId).status).toBe('ACTIVE');
+    expect(mocks.mediaStore.get(testMediaId).access_class).toBe('PRIVATE');
+
+    // 4. Resume request
+    resumeDownload!();
+    const res = await requestPromise;
+
+    // 5. Authorized staff receives the media bytes (HTTP 200)
+    expect(res.status).toBe(200);
+
+    // 6. CRITICAL REQUIREMENT 8: Validate that authorized users NEVER receive public cache headers
+    const cacheControl = res.headers.get('Cache-Control') || '';
+    expect(cacheControl).toContain('private');
+    expect(cacheControl).toContain('no-store');
+    expect(cacheControl).toContain('must-revalidate');
+    expect(cacheControl).toContain('max-age=0');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('immutable');
+    expect(cacheControl).not.toContain('31536000');
+
+    expect(res.headers.get('CDN-Cache-Control')).toBe('no-store');
+    expect(res.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');
+    expect(res.headers.get('Pragma')).toBe('no-cache');
+    expect(res.headers.get('Expires')).toBe('0');
+    expect(res.headers.get('Vary')).toContain('Cookie');
+    expect(res.headers.get('Vary')).toContain('Authorization');
+
+    // Cache-Tag MUST NOT be present on private responses
+    expect(res.headers.get('Cache-Tag')).toBeNull();
+    expect(res.headers.get('X-Cache-Tag')).toBeNull();
+
+    // 7. CRITICAL REQUIREMENT 9: Confirm that NO private response is written to shared edge cache
+    expect(remoteCache.put).not.toHaveBeenCalled();
+    expect(remoteCache._map.size).toBe(0);
+  });
+
+  it('19c. Adversarial Deterministic +18 Adult Restriction: in-flight transition with status = ACTIVE -> unverified visitor returns 403, adult-declared visitor receives 200 strictly private, 0 cache commits', async () => {
+    // 1. Media starts as ACTIVE and PUBLIC
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_adult_race_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const remoteLaggingKv = createMockKv();
+    const remoteCache = createMockCache();
+
+    // Scenario A: Unverified public visitor during in-flight restriction change
+    let resumeDownloadA: (() => void) | null = null;
+    const downloadBarrierA = new Promise<void>((resolve) => {
+      resumeDownloadA = resolve;
+    });
+
+    mocks.download.mockImplementationOnce(async () => {
+      await downloadBarrierA;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const unverifiedRequest = getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [], get: () => undefined }
+    } as any);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Admin updates work content rating to ADULT_18 while status remains ACTIVE
+    mocks.mediaStore.get(testMediaId).work_content_rating = 'ADULT_18';
+    expect(mocks.mediaStore.get(testMediaId).status).toBe('ACTIVE');
+
+    resumeDownloadA!();
+    const unverifiedRes = await unverifiedRequest;
+
+    // Unverified visitor must receive HTTP 403 Forbidden with adult restriction metadata
+    expect(unverifiedRes.status).toBe(403);
+    const unverifiedBody = await unverifiedRes.json();
+    expect(unverifiedBody.error).toBe('Conteúdo restrito a maiores de 18 anos');
+    expect(unverifiedBody.age_restricted).toBe(true);
+    expect(unverifiedRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(remoteCache.put).not.toHaveBeenCalled();
+
+    // Scenario B: Adult-declared visitor (nox-age-status = ADULT) under the same active +18 content
+    let resumeDownloadB: (() => void) | null = null;
+    const downloadBarrierB = new Promise<void>((resolve) => {
+      resumeDownloadB = resolve;
+    });
+
+    mocks.download.mockImplementationOnce(async () => {
+      await downloadBarrierB;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const adultRequest = getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: {
+        getAll: () => [{ name: 'nox-age-status', value: 'ADULT' }],
+        get: (name: string) => (name === 'nox-age-status' ? 'ADULT' : undefined)
+      }
+    } as any);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    resumeDownloadB!();
+    const adultRes = await adultRequest;
+
+    // Adult-declared visitor receives media bytes (HTTP 200)
+    expect(adultRes.status).toBe(200);
+
+    // CRITICAL: Headers MUST be strictly private (no public, no max-age=31536000, no Cache-Tag)
+    const adultCacheControl = adultRes.headers.get('Cache-Control') || '';
+    expect(adultCacheControl).toContain('private');
+    expect(adultCacheControl).toContain('no-store');
+    expect(adultCacheControl).toContain('must-revalidate');
+    expect(adultCacheControl).not.toContain('public');
+    expect(adultCacheControl).not.toContain('31536000');
+    expect(adultRes.headers.get('CDN-Cache-Control')).toBe('no-store');
+    expect(adultRes.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store');
+    expect(adultRes.headers.get('Cache-Tag')).toBeNull();
+
+    // Edge cache must NOT be populated with adult content
+    expect(remoteCache.put).not.toHaveBeenCalled();
+    expect(remoteCache._map.size).toBe(0);
+  });
+
+  it('19d. Controlled Race Condition with deferred cache.put: admin privatizes media (status = ACTIVE, accessClass = PRIVATE) while cache.put is suspended -> post-put guard purges resurrected cache entry', async () => {
     mocks.mediaStore.set(testMediaId, {
       id: testMediaId,
       provider: 'telegram',
@@ -1159,23 +1459,28 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
 
     expect(initialRes.status).toBe(200);
 
-    // Administrative action marks content as PRIVATE
+    // Administrative action marks content as PRIVATE while maintaining status = ACTIVE
     const revokeResult = await revokeMedia(testMediaId, {
       kv,
       cache,
       origin: 'https://projectnox.org',
       reason: 'CONTENT_PRIVATIZATION',
-      accessClass: 'PRIVATE'
+      accessClass: 'PRIVATE',
+      status: 'ACTIVE'
     });
     expect(revokeResult.success).toBe(true);
 
-    // Release deferred cache.put
+    // PROOF: Status remained ACTIVE (not DELETED!), access_class became PRIVATE
+    expect(mocks.mediaStore.get(testMediaId).status).toBe('ACTIVE');
+    expect(mocks.mediaStore.get(testMediaId).access_class).toBe('PRIVATE');
+
+    // Release deferred cache.put to complete in background
     resolvePut();
     if (backgroundTask) {
       await backgroundTask;
     }
 
-    // Cache must not contain the privatized media
+    // Cache must not contain the privatized media (post-put guard purged it)
     const cachedEntry = await cache.match(new Request(`https://projectnox.org/media/${testMediaId}`));
     expect(cachedEntry).toBeNull();
 
@@ -1193,6 +1498,89 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
 
     expect(subsequentRes.status).toBe(404);
     expect(subsequentRes.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it('19e. In-flight Range request by authorized staff on privatized media (status = ACTIVE, access_class = PRIVATE): delivers HTTP 206 with sliced bytes and strictly private headers', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatize_range_auth_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12,
+      sha256: 'active-etag-123'
+    });
+
+    const remoteLaggingKv = createMockKv();
+    const remoteCache = createMockCache();
+
+    mocks.extractFullAuthCookie.mockReturnValue('valid-staff-token');
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: { role: 'ADMIN' }, accessToken: 'valid-staff-token' });
+    mocks.resolveSessionData.mockResolvedValue({ role: 'ADMIN', user: { id: 'admin-user-001' } });
+
+    let resumeDownload: (() => void) | null = null;
+    const downloadBarrier = new Promise<void>((resolve) => {
+      resumeDownload = resolve;
+    });
+
+    mocks.download.mockImplementationOnce(async () => {
+      await downloadBarrier;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const requestPromise = getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer valid-staff-token',
+          Range: 'bytes=0-3'
+        }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: {
+        getAll: () => [{ name: 'auth-token', value: 'valid-staff-token' }],
+        get: (name: string) => (name === 'auth-token' ? 'valid-staff-token' : undefined)
+      }
+    } as any);
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Admin updates access_class to PRIVATE in YSQL (status remains ACTIVE)
+    mocks.mediaStore.get(testMediaId).status = 'ACTIVE';
+    mocks.mediaStore.get(testMediaId).access_class = 'PRIVATE';
+
+    resumeDownload!();
+    const res = await requestPromise;
+
+    // Authorized staff receives HTTP 206 Partial Content
+    expect(res.status).toBe(206);
+    expect(res.headers.get('Content-Range')).toBe('bytes 0-3/12');
+    expect(res.headers.get('Content-Length')).toBe('4');
+
+    // CRITICAL: Range headers MUST be strictly private
+    const cacheControl = res.headers.get('Cache-Control') || '';
+    expect(cacheControl).toContain('private');
+    expect(cacheControl).toContain('no-store');
+    expect(cacheControl).not.toContain('public');
+    expect(cacheControl).not.toContain('31536000');
+    expect(res.headers.get('CDN-Cache-Control')).toBe('no-store');
+    expect(res.headers.get('Cache-Tag')).toBeNull();
+
+    // Partial response MUST NOT be cached
+    expect(remoteCache.put).not.toHaveBeenCalled();
   });
 
   it('20. Prewarmed KV Thumbnail Edge Cache Headers & Conditional ETag Parity: full parity with public CDN caching and RFC 9110 revalidation', async () => {

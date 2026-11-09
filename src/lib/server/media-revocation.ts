@@ -1112,11 +1112,19 @@ export async function revokeMedia(
       if (hasDbConfig) {
         const targetStatus = options.status || 'DELETED';
         try {
-          await executeYugabyteSql(
-            `UPDATE public.media SET status = $1 WHERE id = $2;`,
-            [targetStatus, mediaId],
-            options.platformEnv
-          );
+          if (options.accessClass) {
+            await executeYugabyteSql(
+              `UPDATE public.media SET status = $1, access_class = $2 WHERE id = $3;`,
+              [targetStatus, options.accessClass, mediaId],
+              options.platformEnv
+            );
+          } else {
+            await executeYugabyteSql(
+              `UPDATE public.media SET status = $1 WHERE id = $2;`,
+              [targetStatus, mediaId],
+              options.platformEnv
+            );
+          }
         } catch (dbErr: any) {
           errors.push(`DB_UPDATE_FAILED: ${dbErr?.message || dbErr}`);
           return {
