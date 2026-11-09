@@ -1,7 +1,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { revokeMedia, unrevokeMedia } from '$lib/server/media-revocation';
-import { invalidateMediaMetadataCache } from '$lib/server/yugabyte';
+import { invalidateMediaMetadataCache, executeYugabyteSql } from '$lib/server/yugabyte';
 
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 
@@ -85,6 +85,35 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
 
     processedIds.push(id);
     invalidateMediaMetadataCache(id);
+
+    // 1. Authoritative persistence in public.media.status BEFORE KV write and Cache purge
+    if (!isUnrevoke) {
+      const targetStatus = typeof body?.status === 'string' && body.status.trim() ? body.status.trim() : 'DELETED';
+      try {
+        await executeYugabyteSql(
+          `UPDATE public.media SET status = $1 WHERE id = $2;`,
+          [targetStatus, id],
+          platform?.env
+        );
+      } catch (dbErr: any) {
+        pendingIds.push(id);
+        errors.push({ mediaId: id, error: `DB_UPDATE_FAILED: ${dbErr?.message || dbErr}` });
+        continue;
+      }
+    } else {
+      try {
+        await executeYugabyteSql(
+          `UPDATE public.media SET status = 'ACTIVE' WHERE id = $1;`,
+          [id],
+          platform?.env
+        );
+      } catch (dbErr: any) {
+        pendingIds.push(id);
+        errors.push({ mediaId: id, error: `DB_UPDATE_FAILED: ${dbErr?.message || dbErr}` });
+        continue;
+      }
+    }
+
     try {
       const res = isUnrevoke
         ? await unrevokeMedia(id, {
@@ -92,7 +121,9 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
             cache,
             ctx: platform?.context || platform?.ctx,
             origin: url.origin,
-            reason: body.reason || 'MANUAL_RESTORATION'
+            reason: body.reason || 'MANUAL_RESTORATION',
+            skipDb: true,
+            platformEnv: platform?.env
           })
         : await revokeMedia(id, {
             kv,
@@ -102,7 +133,9 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
             reason: body.reason || 'MANUAL_REVOCATION',
             accessClass: body.accessClass,
             status: body.status,
-            requirePurgeDispatch: true
+            requirePurgeDispatch: true,
+            skipDb: true,
+            platformEnv: platform?.env
           });
 
       if (res.success && res.errors.length === 0) {

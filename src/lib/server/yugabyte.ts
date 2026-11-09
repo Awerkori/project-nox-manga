@@ -1648,10 +1648,13 @@ export function invalidateMediaMetadataCache(mediaId: string): void {
  */
 export async function fetchMediaMetadataFromYugabyte(
   mediaId: string,
-  platformEnv?: any
+  platformEnv?: any,
+  options?: { forceFresh?: boolean }
 ): Promise<any | null> {
-  const cached = getCachedMediaMetadata(mediaId);
-  if (cached) return cached;
+  if (!options?.forceFresh) {
+    const cached = getCachedMediaMetadata(mediaId);
+    if (cached) return cached;
+  }
 
   return withYugabyteLkg(
     `media_${mediaId}`,
@@ -1726,12 +1729,16 @@ export async function fetchMediaMetadataFromYugabyte(
       const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
       const row = res.rows[0] || null;
       if (row) {
-        setCachedMediaMetadata(mediaId, row);
+        if (row.status === 'DELETED') {
+          invalidateMediaMetadataCache(mediaId);
+        } else {
+          setCachedMediaMetadata(mediaId, row);
+        }
       }
       return row;
     },
     null,
-    300_000
+    options?.forceFresh ? 0 : 300_000
   );
 }
 

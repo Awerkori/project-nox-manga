@@ -6,7 +6,7 @@ import {
 } from '$lib/server/storage-router';
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
-import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
+import { fetchMediaMetadataFromYugabyte, executeYugabyteSql, invalidateMediaMetadataCache } from '$lib/server/yugabyte';
 import { classifyMediaAccess, purgeMediaVariants } from '$lib/server/media-revocation';
 
 async function downloadWithTransientRetry(
@@ -33,9 +33,10 @@ async function downloadWithTransientRetry(
 export const GET = async ({ locals: _locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) error(404);
 
-  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
+  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
     if (media && media.status === 'DELETED') {
+      invalidateMediaMetadataCache(params.id);
       const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
       if (cache || platform?.context?.cache) {
         const reqUrl = new URL(request.url);

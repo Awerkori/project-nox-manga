@@ -8,7 +8,7 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
-import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
+import { fetchMediaMetadataFromYugabyte, executeYugabyteSql, invalidateMediaMetadataCache } from '$lib/server/yugabyte';
 import {
   MAX_COVER_THUMBNAIL_BYTES,
   persistCoverThumbnail,
@@ -246,9 +246,10 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     if (prewarmed) return prewarmed;
   }
 
-  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
+  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
   if (!media || media.storage_ready === false || media.status === 'DELETED') {
     if (media && media.status === 'DELETED') {
+      invalidateMediaMetadataCache(params.id);
       if (cache || platform?.context?.cache) {
         const purgeTask = purgeMediaVariants(params.id, {
           cache,
@@ -661,7 +662,32 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
   const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);
-  const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS);
+  const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+  if (isRevoked) {
+    if (cache || platform?.context?.cache) {
+      const purgeTask = purgeMediaVariants(params.id, {
+        cache,
+        ctx: platform?.context || platform?.ctx,
+        origin: url.origin,
+        requirePurgeDispatch: true
+      }).catch(() => {});
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(purgeTask);
+      }
+    }
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
+      status: 404,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
   if (cache && isPublic && isCachableAtEdge && !isRevoked) {
     try {
       const cacheResponse = response.clone();
