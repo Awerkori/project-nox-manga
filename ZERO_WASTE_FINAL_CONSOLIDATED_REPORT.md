@@ -2,13 +2,13 @@
 ## RELATÓRIO CONSOLIDADO FORENSE DEFINITIVO: CAPACIDADE, SEGURANÇA, CONTABILIDADE E LIMITES FÍSICOS
 
 **Worker:** `manga` | **Ambiente:** Cloudflare Workers Free Tier (Orçamento Adicional: Rigorosamente **R$ 0,00**)
-**Versão Ativa em Produção:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (100% tráfego ativo e homologado)
-**Baseline de Rollback Imediato:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`
-**Baseline Secundário:** `fb683114-2f80-4b17-b020-6cc70ef93315`
+**Versão Ativa em Produção:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf` (100% tráfego ativo e homologado)
+**Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652`
+**Baseline Secundário:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`
 **Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
-**Último Commit:** `ccfad07` (`fix(kv-incident): eliminate unsafe KV deletions on HTTP GET read paths and preserve safe method semantics`)
+**Último Commit:** `8ee18e5` (`docs(rollback): update active production version to 398d1735 with fcd51c68 as immediate baseline`)
 **Data da Homologação:** 2026-11-09
-**Status da Operação:** **INCIDENTE KV CORRIGIDO — DEPLOY REALIZADO — 740 TESTES APROVADOS (100% GREEN) — SMOKE TESTS EM PRODUÇÃO VALIDADOS**
+**Status da Operação:** **INCIDENTE KV CORRIGIDO — DEPLOY REALIZADO — 743 TESTES APROVADOS (100% GREEN) — SMOKE TESTS EM PRODUÇÃO VALIDADOS**
 
 ---
 
@@ -145,7 +145,7 @@ A validação foi conduzida através de testes de integração reais e testes ad
 
 #### 5.1 Suíte Global Automatizada (Vitest v5.0.0)
 - **Total de Arquivos de Teste:** **116 arquivos** (100% aprovados)
-- **Total de Testes Individuais:** **737 testes** (100% aprovados)
+- **Total de Testes Individuais:** **743 testes** (100% aprovados)
 - **Testes com Falha:** **0**
 - **Testes Ignorados (Skipped):** **0**
 - **Tempo de Execução:** **20,46 segundos**
@@ -244,6 +244,7 @@ npx wrangler versions deploy fcd51c68-3fa5-4d63-b867-d7d557554652@100% --name ma
 - **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652`.
 - **Baseline Secundário:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
 - **Commits Publicados em `origin/perf/nox-cloudflare-zero-waste`:**
+  - `8ee18e5` — docs(rollback): update active production version to 398d1735 with fcd51c68 as immediate baseline
   - `124e41b` — fix(zero-waste): add 30-day KV expiration TTL, remove phantom keys, and harden 429 tolerance
   - `95f14ea` — docs(rollback): update active production version to fcd51c68 with fafe6ae8 as baseline
   - `ccfad07` — fix(kv-incident): eliminate unsafe KV deletions on HTTP GET read paths and preserve safe method semantics
@@ -294,5 +295,5 @@ npx wrangler versions deploy fcd51c68-3fa5-4d63-b867-d7d557554652@100% --name ma
 Caso seja detectada qualquer anomalia operacional imprevista:
 ```bash
 # Rollback imediato para a versão pré-deploy (convergência em < 5 segundos):
-npx wrangler rollback fafe6ae8-cd04-4f93-8125-bc7a02774619 --name manga --message "Rollback imediato de seguranca"
+npx wrangler rollback fcd51c68-3fa5-4d63-b867-d7d557554652 --name manga --message "Rollback imediato de seguranca"
 ```
