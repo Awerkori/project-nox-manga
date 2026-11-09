@@ -5,8 +5,8 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 ## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Production Version (Post-deploy):** `48420583-7640-44ce-a8f3-6fba722a949a` (Re-verificação autoritativa pós-download contra YSQL, eliminação da corrida com KV defasado, guarda em /api/media e rejeição de status inativos)
-- **Immediate Rollback Target Versions:** `bbba5c8b-7ba2-49d7-a7dd-81e828b09b00` / `400bc8b8-89b5-4ab5-b461-a07edfb7167b` / `398d1735-ef8d-4c0c-9831-cc2b82752bcf`
+- **Active Production Version (Post-deploy):** `322d46b9-71ed-4e14-a03a-bbc48f356bac` (Re-verificação autoritativa pós-download contra YSQL, re-classificação de visibilidade para conteúdo protegido, bloqueio de vazamento em requisições parciais Range 206, eliminação da corrida com KV defasado, guarda em /api/media e rejeição de status inativos)
+- **Immediate Rollback Target Versions:** `48420583-7640-44ce-a8f3-6fba722a949a` / `bbba5c8b-7ba2-49d7-a7dd-81e828b09b00` / `400bc8b8-89b5-4ab5-b461-a07edfb7167b` / `398d1735-ef8d-4c0c-9831-cc2b82752bcf`
 - **Foundational Safe Rollback Baseline:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 - **Versões Anteriores Deprecadas:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` e anteriores NÃO DEVEM ser utilizadas para rollback pois contêm a causa raiz do incidente de estouro de deleções no Workers KV.
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
