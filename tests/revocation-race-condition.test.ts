@@ -657,4 +657,102 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
     expect(mocks.download).not.toHaveBeenCalled();
   });
+
+  it('11. In-flight Range request: admin deletes media during download -> post-download guard blocks Range 206 and returns 404 no-store', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_range_race_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const remoteLaggingKv = createMockKv();
+    const remoteCache = createMockCache();
+
+    mocks.download.mockImplementationOnce(async () => {
+      // Admin deletes media in YSQL while Telegram download is in progress
+      mocks.mediaStore.get(testMediaId).status = 'DELETED';
+
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, {
+        method: 'GET',
+        headers: { range: 'bytes=0-3' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    // CRITICAL SECURITY PROOF:
+    // Range request must NOT return 206 with sliced bytes of deleted media!
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+    expect(remoteCache.put).not.toHaveBeenCalled();
+    expect(remoteCache._map.size).toBe(0);
+  });
+
+  it('12. In-flight Protected Content privatization: admin changes access_class to PRIVATE during download -> post-download guard blocks public cache.put and returns 404', async () => {
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_privatize_race_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const remoteLaggingKv = createMockKv();
+    const remoteCache = createMockCache();
+
+    mocks.download.mockImplementationOnce(async () => {
+      // Admin alters media to PRIVATE in YSQL while Telegram download is in progress
+      mocks.mediaStore.get(testMediaId).access_class = 'PRIVATE';
+
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]));
+          controller.close();
+        }
+      });
+    });
+
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(`https://projectnox.org/media/${testMediaId}`, { method: 'GET' }),
+      platform: {
+        env: { COVER_THUMBNAILS: remoteLaggingKv },
+        caches: { default: remoteCache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    // Anonymous public user must NOT receive newly-privatized media
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
+
+    // CRITICAL PROOF: Newly privatized media must NEVER be cached in public edge cache!
+    expect(remoteCache.put).not.toHaveBeenCalled();
+    expect(remoteCache._map.size).toBe(0);
+  });
 });

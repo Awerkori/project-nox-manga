@@ -25,6 +25,60 @@ async function downloadWithTransientRetry(
   }
 }
 
+async function isAuthorizedForMedia(
+  mediaMeta: any,
+  classification: ReturnType<typeof classifyMediaAccess>,
+  cookies: any,
+  request: Request,
+  platformEnv?: any
+): Promise<{
+  allowed: boolean;
+  isAdultRestricted: boolean;
+  isAdultAllowed: boolean;
+  isStaff: boolean;
+  isOwner: boolean;
+  isAuthenticatedAllowed: boolean;
+}> {
+  if (classification.isPublic) {
+    return {
+      allowed: true,
+      isAdultRestricted: false,
+      isAdultAllowed: false,
+      isStaff: false,
+      isOwner: false,
+      isAuthenticatedAllowed: false
+    };
+  }
+  let verifiedSession = null;
+  const rawCookie = extractFullAuthCookie(cookies.getAll());
+  const authHeader = request.headers.get('authorization') || '';
+  const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
+  if (token) {
+    const { jwt, accessToken } = decodeSessionJwt(token);
+    if (jwt) {
+      try {
+        verifiedSession = await resolveSessionData(null, jwt, accessToken, platformEnv);
+      } catch {
+        // Authentication resolution failure
+      }
+    }
+  }
+  const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
+  const isOwner = Boolean(verifiedSession?.user?.id && mediaMeta.created_by === verifiedSession.user.id);
+  const isAuthenticatedAllowed = mediaMeta.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+  const isAdultRestricted = classification.category === 'RESTRICTED' && classification.reason === 'CONTENT_RATING_ADULT_18';
+  let isAdultAllowed = false;
+  if (isAdultRestricted) {
+    const ageCookie = cookies.get('nox-age-status');
+    const sessionAgeStatus = verifiedSession?.profile?.age_status;
+    if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
+      isAdultAllowed = true;
+    }
+  }
+  const allowed = isStaff || isOwner || isAuthenticatedAllowed || isAdultAllowed;
+  return { allowed, isAdultRestricted, isAdultAllowed, isStaff, isOwner, isAuthenticatedAllowed };
+}
+
 /**
  * Dedicated private/authenticated media endpoint.
  * Intentionally outside /media/* to guarantee that Cloudflare zone Cache Rules
@@ -83,41 +137,13 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   // For non-public media, require authentic cryptographic verification
   if (!isPublic) {
-    let verifiedSession = null;
-    const rawCookie = extractFullAuthCookie(cookies.getAll());
-    const authHeader = request.headers.get('authorization') || '';
-    const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
-
-    if (token) {
-      const { jwt, accessToken } = decodeSessionJwt(token);
-      if (jwt) {
-        try {
-          verifiedSession = await resolveSessionData(null, jwt, accessToken, platform?.env);
-        } catch {
-          // Identity unverified
-        }
-      }
-    }
-
-    const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
-    const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
-    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
-    const isAdultRestricted = accessClassification.category === 'RESTRICTED' && accessClassification.reason === 'CONTENT_RATING_ADULT_18';
-    let isAdultAllowed = false;
-    if (isAdultRestricted) {
-      const ageCookie = cookies.get('nox-age-status');
-      const sessionAgeStatus = verifiedSession?.profile?.age_status;
-      if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
-        isAdultAllowed = true;
-      }
-    }
-
-    if (!isStaff && !isOwner && !isAuthenticatedAllowed && !isAdultAllowed) {
+    const authCheck = await isAuthorizedForMedia(media, accessClassification, cookies, request, platform?.env);
+    if (!authCheck.allowed) {
       return new Response(JSON.stringify({
-        error: isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
-        age_restricted: isAdultRestricted
+        error: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+        age_restricted: authCheck.isAdultRestricted
       }), {
-        status: isAdultRestricted ? 403 : 404,
+        status: authCheck.isAdultRestricted ? 403 : 404,
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
@@ -205,6 +231,15 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
       if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
         isRevoked = true;
         invalidateMediaMetadataCache(params.id);
+      } else {
+        const freshClassification = classifyMediaAccess(freshMeta);
+        if (!freshClassification.isPublic) {
+          const authCheck = await isAuthorizedForMedia(freshMeta, freshClassification, cookies, request, platform?.env);
+          if (!authCheck.allowed) {
+            isRevoked = true;
+            invalidateMediaMetadataCache(params.id);
+          }
+        }
       }
     } catch {
       isRevoked = true;

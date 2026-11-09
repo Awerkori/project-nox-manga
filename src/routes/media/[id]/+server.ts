@@ -28,6 +28,60 @@ function safeTokenCompare(provided: string, expected: string): boolean {
   return diff === 0;
 }
 
+async function isAuthorizedForMedia(
+  mediaMeta: any,
+  classification: ReturnType<typeof classifyMediaAccess>,
+  cookies: any,
+  request: Request,
+  platformEnv?: any
+): Promise<{
+  allowed: boolean;
+  isAdultRestricted: boolean;
+  isAdultAllowed: boolean;
+  isStaff: boolean;
+  isOwner: boolean;
+  isAuthenticatedAllowed: boolean;
+}> {
+  if (classification.isPublic) {
+    return {
+      allowed: true,
+      isAdultRestricted: false,
+      isAdultAllowed: false,
+      isStaff: false,
+      isOwner: false,
+      isAuthenticatedAllowed: false
+    };
+  }
+  let verifiedSession = null;
+  const rawCookie = extractFullAuthCookie(cookies.getAll());
+  const authHeader = request.headers.get('authorization') || '';
+  const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
+  if (token) {
+    const { jwt, accessToken } = decodeSessionJwt(token);
+    if (jwt) {
+      try {
+        verifiedSession = await resolveSessionData(null, jwt, accessToken, platformEnv);
+      } catch {
+        // Authentication resolution failure
+      }
+    }
+  }
+  const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
+  const isOwner = Boolean(verifiedSession?.user?.id && mediaMeta.created_by === verifiedSession.user.id);
+  const isAuthenticatedAllowed = mediaMeta.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+  const isAdultRestricted = classification.category === 'RESTRICTED' && classification.reason === 'CONTENT_RATING_ADULT_18';
+  let isAdultAllowed = false;
+  if (isAdultRestricted) {
+    const ageCookie = cookies.get('nox-age-status');
+    const sessionAgeStatus = verifiedSession?.profile?.age_status;
+    if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
+      isAdultAllowed = true;
+    }
+  }
+  const allowed = isStaff || isOwner || isAuthenticatedAllowed || isAdultAllowed;
+  return { allowed, isAdultRestricted, isAdultAllowed, isStaff, isOwner, isAuthenticatedAllowed };
+}
+
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
 const storageShardBotCache = new Map<string, string>();
 
@@ -291,37 +345,11 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   // Authoritative Media Access Classification
   const accessClassification = classifyMediaAccess(media);
-  const isPublic = accessClassification.isPublic;
+  let isPublic = accessClassification.isPublic;
 
   if (!isPublic) {
-    let verifiedSession = null;
-    const rawCookie = extractFullAuthCookie(cookies.getAll());
-    const authHeader = request.headers.get('authorization') || '';
-    const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
-    if (token) {
-      const { jwt, accessToken } = decodeSessionJwt(token);
-      if (jwt) {
-        try {
-          verifiedSession = await resolveSessionData(null, jwt, accessToken, platform?.env);
-        } catch {
-          // Authentication resolution failure
-        }
-      }
-    }
-    const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
-    const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
-    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
-    const isAdultRestricted = accessClassification.category === 'RESTRICTED' && accessClassification.reason === 'CONTENT_RATING_ADULT_18';
-    let isAdultAllowed = false;
-    if (isAdultRestricted) {
-      const ageCookie = cookies.get('nox-age-status');
-      const sessionAgeStatus = verifiedSession?.profile?.age_status;
-      if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
-        isAdultAllowed = true;
-      }
-    }
-
-    if (!isStaff && !isOwner && !isAuthenticatedAllowed && !isAdultAllowed) {
+    const authCheck = await isAuthorizedForMedia(media, accessClassification, cookies, request, platform?.env);
+    if (!authCheck.allowed) {
       // NOTE: Leitura não autorizada NÃO é revogação administrativa; não grava tombstone nem altera manifesto KV.
       // Porém, purga qualquer cache público residual da borda para garantir fail-closed contra entradas antigas.
       if (cache || platform?.context?.cache) {
@@ -337,10 +365,10 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         }
       }
       return new Response(request.method === 'HEAD' ? null : JSON.stringify({
-        error: isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
-        age_restricted: isAdultRestricted
+        error: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+        age_restricted: authCheck.isAdultRestricted
       }), {
-        status: isAdultRestricted ? 403 : 404,
+        status: authCheck.isAdultRestricted ? 403 : 404,
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
@@ -353,9 +381,9 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
       });
     }
 
-    if (isAdultAllowed && !isStaff && !isOwner && !isAuthenticatedAllowed) {
+    if (authCheck.isAdultAllowed && !authCheck.isStaff && !authCheck.isOwner && !authCheck.isAuthenticatedAllowed) {
       // Proceed to serve the media, but ensure headers are strictly private
-    } else if (media.access_class !== 'PUBLIC' && !isAdultRestricted) {
+    } else if (media.access_class !== 'PUBLIC' && !authCheck.isAdultRestricted) {
       // Authorized access to non-public media: redirect to dedicated private endpoint
       // to strictly prevent edge CDN caching under the /media/* zone rule.
       return new Response(null, {
@@ -586,6 +614,62 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     }
   }
 
+  // 1. Authoritative post-download re-verification BEFORE Range evaluation, internal cover warm, and edge cache.put:
+  // Checks KV tombstone and in-memory revocation sets first, then re-verifies authoritative
+  // Yugabyte metadata to ensure that if public.media.status was changed to DELETED or if access_class
+  // was changed to PRIVATE/RESTRICTED while download was in-flight but remote PoP KV is lagging/outdated,
+  // the media is NEVER returned (neither 200 nor 206) and NEVER cached.
+  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+
+  if (!isRevoked) {
+    try {
+      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
+      if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
+        isRevoked = true;
+        invalidateMediaMetadataCache(params.id);
+      } else {
+        const freshClassification = classifyMediaAccess(freshMeta);
+        isPublic = isPublic && freshClassification.isPublic;
+        if (!freshClassification.isPublic) {
+          const authCheck = await isAuthorizedForMedia(freshMeta, freshClassification, cookies, request, platform?.env);
+          if (!authCheck.allowed) {
+            isRevoked = true;
+            invalidateMediaMetadataCache(params.id);
+          }
+        }
+      }
+    } catch {
+      // Fail closed for caching: if database status cannot be re-verified after download,
+      // fail closed by treating as revoked to strictly prevent committing stale media to cache
+      isRevoked = true;
+    }
+  }
+
+  if (isRevoked) {
+    if (cache || platform?.context?.cache) {
+      const purgeTask = purgeMediaVariants(params.id, {
+        cache,
+        ctx: platform?.context || platform?.ctx,
+        origin: url.origin,
+        requirePurgeDispatch: true
+      }).catch(() => {});
+      if (platform?.context?.waitUntil) {
+        platform.context.waitUntil(purgeTask);
+      }
+    }
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
+      status: 404,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
   const rangeHeader = request.headers.get('range');
   const ifRange = request.headers.get('if-range');
   const currentEtag = headers['ETag'] ? String(headers['ETag']).trim() : null;
@@ -639,51 +723,6 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   const response = new Response(body, { status: 200, headers });
-
-  // 1. Authoritative re-verification BEFORE internal cover warm and edge cache.put:
-  // Checks KV tombstone and in-memory revocation sets first, then re-verifies authoritative
-  // Yugabyte metadata to ensure that if public.media.status was changed to DELETED while
-  // download was in-flight but remote PoP KV is lagging/outdated, the media is NEVER cached.
-  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
-
-  if (!isRevoked) {
-    try {
-      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
-      if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
-        isRevoked = true;
-        invalidateMediaMetadataCache(params.id);
-      }
-    } catch {
-      // Fail closed for caching: if database status cannot be re-verified after download,
-      // fail closed by treating as revoked to strictly prevent committing stale media to cache
-      isRevoked = true;
-    }
-  }
-
-  if (isRevoked) {
-    if (cache || platform?.context?.cache) {
-      const purgeTask = purgeMediaVariants(params.id, {
-        cache,
-        ctx: platform?.context || platform?.ctx,
-        origin: url.origin,
-        requirePurgeDispatch: true
-      }).catch(() => {});
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(purgeTask);
-      }
-    }
-    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
-      status: 404,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'CDN-Cache-Control': 'no-store',
-        'Cloudflare-CDN-Cache-Control': 'no-store',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    });
-  }
 
   // 2. Only the authenticated publication event may create a global KV entry.
   // Interactive requests still read a hot entry, but never write one: that
