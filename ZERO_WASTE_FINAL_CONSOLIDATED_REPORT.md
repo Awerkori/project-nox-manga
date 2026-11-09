@@ -209,18 +209,18 @@ Para total transparência com os avaliadores externos, registram-se as fronteira
 
 Em estrita conformidade com `ROLLBACK_PROCEDURE.md`:
 
-- **Versão Ativa de Produção:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (100% de tráfego atribuído em `projectnox.org` e `www.projectnox.org`).
-- **Baseline de Rollback Imediato:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
-- **Baseline Secundário:** `fb683114-2f80-4b17-b020-6cc70ef93315`.
+- **Versão Ativa de Produção:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf` (100% de tráfego atribuído em `projectnox.org` e `www.projectnox.org`).
+- **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652`.
+- **Baseline Secundário:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
 - **Tempo Estimado de Convergência do Rollback:** < 5 segundos via Cloudflare API.
 
 #### Comandos Oficiais de Rollback:
 ```bash
 # Opção A: Rollback via Wrangler
-npx wrangler rollback fafe6ae8-cd04-4f93-8125-bc7a02774619 --name manga --message "Rollback de contingência para baseline fafe6ae8"
+npx wrangler rollback fcd51c68-3fa5-4d63-b867-d7d557554652 --name manga --message "Rollback de contingência para baseline fcd51c68"
 
 # Opção B: Roteamento de Versão 100%
-npx wrangler versions deploy fafe6ae8-cd04-4f93-8125-bc7a02774619@100% --name manga --message "Tráfego convergido 100% para fafe6ae8"
+npx wrangler versions deploy fcd51c68-3fa5-4d63-b867-d7d557554652@100% --name manga --message "Tráfego convergido 100% para fcd51c68"
 ```
 
 ---
@@ -228,7 +228,7 @@ npx wrangler versions deploy fafe6ae8-cd04-4f93-8125-bc7a02774619@100% --name ma
 ### 9. PARECERES SEPARADOS DA AUDITORIA CRUZADA
 
 #### Parecer do Engenheiro Principal (DeepCoder):
-> *"Investiguei a fundo as restrições da Cloudflare e corrigi as vulnerabilidades de isolamento em respostas privadas no leitor e na página de obra, além de eliminar o vazamento de Cache-Tag em mídias privadas. Substituímos simulações puramente sintéticas por testes de integração que invocam diretamente os manipuladores de rota (`getPublicMediaRoute` e `loadReaderChapter`), medindo timing e consumo com precisão. A contabilidade de 16, 31 ou 51 requisições para capítulos frios decorre da política de cobrança em Custom Domains e da necessidade de mediação de credenciais de bots do Telegram, sendo o menor consumo fisicamente alcançável a R$ 0,00. A infraestrutura atinge 737 testes 100% aprovados e compilação limpa."*
+> *"Investiguei a fundo as restrições da Cloudflare e corrigi as vulnerabilidades de isolamento em respostas privadas no leitor e na página de obra, além de eliminar o vazamento de Cache-Tag em mídias privadas. Substituímos simulações puramente sintéticas por testes de integração que invocam diretamente os manipuladores de rota (`getPublicMediaRoute` e `loadReaderChapter`), medindo timing e consumo com precisão. A contabilidade de 16, 31 ou 51 requisições para capítulos frios decorre da política de cobrança em Custom Domains e da necessidade de mediação de credenciais de bots do Telegram, sendo o menor consumo fisicamente alcançável a R$ 0,00. A infraestrutura atinge 743 testes 100% aprovados e compilação limpa."*
 
 #### Parecer do Coordenador e Revisor Crítico (Gemini Flash):
 > *"A auditoria cética identificou e corrigiu quatro inconsistências reais que haviam passado despercebidas: (1) a ausência de cabeçalhos de controle de cache privado para usuários logados no leitor e na obra; (2) a assimetria de checagem de maioridade em cache de memória versus banco; (3) o vazamento de `Cache-Tag: media-public` em respostas restritas; e (4) o uso de rotinas simuladas no teste de integração em vez de invocar os manipuladores de rota do SvelteKit. Com as correções aplicadas, a suíte passou a exercitar os fluxos reais de código. As limitações da cota Free Tier estão documentadas com total transparência e rigor matemático."*
@@ -240,10 +240,12 @@ npx wrangler versions deploy fafe6ae8-cd04-4f93-8125-bc7a02774619@100% --name ma
 **Situação Final:** **DEPLOY CONCLUÍDO COM SUCESSO E HOMOLOGADO.**
 
 #### 10.1 Versão e Commits Publicados
-- **Versão Ativa na Cloudflare:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
-- **Baseline de Rollback Imediato:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
-- **Baseline Secundário:** `fb683114-2f80-4b17-b020-6cc70ef93315`.
+- **Versão Ativa na Cloudflare:** `398d1735-ef8d-4c0c-9831-cc2b82752bcf` (100% de tráfego em `projectnox.org` e `www.projectnox.org`).
+- **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652`.
+- **Baseline Secundário:** `fafe6ae8-cd04-4f93-8125-bc7a02774619`.
 - **Commits Publicados em `origin/perf/nox-cloudflare-zero-waste`:**
+  - `124e41b` — fix(zero-waste): add 30-day KV expiration TTL, remove phantom keys, and harden 429 tolerance
+  - `95f14ea` — docs(rollback): update active production version to fcd51c68 with fafe6ae8 as baseline
   - `ccfad07` — fix(kv-incident): eliminate unsafe KV deletions on HTTP GET read paths and preserve safe method semantics
   - `58f4b13` — docs(rollback): update active production version to fafe6ae8
   - `46973e1` — fix(zero-waste): heal downloadBotRef in thumbnail fallback and restore mediaBaseUrl on reader cache hit
