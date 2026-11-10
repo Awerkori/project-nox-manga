@@ -355,7 +355,7 @@ export async function executeYugabyteSql<T = any>(
   }
 
   // Strategy 1: Hyperdrive native pooled connection if available
-  const hyperdrive = platformEnv?.HYPERDRIVE;
+  const hyperdrive = platformEnv?.HYPERDRIVE_AUTHORITATIVE || platformEnv?.HYPERDRIVE;
   if (hyperdrive?.connectionString) {
     const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node);
     if (isNode) {
@@ -1643,85 +1643,131 @@ export function invalidateMediaMetadataCache(mediaId: string): void {
   }
 }
 
+const MEDIA_METADATA_SELECT_FIELDS = `
+  m.id, m.provider, m.provider_key, m.bot_reference, m.storage_shard_id,
+  m.mime, m.sha256, m.bytes, m.width, m.height, m.access_class, m.purpose,
+  m.storage_ready, m.status, m.created_by,
+  (
+    EXISTS (
+      SELECT 1 FROM public.pages p
+      JOIN public.chapters c ON c.id = p.chapter_id
+      JOIN public.works w ON w.id = c.work_id
+      WHERE p.media_id = m.id AND (w.content_rating = 'ADULT_18' OR c.chapter_kind = 'adult')
+    ) OR EXISTS (
+      SELECT 1 FROM public.works w_cov
+      WHERE w_cov.cover_id = m.id AND w_cov.content_rating = 'ADULT_18'
+    )
+  ) AS is_adult_associated,
+  (
+    NOT EXISTS (
+      SELECT 1 FROM public.pages p
+      JOIN public.chapters c ON c.id = p.chapter_id
+      JOIN public.works w ON w.id = c.work_id
+      WHERE p.media_id = m.id AND w.published = false
+    ) AND NOT EXISTS (
+      SELECT 1 FROM public.works w_cov
+      WHERE w_cov.cover_id = m.id AND w_cov.published = false
+    )
+  ) AS all_works_published,
+  (
+    NOT EXISTS (
+      SELECT 1 FROM public.pages p
+      JOIN public.chapters c ON c.id = p.chapter_id
+      WHERE p.media_id = m.id AND c.published_at IS NULL
+    )
+  ) AS all_chapters_published,
+  (
+    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
+      EXISTS (
+        SELECT 1 FROM public.pages p
+        JOIN public.chapters c ON c.id = p.chapter_id
+        JOIN public.works w ON w.id = c.work_id
+        WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
+      )
+    ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
+      EXISTS (
+        SELECT 1 FROM public.works w_cov
+        WHERE w_cov.cover_id = m.id AND w_cov.published = true
+      )
+    ) ELSE true END
+  ) AS has_published_association,
+  (
+    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
+      EXISTS (
+        SELECT 1 FROM public.pages p
+        JOIN public.chapters c ON c.id = p.chapter_id
+        JOIN public.works w ON w.id = c.work_id
+        WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
+      )
+    ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
+      EXISTS (
+        SELECT 1 FROM public.works w_cov
+        WHERE w_cov.cover_id = m.id AND w_cov.published = true
+       )
+    ) ELSE true END
+  ) AS has_published_chapter
+`;
+
 /**
  * Fetch media metadata for media delivery from Yugabyte.
+ *
+ * Distinguishes between:
+ * - Conventional reads: leverages in-memory LRU cache, Hyperdrive query caching, and LKG fallback.
+ * - Authoritative reads: strictly bypasses application memory cache, bypasses Hyperdrive query caching
+ *   via PostgreSQL VOLATILE clock_timestamp() evaluation, NEVER returns stale LKG on failure, and
+ *   fails closed (returns null) on connection/query error to prevent unauthorized delivery.
  */
 export async function fetchMediaMetadataFromYugabyte(
   mediaId: string,
   platformEnv?: any,
-  options?: { forceFresh?: boolean }
+  options?: { forceFresh?: boolean; authoritative?: boolean }
 ): Promise<any | null> {
-  if (!options?.forceFresh) {
+  const isAuthoritative = Boolean(options?.authoritative);
+  const isFresh = isAuthoritative || Boolean(options?.forceFresh);
+
+  // 1. Authoritative and forceFresh reads strictly bypass in-memory mediaMetadataCache
+  if (!isFresh) {
     const cached = getCachedMediaMetadata(mediaId);
     if (cached) return cached;
   }
 
+  // 2. Authoritative execution mode:
+  // - Evaluates volatile clock_timestamp() so Hyperdrive tags query as non-cacheable (cacheStatus: volatile).
+  // - Never returns stale LKG entries on error.
+  // - Never turns network/database timeouts into positive delivery authorization.
+  // - Fails closed by returning null if database cannot be verified.
+  if (isAuthoritative) {
+    const sql = `
+      SELECT ${MEDIA_METADATA_SELECT_FIELDS}
+      FROM public.media m
+      WHERE m.id = $1 AND clock_timestamp() IS NOT NULL
+      LIMIT 1;
+    `;
+    try {
+      const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
+      const row = res.rows[0] || null;
+      if (row) {
+        if (row.status === 'DELETED') {
+          invalidateMediaMetadataCache(mediaId);
+        } else {
+          setCachedMediaMetadata(mediaId, row);
+        }
+      } else {
+        invalidateMediaMetadataCache(mediaId);
+      }
+      return row;
+    } catch (err: any) {
+      console.error(`[MEDIA_AUTHORITATIVE_FETCH_FAILED] id=${mediaId} error=${err?.message || err}`);
+      return null;
+    }
+  }
+
+  // 3. Conventional read mode:
   return withYugabyteLkg(
     `media_${mediaId}`,
     async () => {
       const sql = `
-        SELECT m.id, m.provider, m.provider_key, m.bot_reference, m.storage_shard_id,
-               m.mime, m.sha256, m.bytes, m.width, m.height, m.access_class, m.purpose,
-               m.storage_ready, m.status, m.created_by,
-               (
-                 EXISTS (
-                   SELECT 1 FROM public.pages p
-                   JOIN public.chapters c ON c.id = p.chapter_id
-                   JOIN public.works w ON w.id = c.work_id
-                   WHERE p.media_id = m.id AND (w.content_rating = 'ADULT_18' OR c.chapter_kind = 'adult')
-                 ) OR EXISTS (
-                   SELECT 1 FROM public.works w_cov
-                   WHERE w_cov.cover_id = m.id AND w_cov.content_rating = 'ADULT_18'
-                 )
-               ) AS is_adult_associated,
-               (
-                 NOT EXISTS (
-                   SELECT 1 FROM public.pages p
-                   JOIN public.chapters c ON c.id = p.chapter_id
-                   JOIN public.works w ON w.id = c.work_id
-                   WHERE p.media_id = m.id AND w.published = false
-                 ) AND NOT EXISTS (
-                   SELECT 1 FROM public.works w_cov
-                   WHERE w_cov.cover_id = m.id AND w_cov.published = false
-                 )
-               ) AS all_works_published,
-               (
-                 NOT EXISTS (
-                   SELECT 1 FROM public.pages p
-                   JOIN public.chapters c ON c.id = p.chapter_id
-                   WHERE p.media_id = m.id AND c.published_at IS NULL
-                 )
-               ) AS all_chapters_published,
-               (
-                 CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
-                   EXISTS (
-                     SELECT 1 FROM public.pages p
-                     JOIN public.chapters c ON c.id = p.chapter_id
-                     JOIN public.works w ON w.id = c.work_id
-                     WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
-                   )
-                 ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
-                   EXISTS (
-                     SELECT 1 FROM public.works w_cov
-                     WHERE w_cov.cover_id = m.id AND w_cov.published = true
-                   )
-                 ) ELSE true END
-               ) AS has_published_association,
-               (
-                 CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
-                   EXISTS (
-                     SELECT 1 FROM public.pages p
-                     JOIN public.chapters c ON c.id = p.chapter_id
-                     JOIN public.works w ON w.id = c.work_id
-                     WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
-                   )
-                 ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
-                   EXISTS (
-                     SELECT 1 FROM public.works w_cov
-                     WHERE w_cov.cover_id = m.id AND w_cov.published = true
-                    )
-                 ) ELSE true END
-               ) AS has_published_chapter
+        SELECT ${MEDIA_METADATA_SELECT_FIELDS}
         FROM public.media m
         WHERE m.id = $1
         LIMIT 1;

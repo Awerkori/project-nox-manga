@@ -88,7 +88,12 @@ async function isAuthorizedForMedia(
 export const GET = async ({ locals: _locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) error(404);
 
-  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
+  let media: any;
+  try {
+    media = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true, authoritative: true });
+  } catch {
+    media = null;
+  }
   if (!media || media.storage_ready !== true || media.status !== 'ACTIVE') {
     if (media && media.status !== 'ACTIVE') {
       invalidateMediaMetadataCache(params.id);
@@ -244,7 +249,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   if (!isRevoked) {
     try {
-      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true });
+      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true, authoritative: true });
       if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
         isRevoked = true;
         invalidateMediaMetadataCache(params.id);
