@@ -5,9 +5,9 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 ## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Production Version (Post-deploy):** `fdb2322d-fffd-4f23-909e-25e63a06bb03` (Commit `18bf3ee545a698bd65678378cfcff1d35b9fe87b` — Validação estrita de ações administrativas em `/api/internal/media/revoke`, rejeição HTTP 400 para ações desconhecidas sem efeitos colaterais, sanitização de stream Range, integridade atômica YSQL/KV na revogação e unrevogação, re-verificação autoritativa pós-download contra YSQL, e eliminação de condições de corrida)
-- **Immediate Rollback Target Version:** `322d46b9-71ed-4e14-a03a-bbc48f356bac` (Deploy imediatamente anterior, 100% homologado)
-- **Secondary Rollback Targets:** `48420583-7640-44ce-a8f3-6fba722a949a` / `bbba5c8b-7ba2-49d7-a7dd-81e828b09b00` / `400bc8b8-89b5-4ab5-b461-a07edfb7167b` / `398d1735-ef8d-4c0c-9831-cc2b82752bcf`
+- **Active Production Version (Post-deploy):** `0131fdba-9162-44b4-8e4f-ccbe36951a29` (Commit `5db24e848d2a5be33a7c70d69f1c1c1c40a30d3d` — Leituras autoritativas com bypass explícito do Query Cache do Hyperdrive via PostgreSQL VOLATILE clock_timestamp(), fail-closed estrito contra falhas de conexão/timeout, eliminação de fallback stale em LKG para autorização de mídia, proteção abrangente de retornos antecipados GET 200/206/304/HEAD/If-Range e thumbnails KV, e 28 testes adversariais homologados)
+- **Immediate Rollback Target Version:** `fdb2322d-fffd-4f23-909e-25e63a06bb03` (Deploy imediatamente anterior, 100% homologado, commit 18bf3ee)
+- **Secondary Rollback Targets:** `322d46b9-71ed-4e14-a03a-bbc48f356bac` / `48420583-7640-44ce-a8f3-6fba722a949a` / `bbba5c8b-7ba2-49d7-a7dd-81e828b09b00`
 - **Foundational Safe Rollback Baseline:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 - **Versões Anteriores Deprecadas:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` e anteriores NÃO DEVEM ser utilizadas para rollback pois contêm a causa raiz do incidente de estouro de deleções no Workers KV.
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
