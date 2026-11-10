@@ -2793,5 +2793,190 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     expect(legacyData.action).toBe('revoke');
     expect(mocks.mediaStore.get(freshMediaId).status).toBe('DELETED');
     expect(mockKv.put).toHaveBeenCalled();
+
+    // E. Calling with action: 'UNREVOKE' (uppercase) MUST restore media to ACTIVE
+    mocks.executeYugabyteSql.mockClear();
+    mockKv.put.mockClear();
+    mockKv.delete.mockClear();
+    const unrevokeRes = await revokeMediaEndpoint({
+      request: new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${bridgeToken}`
+        },
+        body: JSON.stringify({
+          mediaId: freshMediaId,
+          action: 'UNREVOKE',
+          reason: 'UPPERCASE_UNREVOKE_FLOW'
+        })
+      }),
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+        },
+        caches: { default: mockCache },
+        context: mockCtx
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(unrevokeRes.status).toBe(200);
+    const unrevokeData = await unrevokeRes.json();
+    expect(unrevokeData.action).toBe('unrevoke');
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('ACTIVE');
+
+    // F. Edge cases: empty string, whitespace string, null, and '  PURGE  ' MUST all reject with HTTP 400
+    for (const invalidAction of ['', '   ', null, '  PURGE  ', 'RESTORE', 'PRIVATIZE']) {
+      mocks.executeYugabyteSql.mockClear();
+      mockKv.put.mockClear();
+      mockKv.delete.mockClear();
+      try {
+        await revokeMediaEndpoint({
+          request: new Request('https://projectnox.org/api/internal/media/revoke', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${bridgeToken}`
+            },
+            body: JSON.stringify({
+              mediaId: freshMediaId,
+              action: invalidAction
+            })
+          }),
+          url: new URL('https://projectnox.org/api/internal/media/revoke'),
+          platform: {
+            env: {
+              COVER_THUMBNAILS: mockKv,
+              NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+            },
+            caches: { default: mockCache },
+            context: mockCtx
+          },
+          cookies: { getAll: () => [] }
+        } as any);
+        expect.unreachable(`Should have thrown HTTP 400 for invalid action: ${JSON.stringify(invalidAction)}`);
+      } catch (err: any) {
+        expect(err.status).toBe(400);
+      }
+      expect(mocks.mediaStore.get(freshMediaId).status).toBe('ACTIVE');
+      expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+      expect(mockKv.put).not.toHaveBeenCalled();
+      expect(mockKv.delete).not.toHaveBeenCalled();
+    }
+
+    // G. Batch mediaIds with action: 'purge' MUST reject before any database/KV operation
+    const batchId1 = '88888888-9999-4000-a000-cccccccc0001';
+    const batchId2 = '88888888-9999-4000-a000-cccccccc0002';
+    mocks.mediaStore.set(batchId1, { id: batchId1, status: 'ACTIVE', access_class: 'PUBLIC' });
+    mocks.mediaStore.set(batchId2, { id: batchId2, status: 'ACTIVE', access_class: 'PUBLIC' });
+    mocks.executeYugabyteSql.mockClear();
+    mockKv.put.mockClear();
+    mockKv.delete.mockClear();
+
+    try {
+      await revokeMediaEndpoint({
+        request: new Request('https://projectnox.org/api/internal/media/revoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${bridgeToken}`
+          },
+          body: JSON.stringify({
+            mediaIds: [batchId1, batchId2],
+            action: 'purge'
+          })
+        }),
+        url: new URL('https://projectnox.org/api/internal/media/revoke'),
+        platform: {
+          env: {
+            COVER_THUMBNAILS: mockKv,
+            NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+          },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+      expect.unreachable('Should have thrown HTTP 400 for batch action: "purge"');
+    } catch (err: any) {
+      expect(err.status).toBe(400);
+    }
+    // Proves NEITHER item in batch was modified to DELETED
+    expect(mocks.mediaStore.get(batchId1).status).toBe('ACTIVE');
+    expect(mocks.mediaStore.get(batchId2).status).toBe('ACTIVE');
+    expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+    expect(mockKv.put).not.toHaveBeenCalled();
+
+    // H. Calling with action: 'REVOKE' (uppercase) MUST revoke media and set DELETED
+    mocks.executeYugabyteSql.mockClear();
+    mockKv.put.mockClear();
+    mockKv.delete.mockClear();
+    const revokeUpperRes = await revokeMediaEndpoint({
+      request: new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${bridgeToken}`
+        },
+        body: JSON.stringify({
+          mediaId: freshMediaId,
+          action: 'REVOKE',
+          reason: 'UPPERCASE_REVOKE_FLOW'
+        })
+      }),
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+        },
+        caches: { default: mockCache },
+        context: mockCtx
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(revokeUpperRes.status).toBe(200);
+    const revokeUpperData = await revokeUpperRes.json();
+    expect(revokeUpperData.action).toBe('revoke');
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('DELETED');
+    expect(mockKv.put).toHaveBeenCalled();
+
+    // I. Calling with action: '  unrevoke  ' (whitespace padded) MUST unrevoke media and set ACTIVE
+    mocks.executeYugabyteSql.mockClear();
+    mockKv.put.mockClear();
+    mockKv.delete.mockClear();
+    const unrevokeTrimRes = await revokeMediaEndpoint({
+      request: new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${bridgeToken}`
+        },
+        body: JSON.stringify({
+          mediaId: freshMediaId,
+          action: '  unrevoke  ',
+          reason: 'TRIMMED_UNREVOKE_FLOW'
+        })
+      }),
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+        },
+        caches: { default: mockCache },
+        context: mockCtx
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(unrevokeTrimRes.status).toBe(200);
+    const unrevokeTrimData = await unrevokeTrimRes.json();
+    expect(unrevokeTrimData.action).toBe('unrevoke');
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('ACTIVE');
   });
 });

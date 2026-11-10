@@ -71,8 +71,11 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
   // Supported actions: 'revoke', 'unrevoke'.
   // Any unknown action (e.g. 'purge', 'delete', etc.) MUST be rejected immediately with HTTP 400
   // before ANY operations on YSQL or KV to prevent inadvertent status = 'DELETED' mutations.
+  const normalizedAction = typeof body?.action === 'string'
+    ? body.action.trim().toLowerCase()
+    : undefined;
+
   if (body?.action !== undefined) {
-    const normalizedAction = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
     if (normalizedAction !== 'revoke' && normalizedAction !== 'unrevoke') {
       error(400, `Ação administrativa desconhecida: '${body.action}'. Ações suportadas: 'revoke', 'unrevoke'`);
     }
@@ -81,7 +84,7 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   const kv = platform?.env?.COVER_THUMBNAILS;
 
-  const isUnrevoke = body?.action === 'unrevoke';
+  const isUnrevoke = normalizedAction === 'unrevoke';
   const hasExplicitStatus = typeof body?.status === 'string' && body.status.trim().length > 0;
   const isPrivatization = !isUnrevoke && Boolean(body?.accessClass);
 
