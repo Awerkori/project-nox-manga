@@ -281,44 +281,45 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
           }
         }
 
-        if (evaluateRange && rangeHeader) {
+        // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+        const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+        const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+        if (isRangeValid && rangeMatch) {
           const ab = await cached.arrayBuffer();
           const total = ab.byteLength;
-          const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
-          if (match) {
-            let start: number;
-            let end: number;
-            if (match[1] === '' && match[2] !== '') {
-              const suffixLen = parseInt(match[2], 10);
-              if (suffixLen === 0 || total === 0) {
-                const rangeErrHeaders = new Headers(cached.headers);
-                rangeErrHeaders.set('Content-Range', `bytes */${total}`);
-                rangeErrHeaders.set('X-Media-Cache', 'HIT');
-                return new Response(null, { status: 416, headers: rangeErrHeaders });
-              }
-              start = Math.max(0, total - suffixLen);
-              end = total - 1;
-            } else {
-              start = match[1] ? parseInt(match[1], 10) : 0;
-              end = match[2] ? parseInt(match[2], 10) : total - 1;
-            }
-
-            if (start >= total || start > end || total === 0) {
+          let start: number;
+          let end: number;
+          if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+            const suffixLen = parseInt(rangeMatch[2], 10);
+            if (suffixLen === 0 || total === 0) {
               const rangeErrHeaders = new Headers(cached.headers);
               rangeErrHeaders.set('Content-Range', `bytes */${total}`);
               rangeErrHeaders.set('X-Media-Cache', 'HIT');
               return new Response(null, { status: 416, headers: rangeErrHeaders });
             }
-
-            const actualEnd = Math.min(end, total - 1);
-            const rangeLen = actualEnd - start + 1;
-            const rangeHeaders = new Headers(cached.headers);
-            rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
-            rangeHeaders.set('Content-Length', String(rangeLen));
-            rangeHeaders.set('X-Media-Cache', 'HIT');
-            const sliced = ab.slice(start, actualEnd + 1);
-            return new Response(sliced, { status: 206, headers: rangeHeaders });
+            start = Math.max(0, total - suffixLen);
+            end = total - 1;
+          } else {
+            start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+            end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
           }
+
+          if (start >= total || start > end || total === 0) {
+            const rangeErrHeaders = new Headers(cached.headers);
+            rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+            rangeErrHeaders.set('X-Media-Cache', 'HIT');
+            return new Response(null, { status: 416, headers: rangeErrHeaders });
+          }
+
+          const actualEnd = Math.min(end, total - 1);
+          const rangeLen = actualEnd - start + 1;
+          const rangeHeaders = new Headers(cached.headers);
+          rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+          rangeHeaders.set('Content-Length', String(rangeLen));
+          rangeHeaders.set('X-Media-Cache', 'HIT');
+          const sliced = ab.slice(start, actualEnd + 1);
+          return new Response(sliced, { status: 206, headers: rangeHeaders });
         }
 
         const res = new Response(cached.body, cached);
@@ -491,41 +492,42 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         }
       }
 
-      if (evaluateRange && rangeHeader) {
+      // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+      const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+      const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+      if (isRangeValid && rangeMatch) {
         const ab = await prewarmed.arrayBuffer();
         const total = ab.byteLength;
-        const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
-        if (match) {
-          let start: number;
-          let end: number;
-          if (match[1] === '' && match[2] !== '') {
-            const suffixLen = parseInt(match[2], 10);
-            if (suffixLen === 0 || total === 0) {
-              const rangeErrHeaders = new Headers(prewarmed.headers);
-              rangeErrHeaders.set('Content-Range', `bytes */${total}`);
-              return new Response(null, { status: 416, headers: rangeErrHeaders });
-            }
-            start = Math.max(0, total - suffixLen);
-            end = total - 1;
-          } else {
-            start = match[1] ? parseInt(match[1], 10) : 0;
-            end = match[2] ? parseInt(match[2], 10) : total - 1;
-          }
-
-          if (start >= total || start > end || total === 0) {
+        let start: number;
+        let end: number;
+        if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+          const suffixLen = parseInt(rangeMatch[2], 10);
+          if (suffixLen === 0 || total === 0) {
             const rangeErrHeaders = new Headers(prewarmed.headers);
             rangeErrHeaders.set('Content-Range', `bytes */${total}`);
             return new Response(null, { status: 416, headers: rangeErrHeaders });
           }
-
-          const actualEnd = Math.min(end, total - 1);
-          const rangeLen = actualEnd - start + 1;
-          const rangeHeaders = new Headers(prewarmed.headers);
-          rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
-          rangeHeaders.set('Content-Length', String(rangeLen));
-          const sliced = ab.slice(start, actualEnd + 1);
-          return new Response(sliced, { status: 206, headers: rangeHeaders });
+          start = Math.max(0, total - suffixLen);
+          end = total - 1;
+        } else {
+          start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+          end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
         }
+
+        if (start >= total || start > end || total === 0) {
+          const rangeErrHeaders = new Headers(prewarmed.headers);
+          rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+          return new Response(null, { status: 416, headers: rangeErrHeaders });
+        }
+
+        const actualEnd = Math.min(end, total - 1);
+        const rangeLen = actualEnd - start + 1;
+        const rangeHeaders = new Headers(prewarmed.headers);
+        rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+        rangeHeaders.set('Content-Length', String(rangeLen));
+        const sliced = ab.slice(start, actualEnd + 1);
+        return new Response(sliced, { status: 206, headers: rangeHeaders });
       }
 
       // Populate edge cache so subsequent requests hit Worker edge cache with 0 KV reads and 0 YSQL queries
@@ -846,45 +848,46 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     }
   }
 
-  if (evaluateRange && rangeHeader) {
+  // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+  const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+  const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+  if (isRangeValid && rangeMatch) {
     const bytes = body instanceof Uint8Array ? body : await toUint8Array(body);
     const total = bytes.byteLength;
-    const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
-    if (match) {
-      let start: number;
-      let end: number;
-      if (match[1] === '' && match[2] !== '') {
-        // RFC 9110 suffix range: bytes=-N
-        const suffixLen = parseInt(match[2], 10);
-        if (suffixLen === 0 || total === 0) {
-          return new Response(null, {
-            status: 416,
-            headers: { ...headers, 'Content-Range': `bytes */${total}` }
-          });
-        }
-        start = Math.max(0, total - suffixLen);
-        end = total - 1;
-      } else {
-        start = match[1] ? parseInt(match[1], 10) : 0;
-        end = match[2] ? parseInt(match[2], 10) : total - 1;
-      }
-
-      if (start >= total || start > end || total === 0) {
+    let start: number;
+    let end: number;
+    if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+      // RFC 9110 suffix range: bytes=-N
+      const suffixLen = parseInt(rangeMatch[2], 10);
+      if (suffixLen === 0 || total === 0) {
         return new Response(null, {
           status: 416,
           headers: { ...headers, 'Content-Range': `bytes */${total}` }
         });
       }
-
-      const actualEnd = Math.min(end, total - 1);
-      const sliced = bytes.subarray(start, actualEnd + 1);
-      const rangeHeaders = {
-        ...headers,
-        'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
-        'Content-Length': String(sliced.byteLength)
-      };
-      return new Response(sliced, { status: 206, headers: rangeHeaders });
+      start = Math.max(0, total - suffixLen);
+      end = total - 1;
+    } else {
+      start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+      end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
     }
+
+    if (start >= total || start > end || total === 0) {
+      return new Response(null, {
+        status: 416,
+        headers: { ...headers, 'Content-Range': `bytes */${total}` }
+      });
+    }
+
+    const actualEnd = Math.min(end, total - 1);
+    const sliced = bytes.subarray(start, actualEnd + 1);
+    const rangeHeaders = {
+      ...headers,
+      'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
+      'Content-Length': String(sliced.byteLength)
+    };
+    return new Response(sliced, { status: 206, headers: rangeHeaders });
   }
 
   const response = new Response(body, { status: 200, headers });
@@ -939,3 +942,5 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   return response;
 };
+
+export const HEAD = GET;

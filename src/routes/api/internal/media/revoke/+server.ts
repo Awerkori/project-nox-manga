@@ -129,11 +129,19 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
       }
     } else {
       try {
-        await executeYugabyteSql(
-          `UPDATE public.media SET status = 'ACTIVE' WHERE id = $1;`,
-          [id],
-          platform?.env
-        );
+        if (targetAccessClass) {
+          await executeYugabyteSql(
+            `UPDATE public.media SET status = $1, access_class = $2 WHERE id = $3;`,
+            ['ACTIVE', targetAccessClass, id],
+            platform?.env
+          );
+        } else {
+          await executeYugabyteSql(
+            `UPDATE public.media SET status = 'ACTIVE' WHERE id = $1;`,
+            [id],
+            platform?.env
+          );
+        }
       } catch (dbErr: any) {
         pendingIds.push(id);
         errors.push({ mediaId: id, error: `DB_UPDATE_FAILED: ${dbErr?.message || dbErr}` });
@@ -149,6 +157,7 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
             ctx: platform?.context || platform?.ctx,
             origin: url.origin,
             reason: body.reason || 'MANUAL_RESTORATION',
+            accessClass: targetAccessClass,
             skipDb: true,
             platformEnv: platform?.env
           })

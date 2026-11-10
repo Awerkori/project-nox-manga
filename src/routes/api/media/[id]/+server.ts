@@ -292,7 +292,11 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     }
   }
 
-  if (evaluateRange && rangeHeader) {
+  // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+  const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+  const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+  if (isRangeValid && rangeMatch) {
     const toUint8Array = async (b: BodyInit): Promise<Uint8Array> => {
       if (b instanceof Uint8Array) return b;
       if (b instanceof ArrayBuffer) return new Uint8Array(b);
@@ -321,41 +325,38 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
     const bytes = body instanceof Uint8Array ? body : await toUint8Array(body);
     const total = bytes.byteLength;
-    const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
-    if (match) {
-      let start: number;
-      let end: number;
-      if (match[1] === '' && match[2] !== '') {
-        const suffixLen = parseInt(match[2], 10);
-        if (suffixLen === 0 || total === 0) {
-          return new Response(null, {
-            status: 416,
-            headers: { ...headers, 'Content-Range': `bytes */${total}` }
-          });
-        }
-        start = Math.max(0, total - suffixLen);
-        end = total - 1;
-      } else {
-        start = match[1] ? parseInt(match[1], 10) : 0;
-        end = match[2] ? parseInt(match[2], 10) : total - 1;
-      }
-
-      if (start >= total || start > end || total === 0) {
+    let start: number;
+    let end: number;
+    if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+      const suffixLen = parseInt(rangeMatch[2], 10);
+      if (suffixLen === 0 || total === 0) {
         return new Response(null, {
           status: 416,
           headers: { ...headers, 'Content-Range': `bytes */${total}` }
         });
       }
-
-      const actualEnd = Math.min(end, total - 1);
-      const sliced = bytes.subarray(start, actualEnd + 1);
-      const rangeHeaders = {
-        ...headers,
-        'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
-        'Content-Length': String(sliced.byteLength)
-      };
-      return new Response(sliced, { status: 206, headers: rangeHeaders });
+      start = Math.max(0, total - suffixLen);
+      end = total - 1;
+    } else {
+      start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+      end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
     }
+
+    if (start >= total || start > end || total === 0) {
+      return new Response(null, {
+        status: 416,
+        headers: { ...headers, 'Content-Range': `bytes */${total}` }
+      });
+    }
+
+    const actualEnd = Math.min(end, total - 1);
+    const sliced = bytes.subarray(start, actualEnd + 1);
+    const rangeHeaders = {
+      ...headers,
+      'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
+      'Content-Length': String(sliced.byteLength)
+    };
+    return new Response(sliced, { status: 206, headers: rangeHeaders });
   }
 
   return new Response(body, { status: 200, headers });

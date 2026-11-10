@@ -6,7 +6,7 @@
 **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 **Aviso de Rollback:** Versões anteriores a `fcd51c68` (incluindo `fafe6ae8`) estão DEPRECADAS para rollback pois reintroduziriam o incidente de deleções em GET.
 **Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
-**Status da Operação:** **CONCLUÍDO TECNICAMENTE — AGUARDANDO AUTORIZAÇÃO DE DEPLOY — 779 TESTES APROVADOS (100% GREEN)**
+**Status da Operação:** **CONCLUÍDO TECNICAMENTE — AGUARDANDO AUTORIZAÇÃO DE DEPLOY — 784 TESTES APROVADOS (100% GREEN)**
 
 ---
 
@@ -77,13 +77,20 @@ Foram consolidadas correções arquiteturais estritas sem alteração do ambient
    - Correção da condicional de cabeçalhos: se `locals.user` estiver presente ou a obra for +18, aplica-se `Cache-Control: private, no-cache, no-store, must-revalidate` e `Vary: Cookie, Authorization`.
    - Preservado o cache público (`max-age=60, s-maxage=120, stale-while-revalidate=300`) apenas para visitantes anônimos em obras gerais.
 
-3. **`src/routes/media/[id]/+server.ts`:**
+3. **`src/routes/media/[id]/+server.ts` e `src/routes/api/media/[id]/+server.ts`:**
    - Expurgo explícito (`delete headers['Cache-Tag']` e `delete headers['X-Cache-Tag']`) quando `isPrivateDelivery` é verdadeiro, impedindo a exposição da tag `media-public` em mídias privadas ou restritas +18.
+   - Exportação explícita de `export const HEAD = GET;` em `/media/[id]`, alinhando com `/api/media/[id]` e garantindo tratamento canônico de requisições HEAD pelo SvelteKit router sem perturbação de body.
+   - Resolução RFC 9110 para requisições Range: validação sintática estrita antes do consumo de stream ou buffer (`/^bytes=(\d*)-(\d*)$/`), eliminando travamentos de stream consumido em requisições multi-range ou sintaxe inválida (`bytes=`) com fallback gracioso para HTTP 200 OK.
+   - Preservação de cabeçalhos estritamente privados (`private, no-cache, no-store, must-revalidate, max-age=0`) em respostas HEAD e 304 durante transições de privacidade em voo.
 
-4. **`tests/reader-real-pipeline-integration.test.ts`:**
-   - Reescrita completa da suíte de integração: agora invoca diretamente `getPublicMediaRoute` e `loadReaderChapter`.
-   - Medição de tempo real de execução via `performance.now()` para cada requisição.
-   - Cobertura completa dos 5 arquétipos com 15, 30 e 50 páginas, 8 dimensões forenses de revogação, isolamento de sessão e modelagem matemática de escala.
+4. **`src/lib/server/media-revocation.ts` e `src/routes/api/internal/media/revoke/+server.ts`:**
+   - Desacoplamento semântico completo entre privatização (`status = 'ACTIVE', access_class = 'PRIVATE'`) e revogação/exclusão (`status = 'DELETED'`).
+   - Preservação de `status` e `accessClass` em `knownRevocations` no isolate de execução, prevenindo falso bloqueio 404 de staff autorizado em checagens em memória pós-tombstone.
+   - Suporte a `accessClass` na restauração/unrevoke administrativo: atualizar explicitamente `status = 'ACTIVE'` e `access_class = 'PUBLIC'` quando solicitado.
+   - Contrato operacional para escritas diretas no banco: alterações via SQL direto que não passem pela API de revogação não invalidam caches de borda distribuídos até que o protocolo de purga seja invocado.
+
+5. **`tests/revocation-race-condition.test.ts` e `tests/reader-real-pipeline-integration.test.ts`:**
+   - Expansão para 41 testes adversariais determinísticos (784 testes no total da suíte), cobrindo transições HEAD e 304 em voo, requisições Range multi-range/inválidas, persistência de unrevoke com accessClass e consistência in-memory.
 
 ---
 

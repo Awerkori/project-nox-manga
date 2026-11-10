@@ -600,8 +600,16 @@ export async function isMediaRevoked(
       if (known?.status === 'ACTIVE' && known?.accessClass) {
         return false;
       }
+      // If knownRevocations does not contain status information but KV is available,
+      // fall through to authoritative tombstone check so active private media is not falsely rejected.
+      if (kv && (!known || known.status === undefined)) {
+        // Fall through to tombstone check
+      } else {
+        return true;
+      }
+    } else {
+      return true;
     }
-    return true;
   }
 
   // 2. If KV is absent, check known in-memory revocations first, then fall back to failClosed policy
@@ -642,6 +650,13 @@ export async function isMediaRevoked(
         }
 
         if (options?.allowActivePrivate && parsed?.status === 'ACTIVE' && parsed?.accessClass) {
+          knownRevocations.set(mediaId, {
+            timestamp: tombstoneTs,
+            version: currentManifestVersion,
+            isLegacy: false,
+            status: parsed.status,
+            accessClass: parsed.accessClass
+          });
           return false;
         }
 
@@ -675,7 +690,13 @@ export async function isMediaRevoked(
           memoryRevokedSet.add(mediaId);
           const existing = knownRevocations.get(mediaId);
           if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && currentManifestVersion >= existing.version)) {
-            knownRevocations.set(mediaId, { timestamp: tombstoneTs, version: currentManifestVersion, isLegacy: false });
+            knownRevocations.set(mediaId, {
+              timestamp: tombstoneTs,
+              version: currentManifestVersion,
+              isLegacy: false,
+              status: parsed?.status,
+              accessClass: parsed?.accessClass
+            });
           }
           perIdRevocationSeq.set(mediaId, ++globalRevocationSeq);
           knownRestorations.delete(mediaId);
@@ -1420,7 +1441,7 @@ export async function privatizeMedia(
  */
 export async function unrevokeMedia(
   mediaId: string,
-  options: { kv?: any; cache?: any; ctx?: any; origin?: string; skipDb?: boolean; platformEnv?: any; reason?: string } = {}
+  options: { kv?: any; cache?: any; ctx?: any; origin?: string; skipDb?: boolean; platformEnv?: any; reason?: string; accessClass?: string } = {}
 ): Promise<{ success: boolean; errors: string[] }> {
   const errors: string[] = [];
   const restorationTimestamp = Date.now();
@@ -1436,11 +1457,19 @@ export async function unrevokeMedia(
     );
     if (hasDbConfig) {
       try {
-        await executeYugabyteSql(
-          `UPDATE public.media SET status = 'ACTIVE' WHERE id = $1;`,
-          [mediaId],
-          options.platformEnv
-        );
+        if (options.accessClass) {
+          await executeYugabyteSql(
+            `UPDATE public.media SET status = $1, access_class = $2 WHERE id = $3;`,
+            ['ACTIVE', options.accessClass, mediaId],
+            options.platformEnv
+          );
+        } else {
+          await executeYugabyteSql(
+            `UPDATE public.media SET status = 'ACTIVE' WHERE id = $1;`,
+            [mediaId],
+            options.platformEnv
+          );
+        }
       } catch (dbErr: any) {
         errors.push(`DB_UPDATE_FAILED: ${dbErr?.message || dbErr}`);
         return {

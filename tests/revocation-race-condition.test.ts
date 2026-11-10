@@ -35,10 +35,10 @@ vi.mock('$lib/server/yugabyte', () => ({
   invalidateYugabyteLkgPrefix: vi.fn()
 }));
 
-import { GET as getPublicMediaRoute } from '../src/routes/media/[id]/+server';
+import { GET as getPublicMediaRoute, HEAD as headPublicMediaRoute } from '../src/routes/media/[id]/+server';
 import { POST as revokeMediaEndpoint } from '../src/routes/api/internal/media/revoke/+server';
 import { GET as getPrivateMediaRoute, HEAD as headPrivateMediaRoute } from '../src/routes/api/media/[id]/+server';
-import { revokeMedia, privatizeMedia, isMediaRevoked, clearMemoryRevocationCache } from '../src/lib/server/media-revocation';
+import { revokeMedia, privatizeMedia, unrevokeMedia, isMediaRevoked, clearMemoryRevocationCache } from '../src/lib/server/media-revocation';
 
 function createMockKv(initialData: Record<string, any> = {}, initialMetadata: Record<string, any> = {}) {
   const store = new Map<string, any>();
@@ -2350,5 +2350,280 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     const item = mocks.mediaStore.get(testMediaId);
     expect(item.status).toBe('ACTIVE');
     expect(item.access_class).toBe('PRIVATE');
+  });
+
+  it('30. Adversarial HEAD & 304 during transition: In-flight privatization from PUBLIC to PRIVATE never leaks public policy headers', async () => {
+    // Media was initially PUBLIC
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_head_304_transition',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      sha256: 'sha-head-304-123',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    // In-flight privatization occurs (status = ACTIVE, access_class = PRIVATE)
+    await privatizeMedia(testMediaId, {
+      kv,
+      cache,
+      origin: 'https://projectnox.org',
+      accessClass: 'PRIVATE'
+    });
+
+    const mediaUrl = `https://projectnox.org/media/${testMediaId}`;
+
+    // 1. Anonymous visitor sends HEAD during/after transition:
+    // Must NOT return HTTP 200 with public cache headers; MUST return 404 with null body and strictly private headers
+    const headRes = await headPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(mediaUrl, { method: 'HEAD' }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(headRes.status).toBe(404);
+    expect(headRes.body).toBeNull();
+    expect(headRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(headRes.headers.get('Cache-Control')).not.toContain('public');
+    expect(headRes.headers.get('Cache-Control')).not.toContain('immutable');
+    expect(headRes.headers.get('Cache-Tag')).toBeNull();
+
+    // 2. Anonymous visitor sends conditional GET (If-None-Match) with the media's ETag:
+    // Must NOT return HTTP 304 Not Modified; MUST return 404 with strictly private headers
+    const etagRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(mediaUrl, {
+        method: 'GET',
+        headers: { 'If-None-Match': '"sha-head-304-123"' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(etagRes.status).toBe(404);
+    expect(etagRes.headers.get('Cache-Control')).toContain('no-store');
+    expect(etagRes.headers.get('Cache-Control')).not.toContain('public');
+    expect(etagRes.headers.get('Cache-Tag')).toBeNull();
+  });
+
+  it('31. Multi-range and invalid Range on Edge Cache HIT: returns HTTP 200 OK without disturbing cached body (RFC 9110)', async () => {
+    const cachedBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const cache = createMockCache();
+    const kv = createMockKv();
+    const canonicalUrl = `https://projectnox.org/media/${testMediaId}`;
+
+    await cache.put(
+      new Request(canonicalUrl, { method: 'GET' }),
+      new Response(cachedBytes, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/webp',
+          'Content-Length': '12',
+          'ETag': '"cached-range-etag-456"',
+          'Cache-Control': 'public, max-age=31536000, immutable'
+        }
+      })
+    );
+
+    // A. Multi-range request (Range: bytes=0-3, 5-8) MUST fallback to full HTTP 200 OK per RFC 9110 §14.1.1
+    const multiRangeRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(canonicalUrl, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-3, 5-8' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(multiRangeRes.status).toBe(200);
+    expect(multiRangeRes.headers.get('X-Media-Cache')).toBe('HIT');
+    const multiBytes = new Uint8Array(await multiRangeRes.arrayBuffer());
+    expect(multiBytes.length).toBe(12);
+
+    // B. Invalid Range header (Range: bytes=) MUST fallback to full HTTP 200 OK per RFC 9110 §14.2
+    const invalidRangeRes = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(canonicalUrl, {
+        method: 'GET',
+        headers: { Range: 'bytes=' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(invalidRangeRes.status).toBe(200);
+    expect(invalidRangeRes.headers.get('X-Media-Cache')).toBe('HIT');
+    const invalidBytes = new Uint8Array(await invalidRangeRes.arrayBuffer());
+    expect(invalidBytes.length).toBe(12);
+  });
+
+  it('32. Multi-range and invalid Range on Prewarmed KV Thumbnail: returns HTTP 200 OK without body disturbance', async () => {
+    const thumbBytes = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    const kv = createMockKv(
+      { [`cover-thumb:v1:${testMediaId}`]: thumbBytes },
+      { [`cover-thumb:v1:${testMediaId}`]: { contentType: 'image/webp', etag: '"thumb-kv-multi-range"', contentLength: '12' } }
+    );
+    const cache = createMockCache();
+
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_kv_multi_range_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'cover',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const thumbUrl = `https://projectnox.org/media/${testMediaId}?size=thumb`;
+
+    // Multi-range request on prewarmed KV thumbnail
+    const res = await getPublicMediaRoute({
+      params: { id: testMediaId },
+      request: new Request(thumbUrl, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-3, 5-8' }
+      }),
+      platform: {
+        env: { COVER_THUMBNAILS: kv },
+        caches: { default: cache },
+        context: { waitUntil: (p: Promise<any>) => p }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    const bodyBytes = new Uint8Array(await res.arrayBuffer());
+    expect(bodyBytes.length).toBe(12);
+  });
+
+  it('33. Administrative unrevocation / restoration with target accessClass = "PUBLIC" restores both status = ACTIVE and access_class = PUBLIC', async () => {
+    // Start with a privatized media (status = ACTIVE, access_class = PRIVATE)
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_unrevoke_pub_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PRIVATE',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    // Call /api/internal/media/revoke with action: 'unrevoke', accessClass: 'PUBLIC'
+    const req = new Request('https://projectnox.org/api/internal/media/revoke', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer mock_storage_bridge_token_test'
+      },
+      body: JSON.stringify({
+        mediaId: testMediaId,
+        action: 'unrevoke',
+        accessClass: 'PUBLIC'
+      })
+    });
+
+    const res = await revokeMediaEndpoint({
+      request: req,
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: { COVER_THUMBNAILS: kv, NOX_STORAGE_BRIDGE_TOKEN: 'mock_storage_bridge_token_test' },
+        context: { cache }
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.action).toBe('unrevoke');
+
+    // Confirms SQL was invoked to restore both status = 'ACTIVE' and access_class = 'PUBLIC'
+    const item = mocks.mediaStore.get(testMediaId);
+    expect(item.status).toBe('ACTIVE');
+    expect(item.access_class).toBe('PUBLIC');
+
+    // Programmatic unrevokeMedia with accessClass: 'PUBLIC'
+    item.access_class = 'PRIVATE';
+    mocks.mediaStore.set(testMediaId, item);
+    const progRes = await unrevokeMedia(testMediaId, {
+      kv,
+      cache,
+      accessClass: 'PUBLIC',
+      platformEnv: { NOX_STORAGE_BRIDGE_TOKEN: 'mock_storage_bridge_token_test' }
+    });
+    expect(progRes.success).toBe(true);
+    const updated = mocks.mediaStore.get(testMediaId);
+    expect(updated.status).toBe('ACTIVE');
+    expect(updated.access_class).toBe('PUBLIC');
+  });
+
+  it('34. In-memory isMediaRevoked caching preserves status = ACTIVE for active privatized media across repeated checks', async () => {
+    const kv = createMockKv();
+    const cache = createMockCache();
+
+    mocks.mediaStore.set(testMediaId, {
+      id: testMediaId,
+      provider: 'telegram',
+      provider_key: 'file_mem_cache_priv_123',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    // 1. Privatize media
+    await privatizeMedia(testMediaId, {
+      kv,
+      cache,
+      origin: 'https://projectnox.org',
+      accessClass: 'PRIVATE'
+    });
+
+    // 2. First check with allowActivePrivate: true (reads tombstone, stores in knownRevocations)
+    const firstCheck = await isMediaRevoked(testMediaId, kv, { allowActivePrivate: true, checkTombstone: true });
+    expect(firstCheck).toBe(false);
+
+    // 3. Second check with allowActivePrivate: true WITHOUT checkTombstone (tests in-memory path)
+    const secondCheck = await isMediaRevoked(testMediaId, kv, { allowActivePrivate: true });
+    expect(secondCheck).toBe(false);
+
+    // 4. Anonymous check (allowActivePrivate = false) MUST still fail-closed and return true (revoked)
+    const anonCheck = await isMediaRevoked(testMediaId, kv, { allowActivePrivate: false });
+    expect(anonCheck).toBe(true);
   });
 });
