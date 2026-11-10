@@ -355,7 +355,7 @@ export async function executeYugabyteSql<T = any>(
   }
 
   // Strategy 1: Hyperdrive native pooled connection if available
-  const hyperdrive = platformEnv?.HYPERDRIVE_AUTHORITATIVE || platformEnv?.HYPERDRIVE;
+  const hyperdrive = platformEnv?.HYPERDRIVE;
   if (hyperdrive?.connectionString) {
     const isNode = typeof process !== 'undefined' && Boolean(process.versions?.node);
     if (isNode) {
@@ -1737,6 +1737,9 @@ export async function fetchMediaMetadataFromYugabyte(
   // - Never turns network/database timeouts into positive delivery authorization.
   // - Fails closed by returning null if database cannot be verified.
   if (isAuthoritative) {
+    const authoritativeEnv = platformEnv?.HYPERDRIVE_AUTHORITATIVE
+      ? { ...platformEnv, HYPERDRIVE: platformEnv.HYPERDRIVE_AUTHORITATIVE }
+      : platformEnv;
     const sql = `
       SELECT ${MEDIA_METADATA_SELECT_FIELDS}
       FROM public.media m
@@ -1744,10 +1747,10 @@ export async function fetchMediaMetadataFromYugabyte(
       LIMIT 1;
     `;
     try {
-      const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
+      const res = await executeYugabyteSql(sql, [mediaId], authoritativeEnv);
       const row = res.rows[0] || null;
       if (row) {
-        if (row.status === 'DELETED') {
+        if (row.status !== 'ACTIVE' || row.storage_ready !== true) {
           invalidateMediaMetadataCache(mediaId);
         } else {
           setCachedMediaMetadata(mediaId, row);
@@ -1775,11 +1778,13 @@ export async function fetchMediaMetadataFromYugabyte(
       const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
       const row = res.rows[0] || null;
       if (row) {
-        if (row.status === 'DELETED') {
+        if (row.status !== 'ACTIVE' || row.storage_ready !== true) {
           invalidateMediaMetadataCache(mediaId);
         } else {
           setCachedMediaMetadata(mediaId, row);
         }
+      } else {
+        invalidateMediaMetadataCache(mediaId);
       }
       return row;
     },

@@ -246,6 +246,7 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
 
   // Re-verify authoritative revocation status after download to prevent leaking in-flight revoked media
   let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true, allowActivePrivate: true });
+  let authDeniedInfo: { status: number; message: string; isAdultRestricted: boolean } | null = null;
 
   if (!isRevoked) {
     try {
@@ -259,6 +260,11 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
           const authCheck = await isAuthorizedForMedia(freshMeta, freshClassification, cookies, request, platform?.env);
           if (!authCheck.allowed) {
             isRevoked = true;
+            authDeniedInfo = {
+              status: authCheck.isAdultRestricted ? 403 : 404,
+              message: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+              isAdultRestricted: authCheck.isAdultRestricted
+            };
             invalidateMediaMetadataCache(params.id);
           }
         }
@@ -269,8 +275,14 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
   }
 
   if (isRevoked) {
-    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
-      status: 404,
+    const statusCode = authDeniedInfo ? authDeniedInfo.status : 404;
+    const errorMessage = authDeniedInfo ? authDeniedInfo.message : 'Acesso não autorizado';
+    const isAdult = Boolean(authDeniedInfo?.isAdultRestricted);
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({
+      error: errorMessage,
+      ...(isAdult ? { age_restricted: true } : {})
+    }), {
+      status: statusCode,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

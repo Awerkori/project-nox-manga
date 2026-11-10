@@ -294,6 +294,9 @@ describe('PROJECT NOX — Hyperdrive Media Authoritative Consistency & Zero Wast
     downloadBarrier.active = false;
     mocks.download.mockResolvedValue(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x01, 0x02, 0x03, 0x04]));
     mocks.pgQuery.mockImplementation(mockHyperdriveExecute);
+    mocks.extractFullAuthCookie.mockReturnValue(null);
+    mocks.decodeSessionJwt.mockReturnValue({ jwt: null, accessToken: null });
+    mocks.resolveSessionData.mockResolvedValue(null);
   });
 
   // ==========================================================================
@@ -873,6 +876,158 @@ describe('PROJECT NOX — Hyperdrive Media Authoritative Consistency & Zero Wast
       expect(response.status).toBe(404);
       expect(response.headers.get('Cache-Control')).toContain('no-store');
     });
+
+    it('D5: Falha em etapa de purge/KV no protocolo administrativo retorna status 207 com retryRequired e sem falso sucesso', async () => {
+      const mediaId = 'dddddddd-1111-4000-8000-000000000005';
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'ACTIVE' }));
+
+      const failingKv = {
+        ...createMockKv(),
+        put: vi.fn().mockRejectedValue(new Error('KV_QUOTA_EXCEEDED'))
+      };
+
+      const revokeReq = new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer valid-internal-bridge-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ mediaId, action: 'revoke' })
+      });
+
+      const res = await revokeMediaEndpoint({
+        request: revokeReq,
+        url: new URL(revokeReq.url),
+        platform: { env: { ...mockPlatformEnv, COVER_THUMBNAILS: failingKv } },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(res.status).toBe(207);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.retryRequired).toBe(true);
+      expect(data.errors.length).toBeGreaterThan(0);
+    });
+
+    it('D6: Corrida onde cache.put termina após a revogação é detectada e mídia é purgada da borda', async () => {
+      const mediaId = 'dddddddd-1111-4000-8000-000000000006';
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'ACTIVE', access_class: 'PUBLIC' }));
+
+      const mockCache = createMockCache();
+      const mockKv = createMockKv();
+      const reqUrl = `https://projectnox.org/media/${mediaId}`;
+
+      // Simulate a cached public response already written
+      const cachedHeaders = new Headers({
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'ETag': `"etag-${mediaId}"`
+      });
+      await mockCache.put(reqUrl, new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: cachedHeaders }));
+
+      // Revoke the media via tombstone
+      await mockKv.put(`revoked:v1:${mediaId}`, JSON.stringify({ status: 'DELETED', revokedAt: Date.now() }));
+
+      // An incoming GET request to /media/[id] checks revocation fail-closed despite cached entry
+      const req = new Request(reqUrl);
+      const res = await getPublicMediaRoute({
+        params: { id: mediaId },
+        request: req,
+        url: new URL(req.url),
+        platform: { env: { ...mockPlatformEnv, COVER_THUMBNAILS: mockKv }, caches: { default: mockCache } },
+        cookies: { getAll: () => [] }
+      } as any);
+
+      expect(res.status).toBe(404);
+      expect(res.headers.get('Cache-Control')).toContain('no-store');
+    });
+
+    it('D7: Endpoint privado /api/media/[id] detecta mudança para +18 durante download e retorna 403 age_restricted', async () => {
+      const mediaId = 'dddddddd-1111-4000-8000-000000000007';
+      // Media is initially normal public chapter page
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'ACTIVE', access_class: 'PUBLIC', is_adult_associated: false }));
+
+      createDownloadBarrier();
+
+      // Non-adult anonymous user initiates request
+      const request = new Request(`https://projectnox.org/api/media/${mediaId}`);
+      const responsePromise = getPrivateMediaRoute({
+        params: { id: mediaId },
+        request,
+        url: new URL(request.url),
+        platform: { env: mockPlatformEnv },
+        cookies: { get: () => undefined, getAll: () => [] }
+      } as any);
+
+      // In-flight classification change: chapter or work marked as ADULT_18
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, {
+        status: 'ACTIVE',
+        is_adult_associated: true
+      }));
+
+      downloadBarrier.release();
+      const response = await responsePromise;
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Cache-Control')).toContain('no-store');
+      const body = await response.json();
+      expect(body.age_restricted).toBe(true);
+      expect(body.error).toContain('18 anos');
+    });
+
+    it('D8: Worker reiniciado / novo isolate sem cache em memória consulta KV e DB autoritativo com consistência', async () => {
+      const mediaId = 'dddddddd-1111-4000-8000-000000000008';
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'ACTIVE', access_class: 'PRIVATE' }));
+
+      // Invalidate in-memory caches entirely to simulate fresh isolate
+      invalidateMediaMetadataCache(mediaId);
+
+      // Conventional read will bypass memory cache and query DB fresh
+      const meta = await fetchMediaMetadataFromYugabyte(mediaId, mockPlatformEnv, { authoritative: true });
+      expect(meta).not.toBeNull();
+      expect(meta.access_class).toBe('PRIVATE');
+
+      // Now media deleted in DB
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'DELETED' }));
+      invalidateMediaMetadataCache(mediaId);
+
+      // Authoritative read immediately observes DELETED
+      const deletedMeta = await fetchMediaMetadataFromYugabyte(mediaId, mockPlatformEnv, { authoritative: true });
+      expect(deletedMeta?.status).toBe('DELETED');
+    });
+
+    it('D9: Conteúdo +18 restrito: usuário não verificado recebe 403, usuário com cookie ADULT recebe 200', async () => {
+      const mediaId = 'dddddddd-1111-4000-8000-000000000009';
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'ACTIVE', is_adult_associated: true }));
+
+      // 1. Unverified user receives 403
+      const reqAnon = new Request(`https://projectnox.org/media/${mediaId}`);
+      const resAnon = await getPublicMediaRoute({
+        params: { id: mediaId },
+        request: reqAnon,
+        url: new URL(reqAnon.url),
+        platform: { env: mockPlatformEnv },
+        cookies: { get: () => undefined, getAll: () => [] }
+      } as any);
+
+      expect(resAnon.status).toBe(403);
+      const dataAnon = await resAnon.json();
+      expect(dataAnon.age_restricted).toBe(true);
+
+      // 2. Adult-verified user receives 200 with strictly private headers
+      const reqAdult = new Request(`https://projectnox.org/media/${mediaId}`);
+      const resAdult = await getPublicMediaRoute({
+        params: { id: mediaId },
+        request: reqAdult,
+        url: new URL(reqAdult.url),
+        platform: { env: mockPlatformEnv },
+        cookies: { get: (name: string) => (name === 'nox-age-status' ? 'ADULT' : undefined), getAll: () => [{ name: 'nox-age-status', value: 'ADULT' }] }
+      } as any);
+
+      expect(resAdult.status).toBe(200);
+      expect(resAdult.headers.get('Cache-Control')).toContain('private');
+      expect(resAdult.headers.get('Cache-Control')).toContain('no-store');
+    });
   });
 
   // ==========================================================================
@@ -907,6 +1062,28 @@ describe('PROJECT NOX — Hyperdrive Media Authoritative Consistency & Zero Wast
       const t2 = hyperdriveTelemetry[hyperdriveTelemetry.length - 1];
       expect(t2.cacheStatus).toBe('hit');
       expect(t2.query).not.toContain('clock_timestamp()');
+    });
+
+    it('E3: Suporte a HYPERDRIVE_AUTHORITATIVE separado (Alternativa B) isola leituras autoritativas sem desligar cache global', async () => {
+      const mediaId = 'eeeeeeee-1111-4000-8000-000000000003';
+      authoritativeDb.set(mediaId, makeSampleMedia(mediaId, { status: 'ACTIVE' }));
+
+      const envWithSeparateBinding = {
+        ...mockPlatformEnv,
+        HYPERDRIVE: { connectionString: 'postgresql://mock-hyperdrive-cached:5433/project_nox_prod' },
+        HYPERDRIVE_AUTHORITATIVE: { connectionString: 'postgresql://mock-hyperdrive-nocache:5433/project_nox_prod' }
+      };
+
+      // Authoritative read uses the authoritative env
+      const resAuth = await fetchMediaMetadataFromYugabyte(mediaId, envWithSeparateBinding, { authoritative: true });
+      expect(resAuth).not.toBeNull();
+      expect(hyperdriveTelemetry[hyperdriveTelemetry.length - 1].cacheStatus).toBe('volatile');
+
+      // Conventional read preserves HYPERDRIVE without disabling cache globally
+      invalidateMediaMetadataCache(mediaId);
+      const resConv = await fetchMediaMetadataFromYugabyte(mediaId, envWithSeparateBinding);
+      expect(resConv).not.toBeNull();
+      expect(hyperdriveTelemetry[hyperdriveTelemetry.length - 1].cacheStatus).toBe('miss');
     });
   });
 });
