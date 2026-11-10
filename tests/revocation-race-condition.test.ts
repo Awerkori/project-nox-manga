@@ -2626,4 +2626,172 @@ describe('P0 — 1. Forensic Media Revocation Concurrency & Race Condition Proof
     const anonCheck = await isMediaRevoked(testMediaId, kv, { allowActivePrivate: false });
     expect(anonCheck).toBe(true);
   });
+
+  it('35. Administrative Endpoint /api/internal/media/revoke: strictly rejects action: "purge" and unknown actions with HTTP 400, preserving ACTIVE status in YSQL and preventing KV mutation', async () => {
+    const freshMediaId = '77777777-8888-4999-a000-bbbbbbbb0035';
+    mocks.mediaStore.set(freshMediaId, {
+      id: freshMediaId,
+      provider: 'telegram',
+      provider_key: 'file_safe_action_check',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'chapter_page',
+      mime: 'image/webp',
+      bytes: 12
+    });
+
+    const mockKv = createMockKv();
+    const mockCache = createMockCache();
+    const mockCtx = {
+      cache: {
+        purge: vi.fn().mockResolvedValue({ success: true, errors: [] })
+      }
+    };
+
+    // A. Adversarial call with action: 'purge' MUST reject with HTTP 400
+    mocks.executeYugabyteSql.mockClear();
+    try {
+      await revokeMediaEndpoint({
+        request: new Request('https://projectnox.org/api/internal/media/revoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${bridgeToken}`
+          },
+          body: JSON.stringify({
+            mediaId: freshMediaId,
+            action: 'purge',
+            reason: 'MANUAL_SQL_PURGE_ATTEMPT'
+          })
+        }),
+        url: new URL('https://projectnox.org/api/internal/media/revoke'),
+        platform: {
+          env: {
+            COVER_THUMBNAILS: mockKv,
+            NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+          },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+      expect.unreachable('Should have thrown HTTP 400 for action: "purge"');
+    } catch (err: any) {
+      expect(err.status).toBe(400);
+      expect(err.body?.message).toContain('purge');
+    }
+
+    // Proves YSQL was NEVER mutated and status remains 'ACTIVE'
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('ACTIVE');
+    expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+    // Proves KV was NEVER mutated
+    expect(mockKv.put).not.toHaveBeenCalled();
+    expect(mockKv.delete).not.toHaveBeenCalled();
+    expect(await mockKv.get(`revoked:v1:${freshMediaId}`)).toBeNull();
+
+    // B. Unknown action 'delete' MUST reject with HTTP 400
+    mocks.executeYugabyteSql.mockClear();
+    try {
+      await revokeMediaEndpoint({
+        request: new Request('https://projectnox.org/api/internal/media/revoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${bridgeToken}`
+          },
+          body: JSON.stringify({
+            mediaId: freshMediaId,
+            action: 'delete'
+          })
+        }),
+        url: new URL('https://projectnox.org/api/internal/media/revoke'),
+        platform: {
+          env: {
+            COVER_THUMBNAILS: mockKv,
+            NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+          },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+      expect.unreachable('Should have thrown HTTP 400 for action: "delete"');
+    } catch (err: any) {
+      expect(err.status).toBe(400);
+      expect(err.body?.message).toContain('delete');
+    }
+
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('ACTIVE');
+    expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+    expect(mockKv.put).not.toHaveBeenCalled();
+
+    // C. Non-string action MUST reject with HTTP 400
+    mocks.executeYugabyteSql.mockClear();
+    try {
+      await revokeMediaEndpoint({
+        request: new Request('https://projectnox.org/api/internal/media/revoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${bridgeToken}`
+          },
+          body: JSON.stringify({
+            mediaId: freshMediaId,
+            action: 12345
+          })
+        }),
+        url: new URL('https://projectnox.org/api/internal/media/revoke'),
+        platform: {
+          env: {
+            COVER_THUMBNAILS: mockKv,
+            NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+          },
+          caches: { default: mockCache },
+          context: mockCtx
+        },
+        cookies: { getAll: () => [] }
+      } as any);
+      expect.unreachable('Should have thrown HTTP 400 for non-string action');
+    } catch (err: any) {
+      expect(err.status).toBe(400);
+    }
+
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('ACTIVE');
+    expect(mocks.executeYugabyteSql).not.toHaveBeenCalled();
+    expect(mockKv.put).not.toHaveBeenCalled();
+
+    // D. Legacy flow without action field remains fully supported (defaults to revoke and sets DELETED)
+    mocks.executeYugabyteSql.mockClear();
+    const legacyRes = await revokeMediaEndpoint({
+      request: new Request('https://projectnox.org/api/internal/media/revoke', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${bridgeToken}`
+        },
+        body: JSON.stringify({
+          mediaId: freshMediaId,
+          reason: 'LEGACY_REVOCATION_FLOW'
+        })
+      }),
+      url: new URL('https://projectnox.org/api/internal/media/revoke'),
+      platform: {
+        env: {
+          COVER_THUMBNAILS: mockKv,
+          NOX_STORAGE_BRIDGE_TOKEN: bridgeToken
+        },
+        caches: { default: mockCache },
+        context: mockCtx
+      },
+      cookies: { getAll: () => [] }
+    } as any);
+
+    expect(legacyRes.status).toBe(200);
+    const legacyData = await legacyRes.json();
+    expect(legacyData.success).toBe(true);
+    expect(legacyData.action).toBe('revoke');
+    expect(mocks.mediaStore.get(freshMediaId).status).toBe('DELETED');
+    expect(mockKv.put).toHaveBeenCalled();
+  });
 });

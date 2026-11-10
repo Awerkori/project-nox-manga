@@ -66,13 +66,24 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
     error(400, 'mediaId ou mediaIds obrigatório');
   }
 
+  // Strict validation of administrative action:
+  // Legacy flow omits the action field (undefined), defaulting to revoke (or privatize if accessClass is provided).
+  // Supported actions: 'revoke', 'unrevoke'.
+  // Any unknown action (e.g. 'purge', 'delete', etc.) MUST be rejected immediately with HTTP 400
+  // before ANY operations on YSQL or KV to prevent inadvertent status = 'DELETED' mutations.
+  if (body?.action !== undefined) {
+    const normalizedAction = typeof body.action === 'string' ? body.action.trim().toLowerCase() : '';
+    if (normalizedAction !== 'revoke' && normalizedAction !== 'unrevoke') {
+      error(400, `Ação administrativa desconhecida: '${body.action}'. Ações suportadas: 'revoke', 'unrevoke'`);
+    }
+  }
+
   const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
   const kv = platform?.env?.COVER_THUMBNAILS;
 
-  const isUnrevoke = body?.action === 'unrevoke' || body?.action === 'restore';
-  const isPrivatizeAction = body?.action === 'privatize' || body?.action === 'restrict';
+  const isUnrevoke = body?.action === 'unrevoke';
   const hasExplicitStatus = typeof body?.status === 'string' && body.status.trim().length > 0;
-  const isPrivatization = !isUnrevoke && (isPrivatizeAction || Boolean(body?.accessClass));
+  const isPrivatization = !isUnrevoke && Boolean(body?.accessClass);
 
   // Determine target status and target access class with strict semantic separation:
   // If status is explicitly passed, honor it.
@@ -86,7 +97,7 @@ export const POST: RequestHandler = async ({ request, url, platform, cookies }) 
 
   const targetAccessClass = typeof body?.accessClass === 'string' && body.accessClass.trim()
     ? body.accessClass.trim()
-    : (isPrivatizeAction ? 'PRIVATE' : undefined);
+    : undefined;
 
   const processedIds: string[] = [];
   const revokedIds: string[] = [];

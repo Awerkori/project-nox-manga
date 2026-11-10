@@ -6,7 +6,7 @@
 **Baseline de Rollback Imediato:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 **Aviso de Rollback:** Versões anteriores a `fcd51c68` (incluindo `fafe6ae8`) estão DEPRECADAS para rollback pois reintroduziriam o incidente de deleções em GET.
 **Branch:** `perf/nox-cloudflare-zero-waste` (sincronizada com `origin/perf/nox-cloudflare-zero-waste`)
-**Status da Operação:** **CONCLUÍDO TECNICAMENTE — AGUARDANDO AUTORIZAÇÃO DE DEPLOY — 784 TESTES APROVADOS (100% GREEN)**
+**Status da Operação:** **CONCLUÍDO TECNICAMENTE — AGUARDANDO AUTORIZAÇÃO DE DEPLOY — 785 TESTES APROVADOS (100% GREEN)**
 
 ---
 
@@ -87,10 +87,11 @@ Foram consolidadas correções arquiteturais estritas sem alteração do ambient
    - Desacoplamento semântico completo entre privatização (`status = 'ACTIVE', access_class = 'PRIVATE'`) e revogação/exclusão (`status = 'DELETED'`).
    - Preservação de `status` e `accessClass` em `knownRevocations` no isolate de execução, prevenindo falso bloqueio 404 de staff autorizado em checagens em memória pós-tombstone.
    - Suporte a `accessClass` na restauração/unrevoke administrativo: atualizar explicitamente `status = 'ACTIVE'` e `access_class = 'PUBLIC'` quando solicitado.
-   - Contrato operacional para escritas diretas no banco: alterações via SQL direto que não passem pela API de revogação não invalidam caches de borda distribuídos até que o protocolo de purga seja invocado.
+   - Validação estrita de ações administrativas em `/api/internal/media/revoke`: o endpoint valida obrigatoriamente o campo `action`, aceitando exclusivamente as operações administrativas suportadas (`revoke` ou omitido no fluxo legado de revogação/privatização, e `unrevoke` para restauração). Qualquer ação desconhecida (como `action: 'purge'`, `action: 'delete'`, etc.) é rejeitada imediatamente com HTTP 400 antes de qualquer operação em YSQL ou mutação em KV, eliminando o risco operacional de atualizar indevidamente registros para `status = 'DELETED'`.
+   - Procedimento operacional para alterações manuais em banco: alterações manuais em YSQL que não passem pelos endpoints administrativos não invalidam automaticamente caches de borda distribuídos nem atualizam o KV. Para manter a coerência operacional, operadores devem utilizar exclusivamente os procedimentos administrativos suportados (`POST /api/internal/media/revoke` com `accessClass: 'PRIVATE'` para privatização, omissão/`revoke` para revogação, e `action: 'unrevoke'` para restauração). Caso seja indispensável uma operação de purge puro de borda sem mutação em banco (`purge-only`), ela não deve ser improvisada sobrecarregando endpoints existentes; tal necessidade está catalogada separadamente como item de roadmap futuro, demandando especificação técnica e governança próprias antes de qualquer nova API.
 
 5. **`tests/revocation-race-condition.test.ts` e `tests/reader-real-pipeline-integration.test.ts`:**
-   - Expansão para 41 testes adversariais determinísticos (784 testes no total da suíte), cobrindo transições HEAD e 304 em voo, requisições Range multi-range/inválidas, persistência de unrevoke com accessClass e consistência in-memory.
+   - Expansão para 42 testes adversariais determinísticos (785 testes no total da suíte), cobrindo rejeição estrita de `action: 'purge'` e ações desconhecidas com HTTP 400 sem mutação em YSQL/KV, transições HEAD e 304 em voo, requisições Range multi-range/inválidas, persistência de unrevoke com accessClass e consistência in-memory.
 
 ---
 
@@ -149,11 +150,11 @@ A validação foi conduzida através de testes de integração reais e testes ad
 ### 5. RESULTADOS DE COMPILAÇÃO E REGRESSÕES
 
 #### 5.1 Suíte Global Automatizada (Vitest v5.0.0)
-- **Total de Arquivos de Teste:** **116 arquivos** (100% aprovados)
-- **Total de Testes Individuais:** **743 testes** (100% aprovados)
+- **Total de Arquivos de Teste:** **117 arquivos** (100% aprovados)
+- **Total de Testes Individuais:** **785 testes** (100% aprovados)
 - **Testes com Falha:** **0**
 - **Testes Ignorados (Skipped):** **0**
-- **Tempo de Execução:** **20,46 segundos**
+- **Tempo de Execução:** **20,66 segundos**
 
 #### 5.2 Compilação de Produção
 - **Comando:** `npm run build` (`vite build` + `@sveltejs/adapter-cloudflare` + `patch-worker-runtime.mjs`)
@@ -183,6 +184,8 @@ Para total transparência com os avaliadores externos, registram-se as fronteira
    Clientes HTTP que armazenam imagens com `Cache-Control: immutable` não realizam checagens de rede enquanto a janela de expiração não for atingida. Nenhuma ação no servidor Cloudflare pode forçar a invalidação de um disco local de navegador desconectado ou que não acesse o site.
 4. **Capacidade do Banco YugabyteDB:**
    O pool de conexões YSQL suporta com segurança até 10 conexões concorrentes diretas. O Hyperdrive atua como amortecedor multiplexando as consultas; todavia, picos de leitura fria que superem a capacidade do Hyperdrive podem gerar fila se não houver taxa adequada de cache hit na borda.
+5. **Inexistência de Endpoint Administrativo Dedicado a Expurgo Puro (Roadmap Futuro):**
+   O endpoint `/api/internal/media/revoke` atua estritamente sobre os ciclos de vida de integridade de mídia (revogação, privatização e restauração), exigindo persistência autoritativa prévia em YSQL e tombstones em KV. Alterações manuais diretas via SQL não disparam invalidação automática na borda. A criação de um mecanismo autônomo de expurgo puro (`purge-only`, desprovido de mutação de metadados em banco) está formalmente registrada como demanda de roadmap futuro para ser avaliada sob governança própria, evitando improvisações operacionais em endpoints de revogação.
 
 ---
 
