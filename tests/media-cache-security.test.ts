@@ -497,6 +497,42 @@ describe('Media Security and Cache Guard', () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(original);
   });
 
+  it('streams a large >2MP image without blowing past CPU limits when dimensions are sniffed', async () => {
+    const mediaId = '68666666-6666-4666-8666-666666666666';
+    // 1500x1500 = 2.25 MP (> 2MP) JPEG
+    const largeJpeg = new Uint8Array([
+      0xff, 0xd8,
+      0xff, 0xc0, 0x00, 0x11, 0x08, 0x05, 0xdc, 0x05, 0xdc, 0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+      0xff, 0xd9
+    ]);
+    mocks.mediaRecord = {
+      id: mediaId,
+      provider: 'telegram',
+      storage_ready: true,
+      status: 'ACTIVE',
+      access_class: 'PUBLIC',
+      purpose: 'editorial',
+      bot_reference: 'MANGA_STORAGE_01',
+      mime: 'image/jpeg',
+      sha256: 'large_sniffed_cover',
+      provider_key: 'large_sniffed_key',
+      bytes: largeJpeg.length
+      // width and height intentionally not present in DB record
+    };
+    mocks.download.mockResolvedValue(largeJpeg);
+
+    const res = await GET({
+      locals: {},
+      params: { id: mediaId },
+      request: new Request(`https://nox.invalid/media/${mediaId}?size=thumb`),
+      cookies: { getAll: () => [] }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Thumbnail-Strategy')).toBe('stream-original');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(largeJpeg);
+  });
+
   it('preserves animated GIFs intact on ?size=thumb without converting to static image', async () => {
     // Valid GIF89a header + minimal screen descriptor
     const gifBytes = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x0a, 0x00, 0x0a, 0x00, 0x80, 0x00, 0x00]);

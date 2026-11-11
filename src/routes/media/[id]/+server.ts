@@ -687,10 +687,18 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
     const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
     const canResize = mime === 'image/jpeg' || mime === 'image/png';
     const isChapterPage = media.purpose === 'chapter_page';
+    const targetMaxW = coverVariant === 'hero' ? 720 : 480;
+    const targetMaxH = coverVariant === 'hero' ? 1020 : 680;
+    const isAlreadyWithinBounds =
+      Number(media.width) > 0 &&
+      Number(media.height) > 0 &&
+      Number(media.width) <= targetMaxW &&
+      Number(media.height) <= targetMaxH;
     const streamOriginal =
       !canResize ||
       isChapterPage ||
-      (coverVariant === 'thumb' &&
+      isAlreadyWithinBounds ||
+      ((coverVariant === 'thumb' || coverVariant === 'hero') &&
         !internalCoverWarm &&
         bytes > 0 &&
         bytes <= 1_000_000 &&
@@ -708,8 +716,10 @@ export const GET = async ({ locals: _locals, params, request, platform, cookies 
         headers['Content-Length'] = String(thumb.data.length);
         if (thumb.resized) {
           headers['ETag'] = `"${media.sha256}-thumb-v3"`;
+          headers['X-Thumbnail-Strategy'] = 'resized';
+        } else {
+          headers['X-Thumbnail-Strategy'] = 'stream-original';
         }
-        headers['X-Thumbnail-Strategy'] = 'resized';
       } catch (thumbErr) {
         // The first Telegram stream is one-shot. Reopen it once so a stalled
         // decoder/read degrades to a valid original instead of a broken image.

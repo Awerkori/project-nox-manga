@@ -1647,65 +1647,45 @@ const MEDIA_METADATA_SELECT_FIELDS = `
   m.id, m.provider, m.provider_key, m.bot_reference, m.storage_shard_id,
   m.mime, m.sha256, m.bytes, m.width, m.height, m.access_class, m.purpose,
   m.storage_ready, m.status, m.created_by,
+  (COALESCE(page_info.page_has_adult, false) OR COALESCE(cover_info.cover_has_adult, false)) AS is_adult_associated,
+  NOT (COALESCE(page_info.page_has_unpublished_work, false) OR COALESCE(cover_info.cover_has_unpublished_work, false)) AS all_works_published,
+  NOT COALESCE(page_info.page_has_unpublished_chapter, false) AS all_chapters_published,
   (
-    EXISTS (
-      SELECT 1 FROM public.pages p
-      JOIN public.chapters c ON c.id = p.chapter_id
-      JOIN public.works w ON w.id = c.work_id
-      WHERE p.media_id = m.id AND (w.content_rating = 'ADULT_18' OR c.chapter_kind = 'adult')
-    ) OR EXISTS (
-      SELECT 1 FROM public.works w_cov
-      WHERE w_cov.cover_id = m.id AND w_cov.content_rating = 'ADULT_18'
-    )
-  ) AS is_adult_associated,
-  (
-    NOT EXISTS (
-      SELECT 1 FROM public.pages p
-      JOIN public.chapters c ON c.id = p.chapter_id
-      JOIN public.works w ON w.id = c.work_id
-      WHERE p.media_id = m.id AND w.published = false
-    ) AND NOT EXISTS (
-      SELECT 1 FROM public.works w_cov
-      WHERE w_cov.cover_id = m.id AND w_cov.published = false
-    )
-  ) AS all_works_published,
-  (
-    NOT EXISTS (
-      SELECT 1 FROM public.pages p
-      JOIN public.chapters c ON c.id = p.chapter_id
-      WHERE p.media_id = m.id AND c.published_at IS NULL
-    )
-  ) AS all_chapters_published,
-  (
-    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
-      EXISTS (
-        SELECT 1 FROM public.pages p
-        JOIN public.chapters c ON c.id = p.chapter_id
-        JOIN public.works w ON w.id = c.work_id
-        WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
-      )
-    ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
-      EXISTS (
-        SELECT 1 FROM public.works w_cov
-        WHERE w_cov.cover_id = m.id AND w_cov.published = true
-      )
-    ) ELSE true END
+    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN
+      COALESCE(page_info.page_has_published, false)
+    WHEN m.purpose IN ('cover', 'work_cover') THEN
+      COALESCE(cover_info.cover_has_published, false)
+    ELSE true END
   ) AS has_published_association,
   (
-    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN (
-      EXISTS (
-        SELECT 1 FROM public.pages p
-        JOIN public.chapters c ON c.id = p.chapter_id
-        JOIN public.works w ON w.id = c.work_id
-        WHERE p.media_id = m.id AND c.published_at IS NOT NULL AND w.published = true
-      )
-    ) WHEN m.purpose IN ('cover', 'work_cover') THEN (
-      EXISTS (
-        SELECT 1 FROM public.works w_cov
-        WHERE w_cov.cover_id = m.id AND w_cov.published = true
-       )
-    ) ELSE true END
+    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN
+      COALESCE(page_info.page_has_published, false)
+    WHEN m.purpose IN ('cover', 'work_cover') THEN
+      COALESCE(cover_info.cover_has_published, false)
+    ELSE true END
   ) AS has_published_chapter
+`;
+
+const MEDIA_METADATA_JOINS = `
+  LEFT JOIN LATERAL (
+    SELECT
+      bool_or(w.content_rating = 'ADULT_18' OR c.chapter_kind = 'adult') AS page_has_adult,
+      bool_or(w.published = false) AS page_has_unpublished_work,
+      bool_or(c.published_at IS NULL) AS page_has_unpublished_chapter,
+      bool_or(c.published_at IS NOT NULL AND w.published = true) AS page_has_published
+    FROM public.pages p
+    JOIN public.chapters c ON c.id = p.chapter_id
+    JOIN public.works w ON w.id = c.work_id
+    WHERE p.media_id = m.id
+  ) page_info ON true
+  LEFT JOIN LATERAL (
+    SELECT
+      bool_or(w_cov.content_rating = 'ADULT_18') AS cover_has_adult,
+      bool_or(w_cov.published = false) AS cover_has_unpublished_work,
+      bool_or(w_cov.published = true) AS cover_has_published
+    FROM public.works w_cov
+    WHERE w_cov.cover_id = m.id
+  ) cover_info ON true
 `;
 
 /**
@@ -1743,6 +1723,7 @@ export async function fetchMediaMetadataFromYugabyte(
     const sql = `
       SELECT ${MEDIA_METADATA_SELECT_FIELDS}
       FROM public.media m
+      ${MEDIA_METADATA_JOINS}
       WHERE m.id = $1 AND clock_timestamp() IS NOT NULL
       LIMIT 1;
     `;
@@ -1772,6 +1753,7 @@ export async function fetchMediaMetadataFromYugabyte(
       const sql = `
         SELECT ${MEDIA_METADATA_SELECT_FIELDS}
         FROM public.media m
+        ${MEDIA_METADATA_JOINS}
         WHERE m.id = $1
         LIMIT 1;
       `;
