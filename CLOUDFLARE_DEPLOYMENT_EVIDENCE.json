@@ -1,14 +1,13 @@
 {
-  "activeVersionId": "fb683114-2f80-4b17-b020-6cc70ef93315",
-  "created": "2026-11-08T04:28:44.714Z",
+  "activeVersionId": "e0c3f7be-147d-4c81-838d-b62dfaea9316",
+  "created": "2026-11-11T17:56:20.264Z",
   "trafficAllocation": "100%",
   "routes": [
-    "projectnox.org/*",
-    "www.projectnox.org/*"
+    "projectnox.org",
+    "www.projectnox.org"
   ],
-  "commit": "8a443e0",
-  "fullCommit": "8a443e0f4b60670949366f00afc61e1da0014de8",
-  "entrypoint": "./_app/immutable/entry/start.CTDOMZ5Q.js",
+  "commit": "6411ba5",
+  "fullCommit": "6411ba57d37461465261a34457c3559c40f8190a",
   "author": "awerkori@gmail.com",
   "bindings": {
     "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
@@ -33,17 +32,18 @@
     "xpActionDatabaseErrorHttp500": true,
     "antiCollisionHeadersEnforced": true,
     "chunkedSessionCookiesSupported": true,
-    "adultWorksPrivateNoStoreEnforced": true
+    "adultWorksPrivateNoStoreEnforced": true,
+    "authoritativeSqlLateralAggregation": true,
+    "thumbnailCpuSniffing": true
   },
   "previousStableVersion": {
-    "versionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
-    "commit": "f494bb9",
-    "entrypoint": "./_app/immutable/entry/start.BkvvmzpF.js"
+    "versionId": "d262a573-65df-4e44-b246-f9ee95e47716",
+    "commit": "715e8d1"
   },
   "rollbackProcedure": {
     "procedureDocument": "ROLLBACK_PROCEDURE.md",
-    "targetStableVersionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
-    "primaryRollbackCommand": "npx wrangler rollback 2cd46361-7eb7-4a0a-a84b-6647c8b75efd --name manga --message 'rollback approved'",
-    "versionsDeployCommand": "npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name manga --message 'traffic reverted to stable 2cd46361'"
+    "targetStableVersionId": "d262a573-65df-4e44-b246-f9ee95e47716",
+    "primaryRollbackCommand": "npx wrangler rollback d262a573-65df-4e44-b246-f9ee95e47716 --name manga --message 'rollback approved'",
+    "versionsDeployCommand": "npx wrangler versions deploy d262a573-65df-4e44-b246-f9ee95e47716@100% --name manga --message 'traffic reverted to stable d262a573'"
   }
 }

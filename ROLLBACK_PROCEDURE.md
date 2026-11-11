@@ -5,9 +5,9 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 ## 1. Versões e Topologia de Produção
 
 - **Worker Name:** `manga`
-- **Active Production Version (Post-deploy):** `d262a573-65df-4e44-b246-f9ee95e47716` (Commit `715e8d1` — Isolamento estrito de roteamento Hyperdrive autoritativo prevenindo desligamento global de cache, fail-closed contra metadados inativos ou com storage pendente, captura e retorno consistente de HTTP 403 `age_restricted` em alterações de classificação +18 em voo no endpoint privado `/api/media/[id]`, e matriz adversarial completa expandida com 34 testes homologados)
-- **Immediate Rollback Target Version:** `0131fdba-9162-44b4-8e4f-ccbe36951a29` (Deploy imediatamente anterior, 100% homologado, commit 5db24e8)
-- **Secondary Rollback Targets:** `fdb2322d-fffd-4f23-909e-25e63a06bb03` (Commit 18bf3ee) / `322d46b9-71ed-4e14-a03a-bbc48f356bac` / `48420583-7640-44ce-a8f3-6fba722a949a`
+- **Active Production Version (Post-deploy):** `e0c3f7be-147d-4c81-838d-b62dfaea9316` (Commit `6411ba5` / PR #168 — Otimização cirúrgica autoritativa SQL via agregações exaustivas com `LEFT JOIN LATERAL` e otimização CPU de thumbnails via sniffing rápido de dimensões SOF/IHDR e lookup tables de interpolação bilinear)
+- **Immediate Rollback Target Version:** `d262a573-65df-4e44-b246-f9ee95e47716` (Deploy imediatamente anterior, 100% homologado, commit 715e8d1)
+- **Secondary Rollback Targets:** `0131fdba-9162-44b4-8e4f-ccbe36951a29` (Commit 5db24e8) / `fdb2322d-fffd-4f23-909e-25e63a06bb03` (Commit 18bf3ee) / `322d46b9-71ed-4e14-a03a-bbc48f356bac`
 - **Foundational Safe Rollback Baseline:** `fcd51c68-3fa5-4d63-b867-d7d557554652` (Segura contra deleções em GET; commit ccfad07)
 - **Versões Anteriores Deprecadas:** `fafe6ae8-cd04-4f93-8125-bc7a02774619` e anteriores NÃO DEVEM ser utilizadas para rollback pois contêm a causa raiz do incidente de estouro de deleções no Workers KV.
 - **Traffic Allocation:** 100% em `projectnox.org` e `www.projectnox.org`
@@ -25,7 +25,7 @@ O rollback para a versão `322d46b9-71ed-4e14-a03a-bbc48f356bac` (ou fallback se
 ### Opção A — Rollback Direto via Wrangler CLI (Tempo de convergência: < 5 segundos)
 ```bash
 # Rollback imediato para a versão imediatamente anterior:
-npx wrangler rollback 322d46b9-71ed-4e14-a03a-bbc48f356bac --name manga --message "Rollback para versao homologada estavel 322d46b9"
+npx wrangler rollback d262a573-65df-4e44-b246-f9ee95e47716 --name manga --message "Rollback para versao homologada estavel d262a573"
 
 # Ou rollback para baseline seguro consolidado:
 npx wrangler rollback fcd51c68-3fa5-4d63-b867-d7d557554652 --name manga --message "Rollback para baseline seguro consolidado fcd51c68"
@@ -36,7 +36,7 @@ npx wrangler rollback fcd51c68-3fa5-4d63-b867-d7d557554652 --name manga --messag
 ### Opção B — Redirecionamento 100% de Tráfego de Versão (Alternativa oficial Cloudflare)
 ```bash
 # Tráfego 100% para a versão estável imediatamente anterior:
-npx wrangler versions deploy 322d46b9-71ed-4e14-a03a-bbc48f356bac@100% --name manga --message "Trafego convergido 100% para 322d46b9"
+npx wrangler versions deploy d262a573-65df-4e44-b246-f9ee95e47716@100% --name manga --message "Trafego convergido 100% para d262a573"
 
 # Ou tráfego 100% para o baseline consolidado:
 npx wrangler versions deploy fcd51c68-3fa5-4d63-b867-d7d557554652@100% --name manga --message "Trafego convergido 100% para fcd51c68"
