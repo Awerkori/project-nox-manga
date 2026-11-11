@@ -52,6 +52,7 @@ jobs:
       # workers.dev hostname is not provisioned and returns 404 for every
       # route, which turns this production smoke into a false failure.
       TEST_BASE_URL: https://projectnox.org
+      PUBLIC_SITE_URL: https://projectnox.org
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
