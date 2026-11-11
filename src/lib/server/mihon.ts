@@ -22,9 +22,32 @@ export interface MihonAuthResult {
   error?: string;
 }
 
+export const MIHON_REVOKED_KV_PREFIX = 'mihon:revoked:';
+
+/**
+ * Invalidate local token cache if any isolate-level state exists.
+ * Authoritative auth checks bypass in-memory caching to guarantee global revocation freshness.
+ */
+export function invalidateMihonTokenCache(_tokenHash?: string) {
+  // Bypassed: token verification is authoritatively checked against YSQL with KV tombstone fast-path
+}
+
+export async function recordMihonTokenRevocation(tokenHash: string, kv?: any): Promise<void> {
+  invalidateMihonTokenCache(tokenHash);
+  if (!kv || typeof kv.put !== 'function') {
+    throw new Error('KV binding COVER_THUMBNAILS missing or unavailable for token revocation');
+  }
+  // Write KV tombstone with 300s TTL (persists across edge PoPs)
+  await kv.put(
+    `${MIHON_REVOKED_KV_PREFIX}${tokenHash}`,
+    JSON.stringify({ revokedAt: Date.now() }),
+    { expirationTtl: 300 }
+  );
+}
+
 export async function verifyMihonAuth(request: Request, platformEnv?: any): Promise<MihonAuthResult> {
   const authHeader = request.headers.get('Authorization') || '';
-  const match = authHeader.match(/^Bearer\s+([A-Za-z0-9_\-]+)$/i);
+  const match = authHeader.match(/^Bearer\s+([A-Za-z0-9_-]+)$/i);
 
   if (!match) {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN' };
@@ -32,7 +55,22 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
 
   const rawToken = match[1];
   const hash = await hashToken(rawToken);
+  const kv = platformEnv?.COVER_THUMBNAILS;
 
+  // 1. Edge KV tombstone fast check: if already tombstoned in KV, reject immediately (0 Hyperdrive, 0 YSQL)
+  if (kv && typeof kv.get === 'function') {
+    try {
+      const tombstone = await kv.get(`${MIHON_REVOKED_KV_PREFIX}${hash}`);
+      if (tombstone) {
+        invalidateMihonTokenCache(hash);
+        return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Token revogado' };
+      }
+    } catch {
+      // Non-fatal KV read failure: proceed to authoritative database verification
+    }
+  }
+
+  // 2. Authoritative ACID database verification (guarantees global, multi-isolate, synchronous revocation without stale cache)
   try {
     const res = await executeYugabyteSql(
       `SELECT t.id, t.user_id, t.expires_at, t.revoked,
@@ -41,7 +79,7 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
        JOIN public.members m ON m.id = t.user_id
        WHERE t.token_hash = $1
          AND t.revoked = false
-         AND t.expires_at > now()
+         AND (t.expires_at IS NULL OR t.expires_at > now())
        LIMIT 1;`,
       [hash],
       platformEnv
@@ -60,12 +98,14 @@ export async function verifyMihonAuth(request: Request, platformEnv?: any): Prom
       is_test: Boolean(row.is_test)
     };
 
-    return {
+    const authResult: MihonAuthResult = {
       authenticated: true,
       user: member,
       ageStatus: member.age_status || 'UNKNOWN'
     };
-  } catch (err: any) {
+
+    return authResult;
+  } catch {
     return { authenticated: false, user: null, ageStatus: 'UNKNOWN', error: 'Erro ao verificar token' };
   }
 }
@@ -89,4 +129,19 @@ export async function generateMihonToken(userId: string, deviceName = 'Mihon App
   );
 
   return { token, expiresAt };
+}
+
+/**
+ * RFC 9110 compliant weak comparison function for If-None-Match headers.
+ * Compares incoming If-None-Match header (which may contain weak prefix W/, quotes, or multiple tags)
+ * against the target representation entity tag.
+ */
+export function matchesETag(ifNoneMatch: string | null | undefined, etag: string): boolean {
+  if (!ifNoneMatch) return false;
+  const trimmed = ifNoneMatch.trim();
+  if (!trimmed) return false;
+  if (trimmed === '*') return true;
+  const cleanEtag = etag.replace(/^W\//, '');
+  const tags = trimmed.split(',').map((t) => t.trim().replace(/^W\//, ''));
+  return tags.includes(cleanEtag);
 }

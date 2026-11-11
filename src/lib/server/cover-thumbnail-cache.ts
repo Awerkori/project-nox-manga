@@ -1,3 +1,6 @@
+import { isMediaRevoked } from '$lib/server/media-revocation';
+import { matchesETag } from '$lib/server/mihon';
+
 export const MAX_COVER_THUMBNAIL_BYTES = 2 * 1024 * 1024;
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
 
@@ -9,12 +12,15 @@ type ThumbnailMetadata = {
 
 export type CoverVariant = 'thumb' | 'hero';
 
+export const COVER_THUMBNAIL_EXPIRATION_TTL_SECONDS = 30 * 86400; // 30 days automatic expiration (0 delete ops consumed)
+
 type ThumbnailKv = {
   getWithMetadata(key: string, options: { type: 'arrayBuffer' }): Promise<{
     value: ArrayBuffer | null;
     metadata: ThumbnailMetadata | null;
   } | null>;
-  put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata }): Promise<void>;
+  put(key: string, value: ArrayBuffer, options: { metadata: ThumbnailMetadata; expirationTtl?: number }): Promise<void>;
+  delete?(key: string): Promise<void>;
 };
 
 // Publication can be retried or observed by more than one request in the same
@@ -45,12 +51,14 @@ export async function persistCoverThumbnail(
     return 'skipped';
   }
   if (!metadata.contentType?.startsWith('image/')) return 'skipped';
+  if (await isMediaRevoked(mediaId, kv)) return 'skipped';
   await kv.put(coverThumbnailKey(mediaId, variant), bytes, {
     metadata: {
       contentType: metadata.contentType,
       contentLength: String(bytes.byteLength),
       etag: metadata.etag
-    }
+    },
+    expirationTtl: COVER_THUMBNAIL_EXPIRATION_TTL_SECONDS
   });
   return 'stored';
 }
@@ -108,6 +116,9 @@ export async function readCoverThumbnail(
   variant: CoverVariant = 'thumb'
 ): Promise<Response | null> {
   if (!kv || !isMediaId(mediaId)) return null;
+  if (await isMediaRevoked(mediaId, kv)) {
+    return null;
+  }
   const cached = await kv.getWithMetadata(coverThumbnailKey(mediaId, variant), { type: 'arrayBuffer' }).catch(() => null);
   if (!cached?.value) return null;
 
@@ -116,13 +127,19 @@ export async function readCoverThumbnail(
     'Content-Type': metadata.contentType || 'image/jpeg',
     'Content-Length': metadata.contentLength || String(cached.value.byteLength),
     'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
+    'CDN-Cache-Control': 'public, max-age=31536000',
+    'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
+    'Cache-Tag': `media-${mediaId},media-public`,
+    'X-Cache-Tag': `media-${mediaId},media-public`,
+    'Access-Control-Allow-Origin': '*',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
     'X-Content-Type-Options': 'nosniff',
     'X-Media-Cache': 'COVER_THUMBNAIL_KV',
     'X-Thumbnail-Strategy': 'prewarmed',
     'X-Cover-Variant': variant
   });
   if (metadata.etag) headers.set('ETag', metadata.etag);
-  if (metadata.etag && ifNoneMatch === metadata.etag) return new Response(null, { status: 304, headers });
+  if (metadata.etag && matchesETag(ifNoneMatch, metadata.etag)) return new Response(null, { status: 304, headers });
   return new Response(cached.value, { status: 200, headers });
 }
 

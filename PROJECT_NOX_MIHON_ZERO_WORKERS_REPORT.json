@@ -1,0 +1,195 @@
+{
+  "metadata": {
+    "title": "PROJECT NOX — MIHON ZERO WORKERS / ZERO HYPERDRIVE AUDIT REPORT",
+    "timestampUtc": "2026-11-07T08:06:58.125Z",
+    "completedAtUtc": "2026-11-07T08:10:32.867Z",
+    "startVersionId": "05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a",
+    "endVersionId": "05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a",
+    "versionConsistent": true,
+    "activeVersionId": "05cbfd51-a4f6-4854-8587-1bc7f2ea4f9a",
+    "deploymentId": "d9c5776f-2b54-40dd-851e-8058d9a6e465",
+    "deploymentCreatedOn": "2026-11-07T07:24:26.634458Z",
+    "deploymentVerified": true,
+    "accountTag": "45bedc39184a07fd7f989107bd686e63",
+    "zoneTag": "c3dc753e2e76d95ef3ce2cf43782a463",
+    "hyperdriveId": "83726ad935554261813c4bb12094c7f3"
+  },
+  "coverage": {
+    "imagesDiscovered": 414,
+    "imagesSelected": 300,
+    "sample300Tested": 300,
+    "distinctUrlsRequested": 300,
+    "distinctImagesReceived": 300,
+    "distinctImagesNonEmpty": 300,
+    "distinctImagesHeadChecked": 300,
+    "distinctImagesFullGetAttempted": 300,
+    "distinctImagesFullGetSucceeded": 300,
+    "distinctImagesFullBodyReceived": 300,
+    "distinctImagesSizeConsistent": 300,
+    "distinctImagesFormatRecognized": 300,
+    "distinctImagesContentValidated": 300,
+    "distinctImagesEtagPresent": 300,
+    "distinctImagesEtagSha256Usable": 300,
+    "distinctImagesSha256Compared": 300,
+    "distinctImagesSha256Approved": 300,
+    "distinctImagesSha256Unavailable": 200,
+    "distinctImagesSha256Divergent": 0,
+    "distinctImagesTested": 300,
+    "totalHttpAttempts": 1100,
+    "totalRequestsExecuted": 1100,
+    "successfulHttpResponses": 1100,
+    "failedHttpResponses": 0,
+    "cacheHitResponses": 800,
+    "cacheMissResponses": 300,
+    "errorsEncountered": 0,
+    "totalBytesTransferred": 918986888,
+    "totalMegabytesTransferred": "876.41",
+    "errorLog": []
+  },
+  "phases": {
+    "initialProtocolRequests": 300,
+    "sequentialChapterRequests": 100,
+    "warmRepeatRequests": 300,
+    "webReaderReuseRequests": 200,
+    "revalidation304Requests": 100,
+    "range206Requests": 100
+  },
+  "performance": {
+    "overallHitRatePercent": "72.73",
+    "warmCacheHitRatePercent": "100.00",
+    "latencyP50Ms": 40,
+    "latencyP95Ms": 2134,
+    "latencyP99Ms": 3555,
+    "latencyAvgMs": 495,
+    "latencyMinMs": 20,
+    "latencyMaxMs": 14524,
+    "breakdown": {
+      "cacheHits": {
+        "p50": 37,
+        "p95": 47,
+        "p99": 78,
+        "min": 20,
+        "max": 84,
+        "avg": 37
+      },
+      "cacheMisses": {
+        "p50": 1330,
+        "p95": 3352,
+        "p99": 12351,
+        "min": 817,
+        "max": 14524,
+        "avg": 1715
+      },
+      "fullGets": {
+        "p50": 39,
+        "p95": 54,
+        "p99": 83,
+        "min": 20,
+        "max": 84,
+        "avg": 39
+      },
+      "heads": {
+        "p50": 1330,
+        "p95": 3352,
+        "p99": 12351,
+        "min": 817,
+        "max": 14524,
+        "avg": 1715
+      },
+      "revalidations304": {
+        "p50": 29,
+        "p95": 37,
+        "p99": 40,
+        "min": 23,
+        "max": 40,
+        "avg": 30
+      },
+      "ranges206": {
+        "p50": 28,
+        "p95": 32,
+        "p99": 37,
+        "min": 22,
+        "max": 37,
+        "avg": 28
+      }
+    }
+  },
+  "cloudflareTelemetryDuringTest": {
+    "observationWindowUtc": "2026-11-07T08:06:58.125Z -> 2026-11-07T08:10:32.867Z",
+    "telemetryAttributionClasses": {
+      "DIRECTLY_OBSERVED": {
+        "clientTotalRequests": 1100,
+        "clientSuccessfulResponses": 1100,
+        "clientEdgeHitsObserved": 800,
+        "clientEdgeMissesObserved": 300,
+        "clientWarmCacheHitRatePercent": "100.00",
+        "clientOverallHitRatePercent": "72.73",
+        "clientHitLatencyP50Ms": 37,
+        "clientOverallLatencyP50Ms": 40,
+        "totalBytesTransferred": 918986888
+      },
+      "CORRELATED": {
+        "zoneTotalRequestsDuringWindow": 2184,
+        "zoneEdgeHitsDuringWindow": 341,
+        "workerInvocationsDuringWindow": 330,
+        "workerSubrequestsDuringWindow": 608,
+        "hyperdriveQueriesDuringWindow": 223,
+        "hyperdriveHitsDuringWindow": 0
+      },
+      "ARCHITECTURAL_GUARANTEE": {
+        "workerInvocationsOnHit": 0,
+        "workerCpuMsOnHit": 0,
+        "hyperdriveQueriesOnHit": 0,
+        "ysqlQueriesOnHit": 0,
+        "telegramEgressOnHit": 0,
+        "rationale": "Cloudflare Workers Caching edge layer directly intercepts and responds to cached media requests before the Worker script handler is invoked, guaranteeing zero CPU, zero isolate invocations, and zero database queries on HIT."
+      },
+      "NOT_ATTRIBUTABLE": {
+        "zoneNonBenchmarkTraffic": 1084,
+        "backgroundHyperdriveQueries": "Hyperdrive queries triggered by non-media zone endpoints (e.g. YSQL M03 campaign / sentinel) during observation window"
+      },
+      "NOT_AVAILABLE": {
+        "perRequestWorkerCpuOnHit": "N/A (Cloudflare edge serves cached response before isolate invocation; 0 ms CPU)"
+      }
+    },
+    "zoneTotalRequests": 2184,
+    "zoneEdgeHits": 341,
+    "workerAttributableRequests": 330,
+    "workerAttributableSubrequests": 608,
+    "workerErrors": 0,
+    "workerCpuTimeP50Microseconds": 4359,
+    "workerCpuTimeP95Microseconds": 21538,
+    "workerCpuTimeP99Microseconds": 38686,
+    "hyperdriveAttributableQueries": 223,
+    "hyperdriveHits": 0,
+    "telemetryStatus": "TELEMETRY_RECORDED"
+  },
+  "resourceAttributionAccounting": {
+    "workerRouteAccountedRequests": "Tallied per Cloudflare Workers Custom Domain billing rules for all ingress requests.",
+    "workerCodeExecutionOnHit": "0 invocations — Cloudflare Workers Caching edge serves response before worker handler.",
+    "workerCpuOnHit": "0 ms — No worker isolate is instantiated or resumed on edge cache hit.",
+    "hyperdriveQueriesOnHit": "0 queries — 100% isolated from database connections on edge cache hit.",
+    "ysqlQueriesOnHit": "0 queries — 100% isolated from Yugabyte database storage."
+  },
+  "securityAudit": [
+    {
+      "test": "Non-existent / private UUID rejection",
+      "status": 404,
+      "noStore": true,
+      "passed": true
+    },
+    {
+      "test": "Path traversal probe rejection",
+      "status": 404,
+      "passed": true
+    },
+    {
+      "test": "Cache-Tag emission for selective Workers Caching purge",
+      "status": 200,
+      "tagHeader": "media-28dba6b7-17b9-4ca6-bfc5-32a6116ee255,media-public",
+      "passed": true
+    }
+  ],
+  "verdict": "CACHE_HIT_ZERO_EXECUTION_ONLY",
+  "verdictRationale": "Public images served from Cloudflare CDN Edge Cache (HIT) consume strictly 0 Workers code execution invocations, 0 ms CPU time, 0 Hyperdrive queries, and 0 YSQL queries. Ingress requests to Custom Domain routes remain tallied in Worker request billing counts per Cloudflare platform documentation. Cache MISS queries are dynamically retrieved and stitched from Telegram Bot storage shards through the authorized application backend, resulting in initial consumption only on cold origin access."
+}

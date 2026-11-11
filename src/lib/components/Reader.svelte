@@ -3,14 +3,12 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { SvelteSet } from 'svelte/reactivity';
+  import { SvelteSet, SvelteMap } from 'svelte/reactivity';
   import {
     ArrowLeft,
     ArrowRight,
     Maximize,
-    ChevronUp,
     ChevronDown,
-    Sparkles,
     Flag,
     List,
     X,
@@ -22,10 +20,6 @@
     ChevronLeft,
     ChevronRight,
     Sliders,
-    Heart,
-    Flame,
-    Zap,
-    Smile,
     PartyPopper,
     AlertTriangle,
     Trash2
@@ -36,7 +30,6 @@
   import ReadingProgressBar from '$lib/components/ReadingProgressBar.svelte';
   import ReaderSettingsModal from '$lib/components/ReaderSettingsModal.svelte';
   import { action } from '$lib/actions';
-  import { readPreference, savePreference } from '$lib/preferences';
   import {
     saveChapterOffline,
     getOfflineChapter,
@@ -78,7 +71,6 @@
   const visible = new SvelteSet<number>();
   let sending = false;
   let maxSeenPage = $state(1);
-  let chapterCompleted = $state(false);
 
   // =========================================================================
   // INTELLIGENT AGGRESSIVE ADAPTIVE PRELOADER (TURBO ENGINE V5)
@@ -88,7 +80,8 @@
   let turboActive = $state(false);
   let turboFinished = $state(false);
   const preloadedUrls = new SvelteSet<string>();
-  const inFlightDownloads = new Map<string, Promise<void>>();
+  const inFlightDownloads = new SvelteMap<string, Promise<void>>();
+  const createdBlobUrls: string[] = [];
   let activePreloadWorkers = 0;
   let preloadAbortController: AbortController | null = null;
 
@@ -176,14 +169,17 @@
   async function streamPreloadPage(page: any, signal: AbortSignal, retryCount = 0): Promise<void> {
     if (signal.aborted || !page?.media_id) return;
     const mediaId = page.media_id;
-    const mediaUrl = `/media/${mediaId}`;
+    const mediaBaseUrl = (data as any)?.mediaBaseUrl || '';
+    const mediaUrl = `${mediaBaseUrl}/media/${mediaId}`;
 
     if (preloadedUrls.has(mediaId)) return;
 
     if (inFlightDownloads.has(mediaId)) {
       try {
         await inFlightDownloads.get(mediaId);
-      } catch {}
+      } catch {
+        // Preload failure ignored
+      }
       return;
     }
 
@@ -196,11 +192,20 @@
           updateTurboTelemetry();
           return;
         }
-      } catch {}
+      } catch {
+        // Cache lookup error ignored
+      }
     }
 
     const downloadPromise = (async () => {
       try {
+        if (page.blobUrl) {
+          preloadedUrls.add(mediaId);
+          preloadedCount = preloadedUrls.size;
+          preloadProgressPct = Math.min(100, Math.round((preloadedCount / data.pages.length) * 100));
+          return;
+        }
+
         const isNearViewport = Math.abs(page.position - current) <= 2;
 
         if (!isNearViewport) {
@@ -214,7 +219,7 @@
           if (!res.ok && res.status >= 400) {
             throw new Error(`HTTP ${res.status}`);
           }
-          await res.blob();
+          await res.arrayBuffer();
         } else {
           await new Promise<void>((resolve, reject) => {
             const img = new Image();
@@ -269,7 +274,7 @@
           turboFinished = true;
         }
         updateTurboTelemetry();
-      } catch (err: any) {
+      } catch {
         if (signal.aborted) return;
         if (retryCount < 1) {
           await new Promise((r) => setTimeout(r, 400));
@@ -513,7 +518,6 @@
   let xpAwardConfirmed = $state(false);
   let viewRecorded = false;
   let completionClaimInFlight = false;
-  let completionAwardAttempted = false;
 
   function recordViewOnce() {
     if (viewRecorded || data.preview) return;
@@ -533,10 +537,6 @@
         total_pages: totalPages,
         completed: true
       })) as any;
-
-      if (res?.ok) {
-        chapterCompleted = true;
-      }
 
       if (res?.xp_award?.awarded && typeof window !== 'undefined') {
         xpAwardConfirmed = true;
@@ -597,7 +597,9 @@
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(`nox_prog_${data.chapter.id}`, String(pageNumber));
       }
-    } catch {}
+    } catch {
+      // Non-blocking localStorage
+    }
 
     if (!isAuthenticated || pageNumber <= lastSavedPage) return;
 
@@ -754,11 +756,19 @@
 
       if (e.key === 'ArrowRight' || e.key === 'KeyD') {
         if (readerSettings.mode === 'paginated') {
-          readerSettings.pagedDirection === 'rtl' ? prevPaginatedPage() : nextPaginatedPage();
+          if (readerSettings.pagedDirection === 'rtl') {
+            prevPaginatedPage();
+          } else {
+            nextPaginatedPage();
+          }
         }
       } else if (e.key === 'ArrowLeft' || e.key === 'KeyA') {
         if (readerSettings.mode === 'paginated') {
-          readerSettings.pagedDirection === 'rtl' ? nextPaginatedPage() : prevPaginatedPage();
+          if (readerSettings.pagedDirection === 'rtl') {
+            nextPaginatedPage();
+          } else {
+            prevPaginatedPage();
+          }
         }
       } else if (e.key === 'KeyM') {
         showSettingsModal = !showSettingsModal;
@@ -798,6 +808,13 @@
 
   onDestroy(() => {
     preloadAbortController?.abort();
+    for (const bUrl of createdBlobUrls) {
+      try {
+        URL.revokeObjectURL(bUrl);
+      } catch {
+        // Blob cleanup error ignored
+      }
+    }
     if (saveProgressTimer) {
       clearTimeout(saveProgressTimer);
       saveProgressTimer = null;
@@ -1051,6 +1068,7 @@
             {page}
             onSeen={handleSeen}
             eager={index < 2}
+            mediaBaseUrl={(data as any)?.mediaBaseUrl || ''}
           />
         {/each}
       </div>
@@ -1066,6 +1084,7 @@
               page={data.pages[current - 1]}
               onSeen={handleSeen}
               eager={true}
+              mediaBaseUrl={(data as any)?.mediaBaseUrl || ''}
             />
           </div>
         {/if}
@@ -1075,7 +1094,14 @@
           <button
             type="button"
             class="paginated-arrow-btn left"
-            onclick={(e) => { e.stopPropagation(); readerSettings.pagedDirection === 'rtl' ? nextPaginatedPage() : prevPaginatedPage(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              if (readerSettings.pagedDirection === 'rtl') {
+                nextPaginatedPage();
+              } else {
+                prevPaginatedPage();
+              }
+            }}
             aria-label="Página anterior"
           >
             <ChevronLeft size={28} />
@@ -1083,7 +1109,14 @@
           <button
             type="button"
             class="paginated-arrow-btn right"
-            onclick={(e) => { e.stopPropagation(); readerSettings.pagedDirection === 'rtl' ? prevPaginatedPage() : nextPaginatedPage(); }}
+            onclick={(e) => {
+              e.stopPropagation();
+              if (readerSettings.pagedDirection === 'rtl') {
+                prevPaginatedPage();
+              } else {
+                nextPaginatedPage();
+              }
+            }}
             aria-label="Próxima página"
           >
             <ChevronRight size={28} />
@@ -1213,7 +1246,7 @@
       {#if totalReactionVotes > 0}
         <div class="spectrum-bar-wrap">
           <div class="spectrum-track">
-            {#each REACTION_CONFIG as item}
+            {#each REACTION_CONFIG as item (item.id)}
               {@const pct = getReactionPercentage(item.id)}
               {#if pct > 0}
                 <div
@@ -1319,7 +1352,7 @@
       </div>
 
       <div class="drawer-chapters-list">
-        {#each filteredSiblings as sibling}
+        {#each filteredSiblings as sibling (sibling.id)}
           {@const isCurrent = sibling.id === data.chapter.id}
           <a
             href="/ler/{sibling.id}"

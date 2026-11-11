@@ -1,5 +1,6 @@
 import { executeYugabyteSql } from './yugabyte';
 
+
 const EDITORIAL_CACHE_TTL_MS = 60_000;
 const MAX_FLIGHT_AGE_MS = 4_000;
 const chapterMemCache = new Map<string, { at: number; value: any }>();
@@ -9,6 +10,16 @@ const contentFlights = new Map<string, { promise: Promise<any>; startedAt: numbe
 
 function isTestRuntime(): boolean {
   return typeof process !== 'undefined' && (process.env?.VITEST === 'true' || process.env?.NODE_ENV === 'test');
+}
+
+export function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>, mediaBaseUrl = ''): string | undefined {
+  const prefix = mediaBaseUrl ? mediaBaseUrl.replace(/\/+$/, '') : '';
+  const links = pages
+    .slice(0, 2)
+    .map((page) => page.media_id)
+    .filter((mediaId): mediaId is string => Boolean(mediaId && /^[0-9a-f-]{36}$/i.test(mediaId)))
+    .map((mediaId) => `<${prefix}/media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
+  return links.length ? links.join(', ') : undefined;
 }
 
 // Editorial reads never fall back to the legacy Supabase catalogue.

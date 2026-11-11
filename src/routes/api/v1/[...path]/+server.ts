@@ -1,11 +1,13 @@
 import { json, error } from '@sveltejs/kit';
-import { executeYugabyteSql, fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte } from '$lib/server/yugabyte';
+import * as yugabyteModule from '$lib/server/yugabyte';
+const { executeYugabyteSql, fetchWorkFromYugabyte, fetchWorkTagsFromYugabyte, fetchCatalogFromYugabyte } = yugabyteModule;
 
 export const GET = async ({ locals, params, url, platform }: any) => {
-  const parts = params.path.split('/');
-  const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1)));
-  const limit = 30;
-  const platformEnv = platform?.env;
+  const runWithSession = yugabyteModule.withYugabyteReadSession || ((_env: any, fn: any) => fn(_env));
+  return runWithSession(platform?.env, async (platformEnv: any) => {
+    const parts = params.path.split('/');
+    const page = Math.floor(Math.max(1, Math.min(10000, Number(url.searchParams.get('page')) || 1)));
+    const limit = 30;
 
   if (parts[0] === 'me') {
     if (!locals.user) error(401, 'Autenticação necessária');
@@ -190,20 +192,22 @@ export const GET = async ({ locals, params, url, platform }: any) => {
       [parts[1]],
       platformEnv
     );
+    const mediaBaseUrl = (platformEnv?.MEDIA_CDN_URL || '').replace(/\/+$/, '') || url.origin;
     return json(
       {
         data: pagesRes.rows.map((p: any) => ({
           position: p.position,
           width: p.width,
           height: p.height,
-          url: `${url.origin}/media/${p.media_id}`
+          url: `${mediaBaseUrl}/media/${p.media_id}`
         }))
       },
       { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' } }
     );
   }
 
-  error(404, 'Endpoint não encontrado');
+    error(404, 'Endpoint não encontrado');
+  });
 };
 
 export const POST = async ({ locals, params, request, platform }: any) => {

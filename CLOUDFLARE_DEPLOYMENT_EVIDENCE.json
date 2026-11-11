@@ -1,0 +1,49 @@
+{
+  "activeVersionId": "fb683114-2f80-4b17-b020-6cc70ef93315",
+  "created": "2026-11-08T04:28:44.714Z",
+  "trafficAllocation": "100%",
+  "routes": [
+    "projectnox.org/*",
+    "www.projectnox.org/*"
+  ],
+  "commit": "8a443e0",
+  "fullCommit": "8a443e0f4b60670949366f00afc61e1da0014de8",
+  "entrypoint": "./_app/immutable/entry/start.CTDOMZ5Q.js",
+  "author": "awerkori@gmail.com",
+  "bindings": {
+    "COVER_THUMBNAILS": "KV Namespace (cfcadf7da6f446dd851786d833a2f4ec)",
+    "HYPERDRIVE": "Hyperdrive Config (83726ad935554261813c4bb12094c7f3)",
+    "AUTH_ORIGIN_RATE_LIMIT": "Rate Limit (40 req/60s)",
+    "AUTH_IDENTITY_RATE_LIMIT": "Rate Limit (6 req/60s)",
+    "COMMENT_POST_RATE_LIMITER": "Rate Limit (2 req/60s)",
+    "ASSETS": "Assets"
+  },
+  "deploymentStatus": "ACTIVE_100_PERCENT",
+  "verification": {
+    "liveHttpsStatus": 200,
+    "securityHeadersPresent": true,
+    "mediaRevocationEnforced": true,
+    "failClosedWorkersCachePurge": true,
+    "edgeDeclarativeWorkersCaching": true,
+    "readOnlySandboxCompatible": true,
+    "ysqlSessionLifecyclePreserved": true,
+    "mihonGlobalKvRevocationTombstone": true,
+    "serviceWorkerLocalMediaEviction": true,
+    "orphanCoverFailClosed": true,
+    "xpActionDatabaseErrorHttp500": true,
+    "antiCollisionHeadersEnforced": true,
+    "chunkedSessionCookiesSupported": true,
+    "adultWorksPrivateNoStoreEnforced": true
+  },
+  "previousStableVersion": {
+    "versionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
+    "commit": "f494bb9",
+    "entrypoint": "./_app/immutable/entry/start.BkvvmzpF.js"
+  },
+  "rollbackProcedure": {
+    "procedureDocument": "ROLLBACK_PROCEDURE.md",
+    "targetStableVersionId": "2cd46361-7eb7-4a0a-a84b-6647c8b75efd",
+    "primaryRollbackCommand": "npx wrangler rollback 2cd46361-7eb7-4a0a-a84b-6647c8b75efd --name manga --message 'rollback approved'",
+    "versionsDeployCommand": "npx wrangler versions deploy 2cd46361-7eb7-4a0a-a84b-6647c8b75efd@100% --name manga --message 'traffic reverted to stable 2cd46361'"
+  }
+}

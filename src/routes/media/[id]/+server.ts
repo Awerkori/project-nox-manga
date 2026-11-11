@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { matchesETag } from '$lib/server/mihon';
 import {
   resolveBotDownloadClient,
   normalizeBotReference,
@@ -7,13 +8,14 @@ import {
 import { TelegramStorageError } from '$lib/server/telegram';
 import { extractFullAuthCookie, decodeSessionJwt, resolveSessionData } from '$lib/server/session-cache';
 import { generateThumbnail } from '$lib/server/thumbnail';
-import { fetchMediaMetadataFromYugabyte, executeYugabyteSql } from '$lib/server/yugabyte';
+import { fetchMediaMetadataFromYugabyte, executeYugabyteSql, invalidateMediaMetadataCache } from '$lib/server/yugabyte';
 import {
   MAX_COVER_THUMBNAIL_BYTES,
   persistCoverThumbnail,
   readBoundedCoverResponse,
   readCoverThumbnail
 } from '$lib/server/cover-thumbnail-cache';
+import { isMediaRevoked, purgeMediaVariants, classifyMediaAccess } from '$lib/server/media-revocation';
 
 function safeTokenCompare(provided: string, expected: string): boolean {
   if (!provided || !expected) return false;
@@ -26,7 +28,62 @@ function safeTokenCompare(provided: string, expected: string): boolean {
   return diff === 0;
 }
 
+async function isAuthorizedForMedia(
+  mediaMeta: any,
+  classification: ReturnType<typeof classifyMediaAccess>,
+  cookies: any,
+  request: Request,
+  platformEnv?: any
+): Promise<{
+  allowed: boolean;
+  isAdultRestricted: boolean;
+  isAdultAllowed: boolean;
+  isStaff: boolean;
+  isOwner: boolean;
+  isAuthenticatedAllowed: boolean;
+}> {
+  if (classification.isPublic) {
+    return {
+      allowed: true,
+      isAdultRestricted: false,
+      isAdultAllowed: false,
+      isStaff: false,
+      isOwner: false,
+      isAuthenticatedAllowed: false
+    };
+  }
+  let verifiedSession = null;
+  const rawCookie = extractFullAuthCookie(cookies.getAll());
+  const authHeader = request.headers.get('authorization') || '';
+  const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
+  if (token) {
+    const { jwt, accessToken } = decodeSessionJwt(token);
+    if (jwt) {
+      try {
+        verifiedSession = await resolveSessionData(null, jwt, accessToken, platformEnv);
+      } catch {
+        // Authentication resolution failure
+      }
+    }
+  }
+  const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
+  const isOwner = Boolean(verifiedSession?.user?.id && mediaMeta.created_by === verifiedSession.user.id);
+  const isAuthenticatedAllowed = mediaMeta.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
+  const isAdultRestricted = classification.category === 'RESTRICTED' && classification.reason === 'CONTENT_RATING_ADULT_18';
+  let isAdultAllowed = false;
+  if (isAdultRestricted) {
+    const ageCookie = cookies.get('nox-age-status');
+    const sessionAgeStatus = verifiedSession?.profile?.age_status;
+    if (isStaff || isOwner || ageCookie === 'ADULT' || sessionAgeStatus === 'ADULT') {
+      isAdultAllowed = true;
+    }
+  }
+  const allowed = isStaff || isOwner || isAuthenticatedAllowed || isAdultAllowed;
+  return { allowed, isAdultRestricted, isAdultAllowed, isStaff, isOwner, isAuthenticatedAllowed };
+}
+
 const COVER_BODY_IDLE_TIMEOUT_MS = 12_000;
+const storageShardBotCache = new Map<string, string>();
 
 async function downloadCoverWithTransientRetry(
   client: { download: (fileId: string) => Promise<ReadableStream<Uint8Array>> },
@@ -114,11 +171,26 @@ async function downloadTelegramMedia(
   return downloadCoverWithTransientRetry(client, providerKey);
 }
 
-export const GET = async ({ locals, params, request, platform, cookies }: any) => {
+export const GET = async ({ locals: _locals, params, request, platform, cookies }: any) => {
   if (!/^[0-9a-f-]{36}$/.test(params.id)) error(404);
 
   // Preserve heavy 31MB uncompressed original and typo alias by redirecting to the 5.6MB optimized animated avatar
   if (params.id === 'bdaa2c94-260c-4f9c-85dc-edfc196815f1' || params.id === '4c812f93-6bb1-40f9-9151-dc2d20e86e5e') {
+    const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS) ||
+      await isMediaRevoked('4c86bd8d-1ad8-4142-a660-55fc0824b22a', platform?.env?.COVER_THUMBNAILS);
+    if (isRevoked) {
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+    }
     return new Response(null, {
       status: 302,
       headers: {
@@ -142,18 +214,114 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
   // that buffered a complete small original merely to make a thumbnail.
   const canonicalUrl = coverVariant ? `${url.origin}/media/${params.id}?size=${coverVariant}&v=3` : `${url.origin}/media/${params.id}`;
   const cacheKey = new Request(canonicalUrl, { method: 'GET' });
-  const cache = typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null;
+  const cache = platform?.caches?.default || (typeof caches !== 'undefined' && (caches as any).default ? (caches as any).default : null);
   const hasAuth = Boolean(auth) || Boolean(extractFullAuthCookie(cookies.getAll()));
+  const ctx = platform?.context || platform?.ctx;
+  const waitUntil = typeof ctx?.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : undefined;
   if (cache && !internalCoverWarm && !hasAuth) {
     try {
       const cached = await cache.match(cacheKey);
       if (cached && cached.status === 200) {
+        const isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { failClosed: true });
+        if (isRevoked) {
+          const purgeOptions = {
+            cache,
+            ctx,
+            origin: url.origin,
+            currentUrl: request.url,
+            requirePurgeDispatch: true
+          };
+          if (waitUntil) {
+            waitUntil(purgeMediaVariants(params.id, purgeOptions));
+          } else {
+            await purgeMediaVariants(params.id, purgeOptions);
+          }
+          return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
+            status: 404,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+              'CDN-Cache-Control': 'no-store',
+              'Cloudflare-CDN-Cache-Control': 'no-store',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+        }
         const etag = cached.headers.get('ETag');
-        if (etag && request.headers.get('if-none-match') === etag) {
+        if (etag && matchesETag(request.headers.get('if-none-match'), etag)) {
           const res = new Response(null, { status: 304, headers: cached.headers });
           res.headers.set('X-Media-Cache', 'HIT');
           return res;
         }
+
+        const ifMatch = request.headers.get('if-match');
+        if (ifMatch && ifMatch !== '*' && etag) {
+          const matchEtags = ifMatch.split(',').map((s: string) => s.trim());
+          if (!matchEtags.includes(etag.trim()) || etag.startsWith('W/')) {
+            const res = new Response(null, { status: 412, headers: cached.headers });
+            res.headers.set('X-Media-Cache', 'HIT');
+            return res;
+          }
+        }
+
+        if (request.method === 'HEAD') {
+          const res = new Response(null, { status: 200, headers: cached.headers });
+          res.headers.set('X-Media-Cache', 'HIT');
+          return res;
+        }
+
+        const rangeHeader = request.headers.get('range');
+        const ifRange = request.headers.get('if-range');
+        let evaluateRange = Boolean(rangeHeader && request.method === 'GET');
+        if (evaluateRange && ifRange) {
+          // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+          if (!etag || ifRange.trim().startsWith('W/') || ifRange.trim() !== etag.trim()) {
+            evaluateRange = false;
+          }
+        }
+
+        // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+        const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+        const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+        if (isRangeValid && rangeMatch) {
+          const ab = await cached.arrayBuffer();
+          const total = ab.byteLength;
+          let start: number;
+          let end: number;
+          if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+            const suffixLen = parseInt(rangeMatch[2], 10);
+            if (suffixLen === 0 || total === 0) {
+              const rangeErrHeaders = new Headers(cached.headers);
+              rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+              rangeErrHeaders.set('X-Media-Cache', 'HIT');
+              return new Response(null, { status: 416, headers: rangeErrHeaders });
+            }
+            start = Math.max(0, total - suffixLen);
+            end = total - 1;
+          } else {
+            start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+            end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
+          }
+
+          if (start >= total || start > end || total === 0) {
+            const rangeErrHeaders = new Headers(cached.headers);
+            rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+            rangeErrHeaders.set('X-Media-Cache', 'HIT');
+            return new Response(null, { status: 416, headers: rangeErrHeaders });
+          }
+
+          const actualEnd = Math.min(end, total - 1);
+          const rangeLen = actualEnd - start + 1;
+          const rangeHeaders = new Headers(cached.headers);
+          rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+          rangeHeaders.set('Content-Length', String(rangeLen));
+          rangeHeaders.set('X-Media-Cache', 'HIT');
+          const sliced = ab.slice(start, actualEnd + 1);
+          return new Response(sliced, { status: 206, headers: rangeHeaders });
+        }
+
         const res = new Response(cached.body, cached);
         res.headers.set('X-Media-Cache', 'HIT');
         return res;
@@ -163,22 +331,28 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
-  // Cover thumbnails are derived public media. Unlike the per-PoP Worker cache,
-  // KV lets a freshly imported cover avoid a first-reader Telegram round-trip
-  // on another region/device. Never use it for full pages or private media.
-  if (coverVariant) {
-    const prewarmed = await readCoverThumbnail(
-      platform?.env?.COVER_THUMBNAILS,
-      params.id,
-      request.headers.get('if-none-match'),
-      coverVariant
-    );
-    if (prewarmed) return prewarmed;
+  let media: any;
+  try {
+    media = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true, authoritative: true });
+  } catch {
+    media = null;
   }
-
-  const media: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env);
-  if (!media || media.storage_ready === false || media.status === 'DELETED') {
-    return new Response(JSON.stringify({ error: 'Mídia não encontrada' }), {
+  if (!media || media.storage_ready !== true || media.status !== 'ACTIVE') {
+    if (media && media.status !== 'ACTIVE') {
+      invalidateMediaMetadataCache(params.id);
+      if (cache || platform?.context?.cache) {
+        const purgeTask = purgeMediaVariants(params.id, {
+          cache,
+          ctx,
+          origin: url.origin,
+          requirePurgeDispatch: true
+        }).catch(() => {});
+        if (waitUntil) {
+          waitUntil(purgeTask);
+        }
+      }
+    }
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Mídia não encontrada' }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json',
@@ -191,101 +365,220 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     });
   }
 
-  // Media Access Classification:
-  // 1. Explicit private access classes MUST NEVER be treated as public.
-  // 2. Internal/unreleased purposes (staff_manual, pipeline, etc.) MUST NOT be public unless explicitly marked PUBLIC.
-  // 3. Published chapters (editorial, staff_chapter, scan_chapter), covers, avatars, banners are public.
-  const isExplicitlyPrivate =
-    media.access_class === 'STAFF_ONLY' ||
-    media.access_class === 'AUTHENTICATED' ||
-    media.access_class === 'PRIVATE' ||
-    media.access_class === 'RESTRICTED';
-
-  const isInternalPurpose =
-    media.purpose === 'staff_manual' ||
-    media.purpose === 'pipeline' ||
-    media.purpose === 'scan_pipeline' ||
-    media.purpose === 'production';
-
-  const isPublic =
-    !isExplicitlyPrivate &&
-    (media.access_class === 'PUBLIC' ||
-      (!isInternalPurpose &&
-        (media.purpose === 'editorial' ||
-          media.purpose === 'staff_chapter' ||
-          media.purpose === 'scan_chapter' ||
-          media.purpose === 'avatar' ||
-          media.purpose === 'banner' ||
-          media.purpose === 'scan_logo' ||
-          media.purpose === 'scan_banner' ||
-          media.purpose === 'cosmetic' ||
-          !media.access_class)));
-
-  if (!isPublic) {
-    let verifiedSession = null;
-    const rawCookie = extractFullAuthCookie(cookies.getAll());
-    const authHeader = request.headers.get('authorization') || '';
-    const token = rawCookie || (authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '');
-    if (token) {
-      const { jwt, accessToken } = decodeSessionJwt(token);
-      if (jwt) {
-        try {
-          verifiedSession = await resolveSessionData(null, jwt, accessToken, platform?.env);
-        } catch {
-          // Authentication resolution failure
-        }
-      }
-    }
-    const isStaff = ['STAFF_SITE', 'ADMIN', 'EDITOR'].includes(verifiedSession?.role || '');
-    const isOwner = Boolean(verifiedSession?.user?.id && media.created_by === verifiedSession.user.id);
-    const isAuthenticatedAllowed = media.access_class === 'AUTHENTICATED' && Boolean(verifiedSession?.user?.id);
-    if (!isStaff && !isOwner && !isAuthenticatedAllowed) {
-      return new Response(JSON.stringify({ error: 'Acesso não autorizado' }), {
-        status: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-          'CDN-Cache-Control': 'no-store',
-          'Cloudflare-CDN-Cache-Control': 'no-store',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-    }
-
-    // Authorized access to non-public media: redirect to dedicated private endpoint
-    // to strictly prevent edge CDN caching under the /media/* zone rule.
-    return new Response(null, {
-      status: 307,
+  if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true, allowActivePrivate: hasAuth })) {
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
+      status: 404,
       headers: {
-        'Location': `/api/media/${params.id}${url.search}`,
-        'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         'CDN-Cache-Control': 'no-store',
         'Cloudflare-CDN-Cache-Control': 'no-store',
         'Pragma': 'no-cache',
-        'Expires': '0',
-        'Vary': 'Cookie, Authorization'
+        'Expires': '0'
       }
     });
   }
 
+  // Authoritative Media Access Classification
+  const accessClassification = classifyMediaAccess(media);
+  let isPublic = accessClassification.isPublic;
+
+  if (!isPublic) {
+    const authCheck = await isAuthorizedForMedia(media, accessClassification, cookies, request, platform?.env);
+    if (!authCheck.allowed) {
+      // NOTE: Leitura não autorizada NÃO é revogação administrativa; não grava tombstone nem altera manifesto KV.
+      // Porém, purga qualquer cache público residual da borda para garantir fail-closed contra entradas antigas.
+      if (cache || platform?.context?.cache) {
+        const purgePromise = purgeMediaVariants(params.id, {
+          cache,
+          ctx,
+          origin: url.origin,
+          currentUrl: request.url,
+          requirePurgeDispatch: true
+        }).catch(() => {});
+        if (waitUntil) {
+          waitUntil(purgePromise);
+        }
+      }
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify({
+        error: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+        age_restricted: authCheck.isAdultRestricted
+      }), {
+        status: authCheck.isAdultRestricted ? 403 : 404,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Vary': 'Cookie, Authorization'
+        }
+      });
+    }
+
+    if (authCheck.isAdultAllowed && !authCheck.isStaff && !authCheck.isOwner && !authCheck.isAuthenticatedAllowed) {
+      // Proceed to serve the media, but ensure headers are strictly private
+    } else if (media.access_class !== 'PUBLIC' && !authCheck.isAdultRestricted) {
+      // Authorized access to non-public media: redirect to dedicated private endpoint
+      // to strictly prevent edge CDN caching under the /media/* zone rule.
+      return new Response(null, {
+        status: 307,
+        headers: {
+          'Location': `/api/media/${params.id}${url.search}`,
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Cloudflare-CDN-Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Vary': 'Cookie, Authorization'
+        }
+      });
+    }
+  }
+
+  const isPrivateDelivery = !isPublic || accessClassification.category === 'RESTRICTED';
   const headers: Record<string, string> = {
     'Content-Type': media.mime || 'image/jpeg',
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
     'CDN-Cache-Control': 'public, max-age=31536000',
     'Cloudflare-CDN-Cache-Control': 'public, max-age=31536000',
+    'Cache-Tag': `media-${params.id},media-public`,
+    'X-Cache-Tag': `media-${params.id},media-public`,
     'ETag': `"${media.sha256}"`,
     'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Access-Control-Allow-Origin': '*',
+    'Accept-Ranges': 'bytes',
     'X-Media-Cache': 'MISS'
   };
 
-  if (request.headers.get('if-none-match') === headers.ETag) {
+  if (isPrivateDelivery) {
+    headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate, max-age=0';
+    headers['Pragma'] = 'no-cache';
+    headers['Expires'] = '0';
+    headers['CDN-Cache-Control'] = 'no-store';
+    headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
+    headers['Vary'] = 'Cookie, Authorization';
+    delete headers['Cache-Tag'];
+    delete headers['X-Cache-Tag'];
+  }
+
+  // Cover thumbnails are derived public media. When verified active and public via authoritative DB,
+  // prewarmed KV thumbnails eliminate cold Telegram round-trips and CPU resize operations.
+  // Never serve KV thumbnails for private, restricted, or unverified media.
+  if (coverVariant && isPublic && platform?.env?.COVER_THUMBNAILS) {
+    const prewarmed = await readCoverThumbnail(
+      platform.env.COVER_THUMBNAILS,
+      params.id,
+      request.headers.get('if-none-match'),
+      coverVariant
+    );
+    if (prewarmed) {
+      const etag = prewarmed.headers.get('ETag');
+      const ifMatch = request.headers.get('if-match');
+      if (ifMatch && ifMatch !== '*' && etag) {
+        const matchEtags = ifMatch.split(',').map((s) => s.trim());
+        if (!matchEtags.includes(etag.trim()) || etag.startsWith('W/')) {
+          return new Response(null, { status: 412, headers: prewarmed.headers });
+        }
+      }
+
+      if (request.method === 'HEAD') {
+        return new Response(null, { status: prewarmed.status, headers: prewarmed.headers });
+      }
+
+      const rangeHeader = request.headers.get('range');
+      const ifRange = request.headers.get('if-range');
+      let evaluateRange = Boolean(rangeHeader && request.method === 'GET' && prewarmed.status === 200);
+      if (evaluateRange && ifRange) {
+        if (!etag || ifRange.trim().startsWith('W/') || ifRange.trim() !== etag.trim()) {
+          evaluateRange = false;
+        }
+      }
+
+      // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+      const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+      const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+      if (isRangeValid && rangeMatch) {
+        const ab = await prewarmed.arrayBuffer();
+        const total = ab.byteLength;
+        let start: number;
+        let end: number;
+        if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+          const suffixLen = parseInt(rangeMatch[2], 10);
+          if (suffixLen === 0 || total === 0) {
+            const rangeErrHeaders = new Headers(prewarmed.headers);
+            rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+            return new Response(null, { status: 416, headers: rangeErrHeaders });
+          }
+          start = Math.max(0, total - suffixLen);
+          end = total - 1;
+        } else {
+          start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+          end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
+        }
+
+        if (start >= total || start > end || total === 0) {
+          const rangeErrHeaders = new Headers(prewarmed.headers);
+          rangeErrHeaders.set('Content-Range', `bytes */${total}`);
+          return new Response(null, { status: 416, headers: rangeErrHeaders });
+        }
+
+        const actualEnd = Math.min(end, total - 1);
+        const rangeLen = actualEnd - start + 1;
+        const rangeHeaders = new Headers(prewarmed.headers);
+        rangeHeaders.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+        rangeHeaders.set('Content-Length', String(rangeLen));
+        const sliced = ab.slice(start, actualEnd + 1);
+        return new Response(sliced, { status: 206, headers: rangeHeaders });
+      }
+
+      // Populate edge cache so subsequent requests hit Worker edge cache with 0 KV reads and 0 YSQL queries
+      if (cache && prewarmed.status === 200 && !internalCoverWarm) {
+        const cacheResponse = prewarmed.clone();
+        const cachePutTask = async () => {
+          if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+            return;
+          }
+          await cache.put(cacheKey, cacheResponse);
+          if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+            await cache.delete(cacheKey);
+          }
+        };
+        if (waitUntil) {
+          waitUntil(cachePutTask());
+        } else {
+          await cachePutTask();
+        }
+      }
+      return prewarmed;
+    }
+  }
+
+  if (media.bytes && Number(media.bytes) > 0) {
+    headers['Content-Length'] = String(media.bytes);
+  }
+
+  if (matchesETag(request.headers.get('if-none-match'), headers.ETag)) {
     return new Response(null, { status: 304, headers });
   }
 
+  const ifMatch = request.headers.get('if-match');
+  if (ifMatch && ifMatch !== '*' && headers.ETag) {
+    const matchEtags = ifMatch.split(',').map((s) => s.trim());
+    if (!matchEtags.includes(headers.ETag.trim()) || headers.ETag.startsWith('W/')) {
+      return new Response(null, { status: 412, headers });
+    }
+  }
+
+  if (request.method === 'HEAD') {
+    return new Response(null, { status: 200, headers });
+  }
+
   let body: BodyInit;
-  let downloadBotRef = media.bot_reference;
+  let downloadBotRef: string | undefined;
   if (media.provider === 'supabase') {
     return new Response(JSON.stringify({ error: 'Mídia legada descontinuada' }), {
       status: 502,
@@ -301,13 +594,18 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
     // 1. If storage_shard_id is present and botRef is missing or default 'primary', lookup shard definition
     if (shardId && (!botRef || botRef === 'primary')) {
-      const shardRes = await executeYugabyteSql(
-        'SELECT bot_reference FROM storage_shards WHERE id = $1 LIMIT 1;',
-        [shardId],
-        platform?.env
-      ).catch(() => ({ rows: [] as any[] }));
-      if (shardRes.rows[0]?.bot_reference) {
-        botRef = shardRes.rows[0].bot_reference;
+      if (storageShardBotCache.has(shardId)) {
+        botRef = storageShardBotCache.get(shardId)!;
+      } else {
+        const shardRes = await executeYugabyteSql(
+          'SELECT bot_reference FROM storage_shards WHERE id = $1 LIMIT 1;',
+          [shardId],
+          platform?.env
+        ).catch(() => ({ rows: [] as any[] }));
+        if (shardRes.rows[0]?.bot_reference) {
+          botRef = shardRes.rows[0].bot_reference;
+          storageShardBotCache.set(shardId, botRef);
+        }
       }
     }
 
@@ -337,14 +635,16 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
           const stream = await downloadTelegramMedia(altClient, media.provider_key);
           body = stream;
           botRef = altBotRef;
-          // Self-heal DB mapping in background
-          const healingPromise = executeYugabyteSql(
-            'UPDATE media SET bot_reference = $1 WHERE id = $2;',
-            [altBotRef, media.id],
-            platform?.env
-          ).catch((e) => console.warn('[MEDIA_HEAL_WARN]', e));
-          if (platform?.context?.waitUntil) {
-            platform.context.waitUntil(healingPromise);
+          downloadBotRef = altBotRef;
+          // Self-heal DB mapping synchronously within request lifecycle
+          try {
+            await executeYugabyteSql(
+              'UPDATE media SET bot_reference = $1 WHERE id = $2;',
+              [altBotRef, media.id],
+              platform?.env
+            );
+          } catch (e: any) {
+            console.warn('[MEDIA_HEAL_WARN]', e?.message);
           }
         } catch {
           console.error('[MEDIA_DOWNLOAD_FAILED]', {
@@ -387,10 +687,18 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     const pixels = Math.max(0, Number(media.width) || 0) * Math.max(0, Number(media.height) || 0);
     const canResize = mime === 'image/jpeg' || mime === 'image/png';
     const isChapterPage = media.purpose === 'chapter_page';
+    const targetMaxW = coverVariant === 'hero' ? 720 : 480;
+    const targetMaxH = coverVariant === 'hero' ? 1020 : 680;
+    const isAlreadyWithinBounds =
+      Number(media.width) > 0 &&
+      Number(media.height) > 0 &&
+      Number(media.width) <= targetMaxW &&
+      Number(media.height) <= targetMaxH;
     const streamOriginal =
       !canResize ||
       isChapterPage ||
-      (coverVariant === 'thumb' &&
+      isAlreadyWithinBounds ||
+      ((coverVariant === 'thumb' || coverVariant === 'hero') &&
         !internalCoverWarm &&
         bytes > 0 &&
         bytes <= 1_000_000 &&
@@ -408,8 +716,10 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
         headers['Content-Length'] = String(thumb.data.length);
         if (thumb.resized) {
           headers['ETag'] = `"${media.sha256}-thumb-v3"`;
+          headers['X-Thumbnail-Strategy'] = 'resized';
+        } else {
+          headers['X-Thumbnail-Strategy'] = 'stream-original';
         }
-        headers['X-Thumbnail-Strategy'] = 'resized';
       } catch (thumbErr) {
         // The first Telegram stream is one-shot. Reopen it once so a stalled
         // decoder/read degrades to a valid original instead of a broken image.
@@ -445,12 +755,163 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     }
   }
 
+  // 1. Authoritative post-download re-verification BEFORE Range evaluation, internal cover warm, and edge cache.put:
+  // Checks KV tombstone and in-memory revocation sets first, then re-verifies authoritative
+  // Yugabyte metadata to ensure that if public.media.status was changed to DELETED or if access_class
+  // was changed to PRIVATE/RESTRICTED while download was in-flight but remote PoP KV is lagging/outdated,
+  // the media is NEVER returned with public headers (neither 200 nor 206) and NEVER cached at edge.
+  let isRevoked = await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true });
+  let authDeniedInfo: { status: number; message: string; isAdultRestricted: boolean } | null = null;
+
+  if (!isRevoked) {
+    try {
+      const freshMeta: any = await fetchMediaMetadataFromYugabyte(params.id, platform?.env, { forceFresh: true, authoritative: true });
+      if (!freshMeta || freshMeta.storage_ready !== true || freshMeta.status !== 'ACTIVE') {
+        isRevoked = true;
+        invalidateMediaMetadataCache(params.id);
+      } else {
+        const freshClassification = classifyMediaAccess(freshMeta);
+        const wasPublic = isPublic;
+        isPublic = isPublic && freshClassification.isPublic;
+        const isFreshPrivateDelivery = !isPublic || freshClassification.category === 'RESTRICTED';
+
+        if (isFreshPrivateDelivery) {
+          const authCheck = await isAuthorizedForMedia(freshMeta, freshClassification, cookies, request, platform?.env);
+          if (!authCheck.allowed) {
+            isRevoked = true;
+            authDeniedInfo = {
+              status: authCheck.isAdultRestricted ? 403 : 404,
+              message: authCheck.isAdultRestricted ? 'Conteúdo restrito a maiores de 18 anos' : 'Acesso não autorizado',
+              isAdultRestricted: authCheck.isAdultRestricted
+            };
+            invalidateMediaMetadataCache(params.id);
+          } else {
+            // Authorized delivery of newly privatized or restricted media:
+            // CRITICAL: Recompute headers so private content NEVER inherits public/immutable cache headers.
+            headers['Cache-Control'] = 'private, no-cache, no-store, must-revalidate, max-age=0';
+            headers['Pragma'] = 'no-cache';
+            headers['Expires'] = '0';
+            headers['CDN-Cache-Control'] = 'no-store';
+            headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
+            headers['Vary'] = 'Cookie, Authorization';
+            delete headers['Cache-Tag'];
+            delete headers['X-Cache-Tag'];
+
+            // Purge edge cache to invalidate any prior public variant that might have been cached
+            if (wasPublic && (cache || platform?.context?.cache)) {
+              const purgeTask = purgeMediaVariants(params.id, {
+                cache,
+                ctx,
+                origin: url.origin,
+                currentUrl: request.url,
+                requirePurgeDispatch: true
+              }).catch(() => {});
+              if (waitUntil) {
+                waitUntil(purgeTask);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Fail closed for caching: if database status cannot be re-verified after download,
+      // fail closed by treating as revoked to strictly prevent committing stale media to cache
+      isRevoked = true;
+    }
+  }
+
+  if (isRevoked) {
+    if (cache || platform?.context?.cache) {
+      const purgeTask = purgeMediaVariants(params.id, {
+        cache,
+        ctx,
+        origin: url.origin,
+        requirePurgeDispatch: true
+      }).catch(() => {});
+      if (waitUntil) {
+        waitUntil(purgeTask);
+      }
+    }
+    const statusCode = authDeniedInfo ? authDeniedInfo.status : 404;
+    const errorMessage = authDeniedInfo ? authDeniedInfo.message : 'Acesso não autorizado';
+    const isAdult = Boolean(authDeniedInfo?.isAdultRestricted);
+    return new Response(request.method === 'HEAD' ? null : JSON.stringify({
+      error: errorMessage,
+      ...(isAdult ? { age_restricted: true } : {})
+    }), {
+      status: statusCode,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Cloudflare-CDN-Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Vary': 'Cookie, Authorization'
+      }
+    });
+  }
+
+  const rangeHeader = request.headers.get('range');
+  const ifRange = request.headers.get('if-range');
+  const currentEtag = headers['ETag'] ? String(headers['ETag']).trim() : null;
+  let evaluateRange = Boolean(rangeHeader && request.method === 'GET');
+  if (evaluateRange && ifRange) {
+    // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+    if (!currentEtag || ifRange.trim().startsWith('W/') || ifRange.trim() !== currentEtag) {
+      evaluateRange = false;
+    }
+  }
+
+  // Parse single byte range. Multi-range or invalid syntax is ignored per RFC 9110 §14.1.1 & §14.2
+  const rangeMatch = evaluateRange && rangeHeader ? rangeHeader.trim().match(/^bytes=(\d*)-(\d*)$/) : null;
+  const isRangeValid = Boolean(rangeMatch && (rangeMatch[1] !== '' || rangeMatch[2] !== ''));
+
+  if (isRangeValid && rangeMatch) {
+    const bytes = body instanceof Uint8Array ? body : await toUint8Array(body);
+    const total = bytes.byteLength;
+    let start: number;
+    let end: number;
+    if (rangeMatch[1] === '' && rangeMatch[2] !== '') {
+      // RFC 9110 suffix range: bytes=-N
+      const suffixLen = parseInt(rangeMatch[2], 10);
+      if (suffixLen === 0 || total === 0) {
+        return new Response(null, {
+          status: 416,
+          headers: { ...headers, 'Content-Range': `bytes */${total}` }
+        });
+      }
+      start = Math.max(0, total - suffixLen);
+      end = total - 1;
+    } else {
+      start = rangeMatch[1] ? parseInt(rangeMatch[1], 10) : 0;
+      end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : total - 1;
+    }
+
+    if (start >= total || start > end || total === 0) {
+      return new Response(null, {
+        status: 416,
+        headers: { ...headers, 'Content-Range': `bytes */${total}` }
+      });
+    }
+
+    const actualEnd = Math.min(end, total - 1);
+    const sliced = bytes.subarray(start, actualEnd + 1);
+    const rangeHeaders = {
+      ...headers,
+      'Content-Range': `bytes ${start}-${actualEnd}/${total}`,
+      'Content-Length': String(sliced.byteLength)
+    };
+    return new Response(sliced, { status: 206, headers: rangeHeaders });
+  }
+
   const response = new Response(body, { status: 200, headers });
 
-  // Only the authenticated publication event may create a global KV entry.
+  // 2. Only the authenticated publication event may create a global KV entry.
   // Interactive requests still read a hot entry, but never write one: that
   // prevents a cold edge or concurrent browser views from exhausting the KV
   // free-tier write budget. Large/full reader pages never enter this path.
+  // Executed ONLY IF verified not revoked.
   const kv = platform?.env?.COVER_THUMBNAILS;
   const responseBytes = Number(headers['Content-Length'] || 0);
   if (internalCoverWarm && isPublic && kv && (!responseBytes || responseBytes <= MAX_COVER_THUMBNAIL_BYTES)) {
@@ -467,15 +928,27 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
     response.headers.set('X-Cover-Warm', persisted === 'stored' ? 'stored' : 'skipped');
   }
 
-  // Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
+  // 3. Only cache valid HTTP 200 public responses in Cloudflare edge cache (up to 10MB)
   const isCachableAtEdge = Boolean(media.bytes ? Number(media.bytes) <= 10_485_760 : true);
-  if (cache && isPublic && isCachableAtEdge) {
+  if (cache && isPublic && isCachableAtEdge && !isRevoked) {
     try {
       const cacheResponse = response.clone();
-      if (platform?.context?.waitUntil) {
-        platform.context.waitUntil(cache.put(cacheKey, cacheResponse));
-      } else {
+      const putTask = async () => {
+        // Pre-put guard: check if media was revoked while the response was preparing
+        if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+          return;
+        }
         await cache.put(cacheKey, cacheResponse);
+        // Post-put guard: if an administrative revocation occurred concurrently during cache.put,
+        // purge the entry immediately so the late-completing put cannot resurrect stale public cache
+        if (await isMediaRevoked(params.id, platform?.env?.COVER_THUMBNAILS, { checkTombstone: true })) {
+          await cache.delete(cacheKey);
+        }
+      };
+      if (waitUntil) {
+        waitUntil(putTask());
+      } else {
+        await putTask();
       }
     } catch (cacheErr) {
       console.warn('Edge cache put failed:', cacheErr);
@@ -484,3 +957,5 @@ export const GET = async ({ locals, params, request, platform, cookies }: any) =
 
   return response;
 };
+
+export const HEAD = GET;

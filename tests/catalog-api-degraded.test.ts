@@ -4,7 +4,13 @@ const { fetchCatalog, verifyAuth } = vi.hoisted(() => ({
   fetchCatalog: vi.fn(),
   verifyAuth: vi.fn()
 }));
-vi.mock('../src/lib/server/yugabyte', () => ({ fetchCatalogFromYugabyte: fetchCatalog }));
+vi.mock('../src/lib/server/yugabyte', () => ({
+  fetchCatalogFromYugabyte: fetchCatalog,
+  executeYugabyteSql: vi.fn(),
+  fetchWorkFromYugabyte: vi.fn(),
+  fetchWorkTagsFromYugabyte: vi.fn(),
+  withYugabyteReadSession: (_env: any, fn: any) => fn(_env)
+}));
 vi.mock('../src/lib/server/mihon', () => ({ verifyMihonAuth: verifyAuth }));
 
 import { GET as works } from '../src/routes/api/works/+server';

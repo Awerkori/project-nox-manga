@@ -42,9 +42,6 @@
   let chatLoading = $state(false);
   let chatError = $state('');
 
-  let myMemberInfo = $derived(team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId));
-  let myDisplayName = $derived(myMemberInfo?.display_name || myMemberInfo?.username || 'Membro');
-
   // The server is the source of truth. This small local order is only kept
   // while an owner receives feedback from a channel-reorder request.
   let localChannelOrder = $state<string[] | null>(null);
@@ -226,12 +223,51 @@
     }
   }
 
+  let lastChatInteraction = Date.now();
+  let handleVisibilityChange: (() => void) | null = null;
+  let handleChatActivity: (() => void) | null = null;
+
+  function scheduleNextChatPoll() {
+    if (chatPollTimer) {
+      clearTimeout(chatPollTimer);
+      chatPollTimer = null;
+    }
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
+    const isIdle = Date.now() - lastChatInteraction > 60_000;
+    const interval = isIdle ? 25_000 : 8_000;
+    chatPollTimer = setTimeout(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        await loadChatSnapshot();
+      }
+      scheduleNextChatPoll();
+    }, interval);
+  }
+
   onMount(() => {
     void loadChatSnapshot();
-    // Poll chat updates every 8 seconds while mounted
-    chatPollTimer = setInterval(() => {
-      void loadChatSnapshot();
-    }, 8000);
+    scheduleNextChatPoll();
+
+    if (typeof document !== 'undefined') {
+      handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          lastChatInteraction = Date.now();
+          void loadChatSnapshot();
+          scheduleNextChatPoll();
+        } else if (chatPollTimer) {
+          clearTimeout(chatPollTimer);
+          chatPollTimer = null;
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      handleChatActivity = () => {
+        lastChatInteraction = Date.now();
+      };
+      window.addEventListener('keydown', handleChatActivity, { passive: true });
+      window.addEventListener('click', handleChatActivity, { passive: true });
+    }
 
     // Deep link hash handling (#msg-<id>)
     if (typeof window !== 'undefined' && window.location.hash?.startsWith('#msg-')) {
@@ -250,8 +286,15 @@
 
   onDestroy(() => {
     if (chatPollTimer) {
-      clearInterval(chatPollTimer);
+      clearTimeout(chatPollTimer);
       chatPollTimer = null;
+    }
+    if (typeof document !== 'undefined') {
+      if (handleVisibilityChange) document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (handleChatActivity) {
+        window.removeEventListener('keydown', handleChatActivity);
+        window.removeEventListener('click', handleChatActivity);
+      }
     }
     for (const item of Object.values(typingUsers)) {
       if (item.timer) clearTimeout(item.timer);

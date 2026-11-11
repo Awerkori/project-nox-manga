@@ -390,10 +390,6 @@ export async function loadSnapshot(
         return cachedSnapshotEntry.data;
       }
       if (ageMs < SNAPSHOT_STALE_TTL_MS) {
-        if (!inFlightSnapshotPromise) {
-          const bg = buildSnapshot({ locals, platform }, false);
-          platform?.context?.waitUntil?.(bg.catch(() => {}));
-        }
         return cachedSnapshotEntry.data;
       }
     }
@@ -406,7 +402,7 @@ export async function loadSnapshot(
 }
 
 async function buildSnapshot(
-  { locals, platform }: any,
+  { locals: _locals, platform }: any,
   forceRefresh = false,
   isTestEnv = false,
 ) {

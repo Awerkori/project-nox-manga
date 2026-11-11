@@ -1,4 +1,4 @@
-import { sendBrevoEmail, queryBrevoEvents } from './brevo';
+import { sendBrevoEmail } from './brevo';
 import { generateEmailHtml } from './email-templates';
 import { executeYugabyteSql } from './yugabyte';
 
@@ -88,7 +88,7 @@ async function resolveUserContact(userId: string, platformEnv?: any): Promise<{ 
         return { email, name };
       }
     }
-  } catch (err) {
+  } catch {
     // Non-fatal Yugabyte lookup
   }
 
@@ -101,7 +101,9 @@ async function resolveUserContact(userId: string, platformEnv?: any): Promise<{ 
     if (memRes.rows[0]) {
       name = memRes.rows[0].display_name || memRes.rows[0].username || 'Membro';
     }
-  } catch {}
+  } catch {
+    // Non-fatal member lookup
+  }
 
   return { email, name };
 }
@@ -285,26 +287,20 @@ export async function createNotification(
         console.warn('[NOTIF] Erro ao inserir scan_email_outbox em YugabyteDB:', outboxErr?.message);
       }
 
-      // 6. Disparo imediato para o Brevo garantindo envio em tempo real
-      if (emailQueued) {
-        const dispatchPromise = processPendingEmailOutbox(10, outboxId).catch(err => {
+      // 6. Processamento da outbox: no ambiente Cloudflare Workers/Hyperdrive,
+      // consultas YSQL NUNCA devem ser agendadas em waitUntil após a resposta para
+      // preservar o ciclo de vida da conexão Yugabyte. A fila outbox persistida é
+      // processada de forma assíncrona pelo cron de outbox ou endpoint dedicado.
+      if (emailQueued && !platform) {
+        await processPendingEmailOutbox(10, outboxId).catch(err => {
           console.error('[NOTIF] Erro no processamento imediato da outbox:', err);
         });
-
-        if (platform?.context?.waitUntil) {
-          platform.context.waitUntil(dispatchPromise);
-        } else {
-          await dispatchPromise;
-        }
       }
     }
   }
 
   return { notificationId, emailQueued, outboxId };
 }
-
-let isDispatching = false;
-let hasQueuedRun = false;
 
 /**
  * Processa itens pendentes da outbox de e-mail enviando para o Brevo.

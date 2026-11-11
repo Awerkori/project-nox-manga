@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { member } from '$lib/server/db';
-import { generateMihonToken } from '$lib/server/mihon';
+import { generateMihonToken, invalidateMihonTokenCache, recordMihonTokenRevocation } from '$lib/server/mihon';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
 export const GET = async ({ locals, platform }) => {
@@ -16,7 +16,7 @@ export const GET = async ({ locals, platform }) => {
       platform?.env
     );
     return json({ tokens: res.rows || [] });
-  } catch (err: any) {
+  } catch {
     return json({ error: 'Erro ao carregar tokens' }, { status: 500 });
   }
 };
@@ -45,7 +45,7 @@ export const POST = async ({ request, locals, platform }) => {
 export const DELETE = async ({ request, locals, platform }) => {
   const userId = member(locals);
 
-  let tokenId = '';
+  let tokenId: string;
   try {
     const body = await request.json();
     tokenId = body.id;
@@ -58,13 +58,19 @@ export const DELETE = async ({ request, locals, platform }) => {
   }
 
   try {
-    await executeYugabyteSql(
-      `UPDATE public.mihon_tokens SET revoked = true WHERE id = $1 AND user_id = $2;`,
+    const res = await executeYugabyteSql(
+      `UPDATE public.mihon_tokens SET revoked = true WHERE id = $1 AND user_id = $2 RETURNING token_hash;`,
       [tokenId, userId],
       platform?.env
     );
+    const tokenHash = res.rows?.[0]?.token_hash;
+    if (!tokenHash) {
+      return json({ error: 'Token não encontrado ou não autorizado' }, { status: 404 });
+    }
+    invalidateMihonTokenCache();
+    await recordMihonTokenRevocation(tokenHash, platform?.env?.COVER_THUMBNAILS);
     return json({ ok: true });
-  } catch (err: any) {
+  } catch {
     return json({ error: 'Erro ao revogar token' }, { status: 500 });
   }
 };

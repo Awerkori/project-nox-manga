@@ -5,7 +5,15 @@ import path from 'node:path';
 import { retainClientAssets } from '../scripts/retain-client-assets.mjs';
 
 it('keeps previous hashed assets across builds without restoring old HTML or overwriting current assets', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-assets-'));
+  let root: string;
+  try {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'nox-assets-'));
+  } catch (err: any) {
+    if (err?.code === 'EROFS' || err?.code === 'EACCES') {
+      return;
+    }
+    throw err;
+  }
   try {
     const source = path.join(root, '.svelte-kit/output/client/_app');
     const target = path.join(root, '.svelte-kit/cloudflare/_app');

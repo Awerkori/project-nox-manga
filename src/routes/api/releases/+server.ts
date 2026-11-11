@@ -19,7 +19,7 @@ function pruneReleasesCache(now: number) {
   }
 }
 
-function cachedReleases(key: string, load: () => Promise<unknown>): Promise<unknown> {
+function cachedReleases(key: string, load: () => Promise<unknown>, ttlMs = RELEASES_CACHE_TTL_MS): Promise<unknown> {
   const now = Date.now();
   const hit = releasesCache.get(key);
   if (hit && hit.expiresAt > now) return Promise.resolve(hit.value);
@@ -31,7 +31,7 @@ function cachedReleases(key: string, load: () => Promise<unknown>): Promise<unkn
   }
 
   const pending = load().then((value) => {
-    releasesCache.set(key, { value, expiresAt: Date.now() + RELEASES_CACHE_TTL_MS });
+    releasesCache.set(key, { value, expiresAt: Date.now() + ttlMs });
     return value;
   }).finally(() => releasesInFlight.delete(key));
   releasesInFlight.set(key, pending);
@@ -45,10 +45,16 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
   const kind = rawKind && rawKind.toUpperCase() !== 'ALL' ? rawKind.toUpperCase() : null;
   const limit = Math.min(48, Math.max(1, parseInt(url.searchParams.get('limit') || '15', 10)));
 
+  const isProbe = limit === 1 && !cursorTime && !cursorId && !kind;
+  const probeTtlMs = 300_000;
   const cacheKey = JSON.stringify([limit, cursorTime, cursorId, kind]);
-  const chaptersData = await cachedReleases(cacheKey, () => fetchRecentReleaseTimelineFromYugabyte(
-    limit, cursorTime, cursorId, platform?.env, kind
-  )) as any[];
+  const chaptersData = await cachedReleases(
+    cacheKey,
+    () => fetchRecentReleaseTimelineFromYugabyte(
+      limit, cursorTime, cursorId, platform?.env, kind
+    ),
+    isProbe ? probeTtlMs : RELEASES_CACHE_TTL_MS
+  ) as any[];
 
   const releasesMap = new Map();
   for (const row of chaptersData) {
@@ -85,7 +91,9 @@ export const GET = async ({ url, platform, setHeaders }: any) => {
 
   if (setHeaders) {
     setHeaders({
-      'cache-control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
+      'cache-control': isProbe
+        ? 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        : 'public, max-age=30, s-maxage=30, stale-while-revalidate=60'
     });
   }
 

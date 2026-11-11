@@ -5,7 +5,7 @@ import { withYugabyteReadSession, executeYugabyteSql } from '$lib/server/yugabyt
 // The public Reader already uses direct YSQL for canonical chapter identity.
 // Keep this API on the same authoritative path: PostgREST can otherwise hold
 // a stale schema cache immediately after additive chapter-identity migrations.
-export const GET = async ({ params, locals, cookies, platform }) => {
+export const GET = async ({ params, locals, cookies, platform, request }: any) => {
   const { id } = params;
   const rawPlatformEnv = (platform as any)?.env;
 
@@ -30,7 +30,9 @@ export const GET = async ({ params, locals, cookies, platform }) => {
         try {
           const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platformEnv);
           if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
-        } catch {}
+        } catch {
+          // Non-fatal age_status lookup
+        }
       }
       if (ageStatus === 'MINOR') {
         return json({ error: 'Conteúdo restrito (+18).' }, { status: 403 });
@@ -38,6 +40,30 @@ export const GET = async ({ params, locals, cookies, platform }) => {
     }
 
     const { data: content } = await readerContent(chapter.id, chapter.work_id, platformEnv);
+    const mediaBaseUrl = (rawPlatformEnv?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
+    const rawPages = content?.pages || [];
+
+    const pages = rawPages.map((p: any) => ({
+      ...p,
+      url: `${mediaBaseUrl}/media/${p.media_id}`
+    }));
+
+    const chapterPublishedTime = new Date(chapter.published_at || 0).getTime();
+    const etag = `"${chapter.id}-${pages.length}-${chapterPublishedTime}"`;
+    const cacheControl =
+      !isStaff && !isAdult && chapter.published_at
+        ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
+        : 'private, no-cache, no-store, must-revalidate';
+
+    if (request?.headers?.get?.('if-none-match') === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'Cache-Control': cacheControl,
+          'ETag': etag
+        }
+      });
+    }
 
     return json(
       {
@@ -55,16 +81,15 @@ export const GET = async ({ params, locals, cookies, platform }) => {
         work_id: work.id,
         work_title: work.title,
         work_slug: work.slug,
-        pages: content?.pages || []
+        pages
       },
       {
         headers: {
-          'cache-control':
-            !isStaff && !isAdult && chapter.published_at
-              ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=600'
-              : 'private, no-cache, no-store, must-revalidate'
+          'cache-control': cacheControl,
+          'ETag': etag
         }
       }
     );
   }, 1);
 };
+

@@ -16,9 +16,9 @@ function t(cache, req, res, ctx) {
   if (!r(res)) return res;
 
   const cacheHeaders = new Headers(res.headers);
-  cacheHeaders.delete('set-cookie');
-  cacheHeaders.delete('vary');
-  cacheHeaders.set('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120');
+  if (!cacheHeaders.has('Vary')) {
+    cacheHeaders.set('Vary', 'Accept-Encoding');
+  }
 
   let bodyForCache = null;
   let clientRes = res;
@@ -34,15 +34,23 @@ function t(cache, req, res, ctx) {
     headers: cacheHeaders
   });
 
-  ctx.waitUntil(cache.put(req, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
+  const putReq = typeof req === 'string'
+    ? req
+    : req.method === 'HEAD'
+      ? new Request(req.url, { method: 'GET', headers: req.headers })
+      : req;
+  ctx.waitUntil(cache.put(putReq, cacheResponse).catch(err => console.warn('[EDGE_CACHE_PUT_WARN]', err?.message)));
   return clientRes;
-}
+};
 var n = /* @__PURE__ */ new Set([200, 203, 204, 300, 301, 404, 405, 410, 414, 501]);
 function r(res) {
   if (!n.has(res.status) || res.status >= 400) return false;
+  if (res.headers.has("set-cookie")) return false;
   let cc = res.headers.get("Cache-Control") || "";
-  if (cc.includes("no-store") || cc.includes("no-cache")) return false;
-  return cc.includes("public") || (cc.includes("private") && (cc.includes("max-age=") || cc.includes("s-maxage=")));
+  if (cc.includes("no-store") || cc.includes("no-cache") || cc.includes("private")) return false;
+  let vary = res.headers.get("vary") || "";
+  if (vary && vary.toLowerCase() !== "accept-encoding") return false;
+  return cc.includes("public");
 }
 function o(n2) {
   return async function(r3, o2) {
@@ -83,8 +91,8 @@ var initialized = server.init({
     return response.body;
   }
 });
-const AUTHENTICATED_SESSION_COOKIE = /(?:nox-auth-token|sb-[a-z0-9_-]+-auth-token|supabase[-_]auth[-_]token|sb:token)/i;
-const PERSONALIZED_HOME_COOKIE = /(?:^|;\s*)(?:nox-age-status|nox-blur-nsfw)=/i;
+const AUTHENTICATED_SESSION_COOKIE = /(?:^|[;\s])(?:nox-auth(?:-token)?|sb-[a-z0-9_-]+(?:-auth-token|-access-token|-token)?|supabase[-_]auth[-_]token|sb:token|access[-_]token|session|auth[-_]token)(?:\.\d+)?\s*=/i;
+const PERSONALIZED_HOME_COOKIE = /(?:^|[;\s])(?:nox-age-status|nox-blur-nsfw)\s*=/i;
 
 function shouldBypassSharedCache(req) {
   const cookie = req.headers.get('cookie') || '';
@@ -98,7 +106,7 @@ function getSharedCacheKey(req) {
   try {
     const url = new URL(req.url);
     const p = url.pathname;
-    if (p.startsWith('/media/') || p.startsWith('/_app/') || p.startsWith('/api') ||
+    if (p.startsWith('/api/') || p.startsWith('/media/') || p.startsWith('/_app/') ||
         p.startsWith('/admin') || p.startsWith('/me') || p.startsWith('/perfil') || 
         p.startsWith('/biblioteca') || p.startsWith('/scan') || p.startsWith('/auth') ||
         p.startsWith('/settings')) {
@@ -106,11 +114,59 @@ function getSharedCacheKey(req) {
     }
 
     const cookie = req.headers.get('cookie') || '';
-    const isAdult = /(?:^|;s*)nox-age-status=ADULT/i.test(cookie);
-    const isBlur = !/(?:^|;s*)nox-blur-nsfw=false/i.test(cookie);
-    const seg = isAdult ? (isBlur ? 'ADULT_BLUR' : 'ADULT_NOBLUR') : (isBlur ? 'SAFE_BLUR' : 'SAFE_NOBLUR');
+    const isAdult = /(?:^|[;\s])nox-age-status\s*=\s*ADULT/i.test(cookie);
+    const isMinor = /(?:^|[;\s])nox-age-status\s*=\s*MINOR/i.test(cookie);
+    const ageSeg = isAdult ? 'ADULT' : (isMinor ? 'MINOR' : 'GUEST');
+    const isBlur = isMinor || !/(?:^|[;\s])nox-blur-nsfw\s*=\s*false/i.test(cookie);
+    const seg = ageSeg + '_' + (isBlur ? 'BLUR' : 'NOBLUR');
 
     const cacheUrl = new URL(req.url);
+    if (p === '/catalogo') {
+      const allowedParams = ['pagina', 'ordem', 'tipo', 'status', 'tag', 'q'];
+      const normalizedParams = new URLSearchParams();
+      for (const param of allowedParams) {
+        const val = url.searchParams.get(param);
+        if (val) {
+          const trimmed = val.trim();
+          if (!trimmed) continue;
+          if (param === 'pagina') {
+            const rawNum = Number(trimmed);
+            if (rawNum > 1000) {
+              normalizedParams.set('pagina', '1001');
+            } else if (rawNum > 1) {
+              normalizedParams.set('pagina', String(Math.floor(rawNum)));
+            }
+          } else if (param === 'ordem') {
+            const lowerSort = trimmed.toLowerCase();
+            if (lowerSort === 'titulo' || lowerSort === 'views') {
+              normalizedParams.set('ordem', lowerSort);
+            }
+          } else if (param === 'q') {
+            const cleanQ = trimmed.toLowerCase().replace(/\s+/g, ' ');
+            if (cleanQ) normalizedParams.set('q', cleanQ);
+          } else if (param === 'tipo' || param === 'status') {
+            normalizedParams.set(param, trimmed.toUpperCase());
+          } else {
+            normalizedParams.set(param, trimmed);
+          }
+        }
+      }
+      cacheUrl.search = normalizedParams.toString();
+    } else if (p.startsWith('/obra/')) {
+      cacheUrl.search = '';
+    } else if (p === '/lancamentos') {
+      const rawNum = Number(url.searchParams.get('page'));
+      const kind = url.searchParams.get('kind');
+      const normalizedParams = new URLSearchParams();
+      if (rawNum > 1000) {
+        normalizedParams.set('page', '1001');
+      } else if (rawNum > 1) {
+        normalizedParams.set('page', String(Math.floor(rawNum)));
+      }
+      if (kind && kind.toUpperCase() !== 'ALL') normalizedParams.set('kind', kind.toUpperCase());
+      cacheUrl.search = normalizedParams.toString();
+    }
+
     cacheUrl.searchParams.set('__nox_cache_seg', seg);
     return new Request(cacheUrl.toString(), {
       method: 'GET',
@@ -119,6 +175,539 @@ function getSharedCacheKey(req) {
   } catch {
     return null;
   }
+}
+
+const WORKER_REVOCATION_MANIFEST_KEY = 'media-revocation-manifest:v1';
+const WORKER_REVOCATION_KEY_PREFIX = 'revoked:v1:';
+const WORKER_REVOCATION_RESTORATION_KEY_PREFIX = 'restored:v1:';
+const WORKER_REVOCATION_SYNC_INTERVAL_MS = 10000;
+
+let workerRevokedMediaSet = new Set();
+let workerKnownRevocations = new Map();
+let workerKnownRestorations = new Map();
+let workerManifestRevokedSet = new Set();
+let workerLastRevocationSync = 0;
+let workerManifestLoaded = false;
+let workerManifestKeyPresent = false;
+let workerManifestVersion = 0;
+let workerManifestUpdatedAt = 0;
+let workerReconciliationCursor = 0;
+let workerSyncGeneration = 0;
+let workerPerIdRevocationSeq = new Map();
+let workerGlobalRevocationSeq = 0;
+
+async function syncWorkerManifest(kv) {
+  workerLastRevocationSync = Date.now();
+  const currentSyncGen = ++workerSyncGeneration;
+  try {
+    const manifest = await kv.get(WORKER_REVOCATION_MANIFEST_KEY, { type: 'json' });
+    if (manifest && Array.isArray(manifest.revokedIds)) {
+      const manifestVersion = Number(manifest.version) || 0;
+      const manifestUpdatedAt = Number(manifest.updatedAt) || 0;
+
+      const isNewer = manifestUpdatedAt > workerManifestUpdatedAt ||
+        (manifestUpdatedAt === workerManifestUpdatedAt && manifestVersion >= workerManifestVersion);
+
+      if (isNewer) {
+        workerManifestRevokedSet = new Set(manifest.revokedIds);
+        workerManifestVersion = manifestVersion;
+        workerManifestUpdatedAt = manifestUpdatedAt;
+
+        // 1. Add all currently revoked IDs from manifest unless superseded by newer known restoration
+        const workerRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
+        for (const id of Array.from(workerManifestRevokedSet)) {
+          const hasPerIdTs = Object.prototype.hasOwnProperty.call(workerRevocationsMap, id);
+          const perIdRevocationTs = hasPerIdTs ? Number(workerRevocationsMap[id]) || 0 : 0;
+          const isLegacy = !hasPerIdTs;
+          const restoration = workerKnownRestorations.get(id);
+          const existing = workerKnownRevocations.get(id);
+          const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
+
+          if (restoration) {
+            const isManifestOlderThanRestoration = manifestUpdatedAt < restoration.timestamp ||
+              (manifestUpdatedAt === restoration.timestamp && manifestVersion <= restoration.version);
+
+            if (isLegacy) {
+              if (isManifestOlderThanRestoration) {
+                workerManifestRevokedSet.delete(id);
+                continue;
+              }
+
+              workerRevokedMediaSet.add(id);
+              let tombstoneFound = false;
+              let tombstoneTs = 0;
+              try {
+                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + id);
+                if (tombstone) {
+                  tombstoneFound = true;
+                  tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                    else if (parsed?.timestamp) tombstoneTs = Number(parsed.timestamp);
+                    else if (typeof parsed === 'number') tombstoneTs = parsed;
+                  } catch {}
+                }
+              } catch {}
+
+              const effectiveTs = (tombstoneFound && tombstoneTs >= restoration.timestamp)
+                ? tombstoneTs
+                : (existing?.timestamp || manifestUpdatedAt);
+              if (!existing || effectiveTs > existing.timestamp) {
+                workerKnownRevocations.set(id, { timestamp: effectiveTs, version: manifestVersion, isLegacy: !tombstoneFound });
+              }
+              workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
+              workerKnownRestorations.delete(id);
+              continue;
+            } else if (perIdRevocationTs < restoration.timestamp || (perIdRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+              workerManifestRevokedSet.delete(id);
+              continue;
+            }
+          }
+          workerRevokedMediaSet.add(id);
+          if (!existing) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion, isLegacy });
+          } else if (hasPerIdTs && perIdRevocationTs > existing.timestamp) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion, isLegacy: false });
+          }
+          workerPerIdRevocationSeq.set(id, ++workerGlobalRevocationSeq);
+          workerKnownRestorations.delete(id);
+        }
+
+        // 2. Explicit positive restorations: process with bounded concurrency and verify tombstones only for relevant IDs
+        if (Array.isArray(manifest.restoredIds)) {
+          const restorationsMap = manifest.restorations && typeof manifest.restorations === 'object' ? manifest.restorations : {};
+          const candidateRestorations = [];
+
+          for (const restoredId of manifest.restoredIds) {
+            if (workerManifestRevokedSet.has(restoredId)) continue;
+            const perIdRestorationTs = Number(restorationsMap[restoredId]) || manifestUpdatedAt;
+            const known = workerKnownRevocations.get(restoredId);
+            if (known && (perIdRestorationTs < known.timestamp || (perIdRestorationTs === known.timestamp && manifestVersion <= known.version))) {
+              continue;
+            }
+
+            // Optimization (P2): if this isolate has never seen this ID, avoid serial KV reads on cache hits
+            if (!workerRevokedMediaSet.has(restoredId) && !workerKnownRevocations.has(restoredId)) {
+              const existingRest = workerKnownRestorations.get(restoredId);
+              if (!existingRest || perIdRestorationTs > existingRest.timestamp || (perIdRestorationTs === existingRest.timestamp && manifestVersion >= existingRest.version)) {
+                workerKnownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+              }
+              continue;
+            }
+
+            candidateRestorations.push(restoredId);
+          }
+
+          // Process candidate restorations in bounded batches of 10
+          const RESTORATION_BATCH_SIZE = 10;
+          for (let i = 0; i < candidateRestorations.length; i += RESTORATION_BATCH_SIZE) {
+            const batch = candidateRestorations.slice(i, i + RESTORATION_BATCH_SIZE);
+            await Promise.allSettled(
+              batch.map(async (restoredId) => {
+                const perIdRestorationTs = Number(restorationsMap[restoredId]) || manifestUpdatedAt;
+                const knownBefore = workerKnownRevocations.get(restoredId);
+                const startSeq = workerPerIdRevocationSeq.get(restoredId) || 0;
+                try {
+                  const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + restoredId);
+                  if (tombstone) {
+                    let tombstoneTs = Date.now();
+                    try {
+                      const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                      if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                    } catch {}
+                    // Compare against per-ID restoration timestamp instead of manifestUpdatedAt
+                    if (tombstoneTs >= perIdRestorationTs) {
+                      workerRevokedMediaSet.add(restoredId);
+                      const existing = workerKnownRevocations.get(restoredId);
+                      if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && manifestVersion >= existing.version)) {
+                        workerKnownRevocations.set(restoredId, { timestamp: tombstoneTs, version: manifestVersion });
+                      }
+                      workerPerIdRevocationSeq.set(restoredId, ++workerGlobalRevocationSeq);
+                      workerKnownRestorations.delete(restoredId);
+                      return;
+                    }
+                  }
+                } catch {
+                  return;
+                }
+
+                // Race Condition Guard (P1): Revalidate state after the await
+                if (
+                  workerSyncGeneration !== currentSyncGen ||
+                  workerManifestRevokedSet.has(restoredId) ||
+                  (workerPerIdRevocationSeq.get(restoredId) || 0) !== startSeq
+                ) {
+                  return;
+                }
+                const curKnown = workerKnownRevocations.get(restoredId);
+                if (curKnown && (!knownBefore || curKnown !== knownBefore || curKnown.timestamp > perIdRestorationTs)) {
+                  return;
+                }
+
+                workerRevokedMediaSet.delete(restoredId);
+                workerKnownRevocations.delete(restoredId);
+                const existingRest = workerKnownRestorations.get(restoredId);
+                if (!existingRest || perIdRestorationTs > existingRest.timestamp || (perIdRestorationTs === existingRest.timestamp && manifestVersion >= existingRest.version)) {
+                  workerKnownRestorations.set(restoredId, { timestamp: perIdRestorationTs, version: manifestVersion });
+                }
+              })
+            );
+          }
+        }
+
+        // 3. Reconcile missing IDs: check tombstones and restoration records (batch of 10)
+        const restoredSet = new Set(Array.isArray(manifest.restoredIds) ? manifest.restoredIds : []);
+        const missing = Array.from(workerRevokedMediaSet).filter((id) => {
+          if (workerManifestRevokedSet.has(id) || restoredSet.has(id)) return false;
+          const known = workerKnownRevocations.get(id);
+          if (known && (manifestUpdatedAt < known.timestamp || (manifestUpdatedAt === known.timestamp && manifestVersion <= known.version))) {
+            return false;
+          }
+          return true;
+        });
+
+        if (missing.length > 0) {
+          if (workerReconciliationCursor >= missing.length) {
+            workerReconciliationCursor = 0;
+          }
+          const batchSize = Math.min(10, missing.length);
+          const batch = [];
+          for (let i = 0; i < batchSize; i++) {
+            batch.push(missing[(workerReconciliationCursor + i) % missing.length]);
+          }
+          workerReconciliationCursor = (workerReconciliationCursor + batchSize) % missing.length;
+
+          await Promise.allSettled(
+            batch.map(async (knownId) => {
+              const startSeq = workerPerIdRevocationSeq.get(knownId) || 0;
+              try {
+                const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + knownId);
+                if (tombstone) {
+                  let tombstoneTs = Date.now();
+                  try {
+                    const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+                    if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+                  } catch {}
+                  const existing = workerKnownRevocations.get(knownId);
+                  if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
+                    workerKnownRevocations.set(knownId, { timestamp: tombstoneTs, version: workerManifestVersion });
+                  }
+                  workerRevokedMediaSet.add(knownId);
+                  workerPerIdRevocationSeq.set(knownId, ++workerGlobalRevocationSeq);
+                  return;
+                }
+
+                // Tombstone is null: negative KV read alone is NOT sufficient proof of restoration
+                const known = workerKnownRevocations.get(knownId);
+                let canRestore = false;
+                let hasActualRestorationEvidence = false;
+                let restorationTs = manifestUpdatedAt;
+                let restorationVer = manifestVersion;
+
+                if ((known && known.timestamp > 0)) {
+                  const knownTs = Number(known?.timestamp) || 0;
+                  const knownVer = Number(known?.version) || 0;
+                  const knownRest = workerKnownRestorations.get(knownId);
+                  if (knownRest && ((knownTs === 0 && knownVer === 0) || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version >= knownVer))) {
+                    canRestore = true;
+                    hasActualRestorationEvidence = true;
+                    restorationTs = knownRest.timestamp;
+                    restorationVer = knownRest.version;
+                  } else {
+                    try {
+                      const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + knownId, { type: 'json' });
+                      if (resRecord) {
+                        const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                        const recVer = Number(resRecord.version) || 0;
+                        if ((knownTs === 0 && knownVer === 0) || recTs > knownTs || (recTs === knownTs && recVer >= knownVer)) {
+                          canRestore = true;
+                          hasActualRestorationEvidence = true;
+                          restorationTs = recTs;
+                          restorationVer = recVer;
+                        }
+                      }
+                    } catch {}
+                  }
+                } else if (!known || known.timestamp === 0) {
+                  canRestore = true;
+                }
+
+                if (canRestore) {
+                  if (
+                    workerSyncGeneration === currentSyncGen &&
+                    !workerManifestRevokedSet.has(knownId) &&
+                    (workerPerIdRevocationSeq.get(knownId) || 0) === startSeq
+                  ) {
+                    workerRevokedMediaSet.delete(knownId);
+                    workerKnownRevocations.delete(knownId);
+                    if (hasActualRestorationEvidence) {
+                      workerKnownRestorations.set(knownId, { timestamp: restorationTs, version: restorationVer });
+                    }
+                  }
+                }
+              } catch {
+                // Fail closed on error
+              }
+            })
+          );
+        } else {
+          workerReconciliationCursor = 0;
+        }
+      } else {
+        // Manifest is older than known version/timestamp - only merge IDs not superseded by known restorations
+        const olderRevocationsMap = manifest.revocations && typeof manifest.revocations === 'object' ? manifest.revocations : {};
+        for (const id of Array.from(manifest.revokedIds)) {
+          const hasPerIdTs = Object.prototype.hasOwnProperty.call(olderRevocationsMap, id);
+          const perIdRevocationTs = hasPerIdTs ? Number(olderRevocationsMap[id]) || 0 : 0;
+          const isLegacy = !hasPerIdTs;
+          const existing = workerKnownRevocations.get(id);
+          const effectiveRevocationTs = perIdRevocationTs || (existing && !existing.isLegacy ? existing.timestamp : 0);
+          const restoration = workerKnownRestorations.get(id);
+          if (restoration) {
+            if (isLegacy || effectiveRevocationTs < restoration.timestamp || (effectiveRevocationTs === restoration.timestamp && manifestVersion <= restoration.version)) {
+              continue; // Skip! ID was restored after this older manifest was written
+            }
+          }
+          workerRevokedMediaSet.add(id);
+          workerManifestRevokedSet.add(id);
+          if (!existing) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs || manifestUpdatedAt, version: manifestVersion, isLegacy });
+          } else if (hasPerIdTs && perIdRevocationTs > existing.timestamp) {
+            workerKnownRevocations.set(id, { timestamp: perIdRevocationTs, version: manifestVersion, isLegacy: false });
+          }
+        }
+      }
+      workerManifestLoaded = true;
+      workerManifestKeyPresent = true;
+      return true;
+    } else if (manifest === null || manifest === undefined) {
+      workerManifestRevokedSet = new Set();
+      workerManifestLoaded = true;
+      workerManifestKeyPresent = false;
+      return true;
+    } else {
+      workerManifestLoaded = false;
+      workerManifestKeyPresent = false;
+      return false;
+    }
+  } catch {
+    workerManifestLoaded = false;
+    workerManifestKeyPresent = false;
+    return false;
+  }
+}
+
+async function checkMediaRevocationWorker(mediaId, kv, options) {
+  if (!mediaId) return false;
+
+  // 1. Instant in-memory check (only if caller did not explicitly request fresh sync or authoritative tombstone)
+  if (!options?.checkTombstone && !options?.forceFresh && workerRevokedMediaSet.has(mediaId)) {
+    return true;
+  }
+
+  // 2. If KV is absent, check known in-memory revocations first, then fall back to failClosed policy
+  if (!kv) {
+    if (workerRevokedMediaSet.has(mediaId)) return true;
+    return Boolean(options?.failClosed);
+  }
+
+  // 3. Periodic manifest sync (request-scoped, throttled by interval)
+  const now = Date.now();
+  const shouldSync = options?.forceFresh || !workerManifestLoaded || (now - workerLastRevocationSync > WORKER_REVOCATION_SYNC_INTERVAL_MS);
+  if (shouldSync) {
+    const loaded = await syncWorkerManifest(kv);
+    if (!loaded && options?.failClosed && !workerManifestLoaded) {
+      return true;
+    }
+  }
+
+  // 4. Authoritative tombstone check: if explicitly requested, forced fresh, manifest absent, or manifest failed to load
+  const shouldCheckTombstone =
+    Boolean(options?.forceFresh) ||
+    Boolean(options?.checkTombstone) ||
+    !workerManifestKeyPresent ||
+    !workerManifestLoaded;
+
+  if (shouldCheckTombstone) {
+    try {
+      const tombstone = await kv.get(WORKER_REVOCATION_KEY_PREFIX + mediaId);
+      if (tombstone) {
+        let tombstoneTs = Date.now();
+        try {
+          const parsed = typeof tombstone === 'string' ? JSON.parse(tombstone) : tombstone;
+          if (parsed?.revokedAt) tombstoneTs = Number(parsed.revokedAt);
+        } catch {}
+
+        let isStaleTombstone = false;
+        let restorationTs = 0;
+        let restorationVer = 0;
+        const knownRest = workerKnownRestorations.get(mediaId);
+        if (knownRest && knownRest.timestamp > tombstoneTs) {
+          isStaleTombstone = true;
+          restorationTs = knownRest.timestamp;
+          restorationVer = knownRest.version;
+        } else {
+          try {
+            const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+            if (resRecord) {
+              const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+              const recVer = Number(resRecord.version) || 0;
+              if (recTs > tombstoneTs) {
+                isStaleTombstone = true;
+                restorationTs = recTs;
+                restorationVer = recVer;
+                workerKnownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
+              }
+            }
+          } catch {}
+        }
+
+        if (!isStaleTombstone) {
+          workerRevokedMediaSet.add(mediaId);
+          const existing = workerKnownRevocations.get(mediaId);
+          if (!existing || tombstoneTs > existing.timestamp || (tombstoneTs === existing.timestamp && workerManifestVersion >= existing.version)) {
+            workerKnownRevocations.set(mediaId, { timestamp: tombstoneTs, version: workerManifestVersion, isLegacy: false });
+          }
+          workerPerIdRevocationSeq.set(mediaId, ++workerGlobalRevocationSeq);
+          workerKnownRestorations.delete(mediaId);
+          return true;
+        } else {
+          const known = workerKnownRevocations.get(mediaId);
+          const knownRevTs = Number(known?.timestamp) || 0;
+          const knownRevVer = Number(known?.version) || 0;
+          if (
+            knownRevTs > 0 &&
+            (restorationTs < knownRevTs || (restorationTs === knownRevTs && restorationVer < knownRevVer))
+          ) {
+            workerRevokedMediaSet.add(mediaId);
+            return true;
+          }
+          const isLegacy = Boolean(known?.isLegacy || (!known?.timestamp && !workerKnownRevocations.has(mediaId)));
+          if (!workerManifestRevokedSet.has(mediaId) || isLegacy) {
+            workerRevokedMediaSet.delete(mediaId);
+            workerKnownRevocations.delete(mediaId);
+            workerManifestRevokedSet.delete(mediaId);
+            return false;
+          }
+        }
+      } else {
+        if (workerManifestLoaded && workerManifestKeyPresent && workerManifestRevokedSet.has(mediaId)) {
+          const known = workerKnownRevocations.get(mediaId);
+          let knownRest = workerKnownRestorations.get(mediaId);
+          const isLegacy = Boolean(known?.isLegacy || (!known?.timestamp && !workerKnownRevocations.has(mediaId)));
+
+          if (!knownRest && isLegacy && kv) {
+            try {
+              const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+              if (resRecord) {
+                const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                const recVer = Number(resRecord.version) || 0;
+                knownRest = { timestamp: recTs, version: recVer };
+                workerKnownRestorations.set(mediaId, knownRest);
+              }
+            } catch {}
+          }
+
+          const revTs = known?.isLegacy ? 0 : (known?.timestamp || workerManifestUpdatedAt);
+          const isManifestOlderThanRestoration = Boolean(
+            knownRest &&
+            (workerManifestUpdatedAt < knownRest.timestamp ||
+              (workerManifestUpdatedAt === knownRest.timestamp && workerManifestVersion <= knownRest.version))
+          );
+          if (knownRest && (isManifestOlderThanRestoration || (!isLegacy && (knownRest.timestamp > revTs || (knownRest.timestamp === revTs && knownRest.version >= workerManifestVersion))))) {
+            workerManifestRevokedSet.delete(mediaId);
+            workerRevokedMediaSet.delete(mediaId);
+            workerKnownRevocations.delete(mediaId);
+          } else {
+            workerRevokedMediaSet.add(mediaId);
+            return true;
+          }
+        }
+        if (workerManifestLoaded && workerManifestKeyPresent && !workerManifestRevokedSet.has(mediaId)) {
+          const known = workerKnownRevocations.get(mediaId);
+          if (known && !known.isLegacy && (workerManifestUpdatedAt < known.timestamp || (workerManifestUpdatedAt === known.timestamp && workerManifestVersion <= known.version))) {
+            return true;
+          }
+          const startSeq = workerPerIdRevocationSeq.get(mediaId) || 0;
+          let hasRestorationEvidence = false;
+          let restorationTs = workerManifestUpdatedAt;
+          let restorationVer = workerManifestVersion;
+
+          if (known && (known.timestamp > 0 || known.isLegacy)) {
+            const knownRest = workerKnownRestorations.get(mediaId);
+            const knownTs = Number(known?.timestamp) || 0;
+            const knownVer = Number(known?.version) || 0;
+            if (knownRest && ((knownTs === 0 && knownVer === 0) || knownRest.timestamp > knownTs || (knownRest.timestamp === knownTs && knownRest.version >= knownVer))) {
+              hasRestorationEvidence = true;
+              restorationTs = knownRest.timestamp;
+              restorationVer = knownRest.version;
+            } else {
+              try {
+                const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+                if (resRecord) {
+                  const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                  const recVer = Number(resRecord.version) || 0;
+                  if ((knownTs === 0 && knownVer === 0) || recTs > knownTs || (recTs === knownTs && recVer >= knownVer)) {
+                    hasRestorationEvidence = true;
+                    restorationTs = recTs;
+                    restorationVer = recVer;
+                  }
+                }
+              } catch {}
+            }
+            if (!hasRestorationEvidence) {
+              return true;
+            }
+          } else if (options?.checkTombstone && kv) {
+            try {
+              const resRecord = await kv.get(WORKER_REVOCATION_RESTORATION_KEY_PREFIX + mediaId, { type: 'json' });
+              if (resRecord) {
+                const recTs = Number(resRecord.restoredAt || resRecord.timestamp) || 0;
+                const recVer = Number(resRecord.version) || 0;
+                workerKnownRestorations.set(mediaId, { timestamp: recTs, version: recVer });
+              }
+            } catch {}
+          }
+
+          // Race Condition Guard (P1): Revalidate state and sequence after KV read
+          if (
+            workerManifestRevokedSet.has(mediaId) ||
+            (workerPerIdRevocationSeq.get(mediaId) || 0) !== startSeq
+          ) {
+            return true;
+          }
+
+          workerRevokedMediaSet.delete(mediaId);
+          workerKnownRevocations.delete(mediaId);
+          if (hasRestorationEvidence) {
+            workerKnownRestorations.set(mediaId, { timestamp: restorationTs, version: restorationVer });
+          }
+          return false;
+        }
+        if (workerManifestLoaded && !workerManifestKeyPresent) {
+          if (workerRevokedMediaSet.has(mediaId)) {
+            return true;
+          }
+          return false;
+        }
+        if (workerRevokedMediaSet.has(mediaId)) {
+          return true;
+        }
+        if (options?.failClosed) {
+          return true;
+        }
+        return false;
+      }
+    } catch {
+      if (options?.failClosed) return true;
+    }
+  }
+
+  // 5. In-memory set check after sync
+  if (workerRevokedMediaSet.has(mediaId)) return true;
+
+  return false;
 }
 
 // APPLICATION_ROUTE_GUARD
@@ -158,7 +747,74 @@ var worker_default = {
   async fetch(req, env2, ctx) {
     const url = new URL(req.url);
 
+    // 0. Bot & scanner protection: block non-essential aggressive scrapers and scanner methods
+    const ua = (req.headers.get('user-agent') || '').toLowerCase();
+    const isAbusiveBot =
+      ua.includes('ahrefsbot') ||
+      ua.includes('claudebot') ||
+      ua.includes('bytespider') ||
+      ua.includes('petalbot') ||
+      ua.includes('semrushbot') ||
+      ua.includes('mj12bot') ||
+      ua.includes('dotbot');
+
+    if (isAbusiveBot && url.pathname !== '/robots.txt' && url.pathname !== '/favicon.ico') {
+      return new Response('Access forbidden for non-essential automated crawlers.', {
+        status: 403,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+          'X-Robots-Tag': 'noindex, nofollow'
+        }
+      });
+    }
+
+    if (['PUT', 'DELETE', 'PATCH', 'TRACE'].includes(req.method) && (!ua || url.pathname === '/' || url.pathname.startsWith('/catalogo') || url.pathname.startsWith('/lancamentos') || url.pathname.startsWith('/obra/'))) {
+      return new Response('Method Not Allowed', {
+        status: 405,
+        headers: {
+          'Allow': 'GET, HEAD',
+          'Cache-Control': 'public, max-age=86400',
+          'Content-Type': 'text/plain; charset=utf-8'
+        }
+      });
+    }
+
+    // Vulnerability scanner & probe fast-path rejection: block dotfiles, encoded probes, and common PHP/exploit scans before SSR
+    const pLower = url.pathname.toLowerCase();
+    let decodedPath = pLower;
+    try {
+      decodedPath = decodeURIComponent(pLower);
+    } catch {}
+
+    const isDotfileProbe =
+      ((pLower.startsWith('/.') || pLower.includes('/.') || decodedPath.startsWith('/.') || decodedPath.includes('/.') || decodedPath.includes('..')) &&
+       !pLower.startsWith('/.well-known') && !decodedPath.startsWith('/.well-known'));
+
+    const isExploitProbe =
+      decodedPath.includes('.php') ||
+      decodedPath.startsWith('/wp-') ||
+      decodedPath.startsWith('/wordpress') ||
+      decodedPath.startsWith('/cgi-bin') ||
+      decodedPath.startsWith('/actuator') ||
+      decodedPath.startsWith('/pma') ||
+      decodedPath.startsWith('/phpmyadmin') ||
+      decodedPath.startsWith('/boaform') ||
+      /\.(?:bak|sql|env|conf|ini|asp|aspx|jsp)(?:$|[/?])/i.test(decodedPath);
+
+    if (isDotfileProbe || isExploitProbe) {
+      return new Response('Not Found', {
+        status: 404,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+          'X-Robots-Tag': 'noindex, nofollow'
+        }
+      });
+    }
+
     // 1. Canonical domain enforcement: www.projectnox.org -> projectnox.org
+    // Hostname is not in Cloudflare Workers Cache key; redirect MUST NEVER be cached at edge (fail-closed against cross-domain cache collision)
     if (url.hostname === 'www.projectnox.org') {
       const canonicalUrl = new URL(req.url);
       canonicalUrl.hostname = 'projectnox.org';
@@ -167,7 +823,12 @@ var worker_default = {
         status: 308,
         headers: {
           'location': canonicalUrl.toString(),
-          'cache-control': 'public, max-age=86400'
+          'cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cloudflare-cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'vary': 'Host',
+          'pragma': 'no-cache',
+          'expires': '0'
         }
       });
     }
@@ -181,7 +842,12 @@ var worker_default = {
         status: 308,
         headers: {
           'location': canonicalUrl.toString(),
-          'cache-control': 'public, max-age=86400'
+          'cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'cloudflare-cdn-cache-control': 'private, no-cache, no-store, must-revalidate',
+          'vary': 'Host',
+          'pragma': 'no-cache',
+          'expires': '0'
         }
       });
     }
@@ -190,7 +856,8 @@ var worker_default = {
     if (url.pathname.startsWith('/media/') && (req.method === 'GET' || req.method === 'HEAD')) {
       const cache = typeof caches !== 'undefined' && caches.default;
       if (cache && !req.headers.has('authorization') && !shouldBypassSharedCache(req)) {
-        const mediaId = url.pathname.slice(7);
+        const rawId = url.pathname.slice(7);
+        const mediaId = rawId.replace(/\/+$/, '');
         if (/^[0-9a-f-]{36}$/i.test(mediaId)) {
           const sizeParam = url.searchParams.get('size');
           const coverVariant = sizeParam === 'thumb' || sizeParam === 'hero' ? sizeParam : null;
@@ -201,15 +868,125 @@ var worker_default = {
           try {
             const cached = await cache.match(cacheKey);
             if (cached && cached.status === 200) {
-              const etag = cached.headers.get('ETag');
-              if (etag && req.headers.get('if-none-match') === etag) {
-                const notModified = new Response(null, { status: 304, headers: cached.headers });
-                notModified.headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
-                return notModified;
+              const isRevoked = await checkMediaRevocationWorker(mediaId, env2?.COVER_THUMBNAILS, { failClosed: true });
+              if (isRevoked) {
+                try {
+                  const deleteTasks = [
+                    cache.delete(cacheKey),
+                    cache.delete(new Request(req.url, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}/`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=3`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=3`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=2`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=2`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb&v=1`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero&v=1`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=thumb`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?size=hero`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?v=3`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?v=2`, { method: 'GET' })),
+                    cache.delete(new Request(`${url.origin}/media/${mediaId}?v=1`, { method: 'GET' }))
+                  ];
+                  if (ctx?.cache && typeof ctx.cache.purge === 'function') {
+                    deleteTasks.push(ctx.cache.purge({ tags: [`media-${mediaId}`], pathPrefixes: [`/media/${mediaId}`] }).catch(() => {}));
+                  } else if (cache && typeof cache.purge === 'function') {
+                    deleteTasks.push(cache.purge({ tags: [`media-${mediaId}`], pathPrefixes: [`/media/${mediaId}`] }).catch(() => {}));
+                  }
+                  const deletePromise = Promise.allSettled(deleteTasks);
+                  if (ctx && typeof ctx.waitUntil === 'function') {
+                    ctx.waitUntil(deletePromise);
+                  } else {
+                    await deletePromise;
+                  }
+                } catch {}
+
+                return new Response(req.method === 'HEAD' ? null : JSON.stringify({ error: 'Acesso não autorizado' }), {
+                  status: 404,
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                    'CDN-Cache-Control': 'no-store',
+                    'Cloudflare-CDN-Cache-Control': 'no-store',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                  }
+                });
               }
-              const fastRes = new Response(cached.body, cached);
-              fastRes.headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
-              return fastRes;
+
+              const headers = new Headers(cached.headers);
+              headers.set('X-Media-Cache', 'EDGE-FAST-HIT');
+              headers.set('Access-Control-Allow-Origin', '*');
+              headers.set('Accept-Ranges', 'bytes');
+
+              const etag = cached.headers.get('ETag');
+              const ifNoneMatch = req.headers.get('if-none-match');
+              if (etag && ifNoneMatch) {
+                const cleanEtag = etag.trim().replace(/^W\//, '');
+                const isMatch = ifNoneMatch.trim() === '*' ||
+                  ifNoneMatch.split(',').some((t) => t.trim().replace(/^W\//, '') === cleanEtag);
+                if (isMatch) {
+                  return new Response(null, { status: 304, headers });
+                }
+              }
+
+              const ifMatch = req.headers.get('if-match');
+              if (ifMatch && ifMatch !== '*' && etag) {
+                const matchEtags = ifMatch.split(',').map((s) => s.trim());
+                if (!matchEtags.includes(etag.trim()) || etag.startsWith('W/')) {
+                  return new Response(null, { status: 412, headers });
+                }
+              }
+
+              const rangeHeader = req.headers.get('range');
+              const ifRange = req.headers.get('if-range');
+              let evaluateRange = Boolean(rangeHeader && req.method === 'GET');
+              if (evaluateRange && ifRange) {
+                // RFC 9110 §13.1.5: Strong validator comparison only. Weak ETags MUST NOT match.
+                if (!etag || ifRange.trim().startsWith('W/') || ifRange.trim() !== etag.trim()) {
+                  evaluateRange = false;
+                }
+              }
+
+              if (evaluateRange) {
+                const ab = await cached.arrayBuffer();
+                const total = ab.byteLength;
+                const match = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+                if (match) {
+                  let start;
+                  let end;
+                  if (match[1] === '' && match[2] !== '') {
+                    const suffixLen = parseInt(match[2], 10);
+                    if (suffixLen === 0 || total === 0) {
+                      headers.set('Content-Range', `bytes */${total}`);
+                      return new Response(null, { status: 416, headers });
+                    }
+                    start = Math.max(0, total - suffixLen);
+                    end = total - 1;
+                  } else {
+                    start = match[1] ? parseInt(match[1], 10) : 0;
+                    end = match[2] ? parseInt(match[2], 10) : total - 1;
+                  }
+
+                  if (start >= total || start > end || total === 0) {
+                    headers.set('Content-Range', `bytes */${total}`);
+                    return new Response(null, { status: 416, headers });
+                  }
+
+                  const actualEnd = Math.min(end, total - 1);
+                  const rangeLen = actualEnd - start + 1;
+                  headers.set('Content-Range', `bytes ${start}-${actualEnd}/${total}`);
+                  headers.set('Content-Length', String(rangeLen));
+                  const sliced = ab.slice(start, actualEnd + 1);
+                  return new Response(sliced, { status: 206, headers });
+                }
+              }
+
+              if (req.method === 'HEAD') {
+                return new Response(null, { status: 200, headers });
+              }
+
+              return new Response(cached.body, { status: 200, headers });
             }
           } catch {
             // Fall through to standard SvelteKit SSR pipeline
@@ -234,6 +1011,22 @@ var worker_default = {
     const sharedCacheKey = !cacheBypassRequest ? getSharedCacheKey(req) : null;
     let res = !cacheBypassRequest && !pragma.includes("no-cache") && sharedCacheKey && await r2(sharedCacheKey);
     if (res) {
+      const etag = res.headers.get('etag');
+      const ifNoneMatch = req.headers.get('if-none-match');
+      if (etag && ifNoneMatch) {
+        const cleanEtag = etag.trim().replace(/^W\//, '');
+        const isMatch = ifNoneMatch.trim() === '*' ||
+          ifNoneMatch.split(',').some((t) => t.trim().replace(/^W\//, '') === cleanEtag);
+        if (isMatch) {
+          const headers = new Headers(res.headers);
+          headers.set('X-Nox-Edge-Cache', 'HIT');
+          headers.delete('content-length');
+          headers.delete('content-type');
+          headers.delete('content-encoding');
+          headers.delete('content-range');
+          return new Response(null, { status: 304, headers });
+        }
+      }
       res = new Response(res.body, res);
       res.headers.set('X-Nox-Edge-Cache', 'HIT');
       return res;

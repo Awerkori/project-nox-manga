@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { dispatchScanMentions } from '$lib/server/scan-mentions';
 import { createScanNotification } from '$lib/server/scan-notifications';
-import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
+import { createNotification } from '$lib/server/notifications';
 import { invalidateAdminTicketsCache } from '$lib/server/admin-cache';
 import { withTimeout } from '$lib/server/resilience';
 import { executeYugabyteSql, withYugabyteLkg, withYugabyteReadSession } from '$lib/server/yugabyte';
@@ -2835,10 +2835,6 @@ export const actions: Actions = {
       platform
     }).catch(err => console.error('Error dispatching chat mentions:', err));
 
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(10, undefined, platform?.env).catch(() => {}));
-    }
-
     return { success: true, messageId: msg.id };
   },
 
@@ -3167,7 +3163,7 @@ export const actions: Actions = {
 
     // Fallback to legacy rework_stages format if payload not provided
     if (parsedPayload.length === 0 && reworkStagesRaw) {
-      let stagesList: string[] = [];
+      let stagesList: string[];
       try {
         stagesList = JSON.parse(reworkStagesRaw);
       } catch {
@@ -3732,9 +3728,7 @@ export const actions: Actions = {
       const expected = /CHAPTER_ALREADY_EXISTS|SCAN_MEMBERSHIP_REQUIRED|RAW_PROVIDER_REQUIRED/.test(detail);
       return fail(expected ? 409 : 503, { message: expected ? 'O capítulo já existe ou você não tem o cargo necessário.' : 'Não foi possível criar o capítulo com segurança agora.' });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, chapterId };
   },
 
@@ -3763,9 +3757,7 @@ export const actions: Actions = {
       const detail = String(error?.message || 'unknown');
       return fail(/BULK_RANGE_INVALID|SCAN_MEMBERSHIP_REQUIRED|RAW_PROVIDER_REQUIRED/.test(detail) ? 400 : 503, { message: 'Não foi possível criar os capítulos em lote com segurança.' });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: resultData };
   },
 
@@ -3799,9 +3791,7 @@ export const actions: Actions = {
             : 'Não foi possível assumir a etapa com segurança agora. Nenhuma alteração foi aplicada.'
       });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 
@@ -3834,9 +3824,7 @@ export const actions: Actions = {
           : 'Não foi possível liberar a etapa com segurança agora. Nenhuma alteração foi aplicada.'
       });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 
@@ -3876,9 +3864,7 @@ export const actions: Actions = {
               : 'Não foi possível concluir a etapa com segurança agora. Nenhuma alteração foi aplicada.'
       });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 
@@ -3915,9 +3901,7 @@ export const actions: Actions = {
           : 'Não foi possível solicitar retrabalho com segurança agora. Nenhuma alteração foi aplicada.'
       });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 
@@ -3955,9 +3939,7 @@ export const actions: Actions = {
           : 'Não foi possível aplicar o override com segurança agora. Nenhuma alteração foi aplicada.'
       });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 
@@ -4242,9 +4224,7 @@ export const actions: Actions = {
     } catch {
       return fail(503, { message: 'Não foi possível publicar o capítulo com segurança agora.' });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 
@@ -4431,9 +4411,7 @@ export const actions: Actions = {
     } catch {
       return fail(503, { message: 'Não foi possível retirar o capítulo do público com segurança agora.' });
     }
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(20, undefined, platform?.env).catch(() => {}));
-    }
+
     return { success: true, result: data };
   },
 

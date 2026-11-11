@@ -1,3 +1,12 @@
+User-agent: AhrefsBot
+User-agent: ClaudeBot
+User-agent: SemrushBot
+User-agent: PetalBot
+User-agent: MJ12bot
+User-agent: DotBot
+User-agent: Bytespider
+Disallow: /
+
 User-agent: *
 Allow: /
 Disallow: /admin
@@ -5,5 +14,7 @@ Disallow: /auth
 Disallow: /api/action
 Disallow: /api/upload
 Disallow: /ler/
+Disallow: /catalogo?*pagina=
+Disallow: /lancamentos?*page=
 
 Sitemap: https://projectnox.org/sitemap.xml

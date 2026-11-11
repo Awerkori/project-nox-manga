@@ -1,4 +1,5 @@
 import { Client, Pool } from 'pg';
+import { enforceSieveSqlParams } from './data-sieve';
 
 export interface SqlResponse<T = any> {
   rows: T[];
@@ -337,6 +338,12 @@ export async function executeYugabyteSql<T = any>(
   params: any[] = [],
   platformEnv?: any
 ): Promise<SqlResponse<T>> {
+  // Enforce permanent architectural storage sieve on write queries
+  const sieveCheck = enforceSieveSqlParams(query, params);
+  if (!sieveCheck.ok) {
+    throw new Error(sieveCheck.error);
+  }
+
   const activeSession = platformEnv?.[YUGABYTE_READ_SESSION_KEY] as YugabyteReadSession | undefined;
   if (activeSession) {
     if (activeSession.isClosed()) {
@@ -1127,7 +1134,7 @@ export async function fetchFullWorkPageFromYugabyte(
       };
     },
     null,
-    30_000
+    180_000
   );
 
   if (!base || !base.work) return null;
@@ -1603,28 +1610,168 @@ export async function fetchWorkTagsFromYugabyte(
   );
 }
 
+const MEDIA_METADATA_CACHE_TTL_MS = 600_000;
+const MAX_MEDIA_METADATA_ENTRIES = 20_000;
+const mediaMetadataCache = new Map<string, { data: any; timestamp: number }>();
+
+export function getCachedMediaMetadata(mediaId: string): any | null {
+  const entry = mediaMetadataCache.get(mediaId);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > MEDIA_METADATA_CACHE_TTL_MS) {
+    mediaMetadataCache.delete(mediaId);
+    return null;
+  }
+  return entry.data;
+}
+
+export function setCachedMediaMetadata(mediaId: string, data: any): void {
+  if (!mediaId || !data) return;
+  if (mediaMetadataCache.size >= MAX_MEDIA_METADATA_ENTRIES) {
+    const oldest = mediaMetadataCache.keys().next().value;
+    if (oldest) mediaMetadataCache.delete(oldest);
+  }
+  mediaMetadataCache.set(mediaId, { data, timestamp: Date.now() });
+  setLkg(`media_${mediaId}`, data);
+}
+
+export function invalidateMediaMetadataCache(mediaId: string): void {
+  mediaMetadataCache.delete(mediaId);
+  try {
+    invalidateYugabyteLkgPrefix(`media_${mediaId}`);
+  } catch {
+    // Non-fatal cache invalidation error
+  }
+}
+
+const MEDIA_METADATA_SELECT_FIELDS = `
+  m.id, m.provider, m.provider_key, m.bot_reference, m.storage_shard_id,
+  m.mime, m.sha256, m.bytes, m.width, m.height, m.access_class, m.purpose,
+  m.storage_ready, m.status, m.created_by,
+  (COALESCE(page_info.page_has_adult, false) OR COALESCE(cover_info.cover_has_adult, false)) AS is_adult_associated,
+  NOT (COALESCE(page_info.page_has_unpublished_work, false) OR COALESCE(cover_info.cover_has_unpublished_work, false)) AS all_works_published,
+  NOT COALESCE(page_info.page_has_unpublished_chapter, false) AS all_chapters_published,
+  (
+    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN
+      COALESCE(page_info.page_has_published, false)
+    WHEN m.purpose IN ('cover', 'work_cover') THEN
+      COALESCE(cover_info.cover_has_published, false)
+    ELSE true END
+  ) AS has_published_association,
+  (
+    CASE WHEN m.purpose IN ('chapter_page', 'staff_chapter', 'scan_chapter') THEN
+      COALESCE(page_info.page_has_published, false)
+    WHEN m.purpose IN ('cover', 'work_cover') THEN
+      COALESCE(cover_info.cover_has_published, false)
+    ELSE true END
+  ) AS has_published_chapter
+`;
+
+const MEDIA_METADATA_JOINS = `
+  LEFT JOIN LATERAL (
+    SELECT
+      bool_or(w.content_rating = 'ADULT_18' OR c.chapter_kind = 'adult') AS page_has_adult,
+      bool_or(w.published = false) AS page_has_unpublished_work,
+      bool_or(c.published_at IS NULL) AS page_has_unpublished_chapter,
+      bool_or(c.published_at IS NOT NULL AND w.published = true) AS page_has_published
+    FROM public.pages p
+    JOIN public.chapters c ON c.id = p.chapter_id
+    JOIN public.works w ON w.id = c.work_id
+    WHERE p.media_id = m.id
+  ) page_info ON true
+  LEFT JOIN LATERAL (
+    SELECT
+      bool_or(w_cov.content_rating = 'ADULT_18') AS cover_has_adult,
+      bool_or(w_cov.published = false) AS cover_has_unpublished_work,
+      bool_or(w_cov.published = true) AS cover_has_published
+    FROM public.works w_cov
+    WHERE w_cov.cover_id = m.id
+  ) cover_info ON true
+`;
+
 /**
  * Fetch media metadata for media delivery from Yugabyte.
+ *
+ * Distinguishes between:
+ * - Conventional reads: leverages in-memory LRU cache, Hyperdrive query caching, and LKG fallback.
+ * - Authoritative reads: strictly bypasses application memory cache, bypasses Hyperdrive query caching
+ *   via PostgreSQL VOLATILE clock_timestamp() evaluation, NEVER returns stale LKG on failure, and
+ *   fails closed (returns null) on connection/query error to prevent unauthorized delivery.
  */
 export async function fetchMediaMetadataFromYugabyte(
   mediaId: string,
-  platformEnv?: any
+  platformEnv?: any,
+  options?: { forceFresh?: boolean; authoritative?: boolean }
 ): Promise<any | null> {
+  const isAuthoritative = Boolean(options?.authoritative);
+  const isFresh = isAuthoritative || Boolean(options?.forceFresh);
+
+  // 1. Authoritative and forceFresh reads strictly bypass in-memory mediaMetadataCache
+  if (!isFresh) {
+    const cached = getCachedMediaMetadata(mediaId);
+    if (cached) return cached;
+  }
+
+  // 2. Authoritative execution mode:
+  // - Evaluates volatile clock_timestamp() so Hyperdrive tags query as non-cacheable (cacheStatus: volatile).
+  // - Never returns stale LKG entries on error.
+  // - Never turns network/database timeouts into positive delivery authorization.
+  // - Fails closed by returning null if database cannot be verified.
+  if (isAuthoritative) {
+    const authoritativeEnv = platformEnv?.HYPERDRIVE_AUTHORITATIVE
+      ? { ...platformEnv, HYPERDRIVE: platformEnv.HYPERDRIVE_AUTHORITATIVE }
+      : platformEnv;
+    const sql = `
+      SELECT ${MEDIA_METADATA_SELECT_FIELDS}
+      FROM public.media m
+      ${MEDIA_METADATA_JOINS}
+      WHERE m.id = $1 AND clock_timestamp() IS NOT NULL
+      LIMIT 1;
+    `;
+    try {
+      const res = await executeYugabyteSql(sql, [mediaId], authoritativeEnv);
+      const row = res.rows[0] || null;
+      if (row) {
+        if (row.status !== 'ACTIVE' || row.storage_ready !== true) {
+          invalidateMediaMetadataCache(mediaId);
+        } else {
+          setCachedMediaMetadata(mediaId, row);
+        }
+      } else {
+        invalidateMediaMetadataCache(mediaId);
+      }
+      return row;
+    } catch (err: any) {
+      console.error(`[MEDIA_AUTHORITATIVE_FETCH_FAILED] id=${mediaId} error=${err?.message || err}`);
+      return null;
+    }
+  }
+
+  // 3. Conventional read mode:
   return withYugabyteLkg(
     `media_${mediaId}`,
     async () => {
       const sql = `
-        SELECT id, provider, provider_key, bot_reference, storage_shard_id,
-               mime, sha256, bytes, width, height, access_class, purpose,
-               storage_ready, status, created_by
-        FROM media
-        WHERE id = $1
+        SELECT ${MEDIA_METADATA_SELECT_FIELDS}
+        FROM public.media m
+        ${MEDIA_METADATA_JOINS}
+        WHERE m.id = $1
         LIMIT 1;
       `;
       const res = await executeYugabyteSql(sql, [mediaId], platformEnv);
-      return res.rows[0] || null;
+      const row = res.rows[0] || null;
+      if (row) {
+        if (row.status !== 'ACTIVE' || row.storage_ready !== true) {
+          invalidateMediaMetadataCache(mediaId);
+        } else {
+          setCachedMediaMetadata(mediaId, row);
+        }
+      } else {
+        invalidateMediaMetadataCache(mediaId);
+      }
+      return row;
     },
     null,
-    300_000
+    options?.forceFresh ? 0 : 300_000
   );
 }
+

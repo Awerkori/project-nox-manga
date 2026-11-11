@@ -61,6 +61,15 @@ describe('Zero-Worker Architecture Verification Suite', () => {
     expect(wranglerConfig.triggers?.crons).toEqual(['0 * * * *']);
   });
 
+  it('enforces native Workers Caching in wrangler.jsonc for zero worker invocation on cache hits', () => {
+    const wranglerPath = path.join(root, 'wrangler.jsonc');
+    const wranglerConfig = JSON.parse(fs.readFileSync(wranglerPath, 'utf8'));
+
+    expect(wranglerConfig.cache).toBeDefined();
+    expect(wranglerConfig.cache?.enabled).toBe(true);
+    expect(wranglerConfig.cache?.cross_version_cache).toBe(true);
+  });
+
   it('routes member action directly and securely to /api/action without legacy Supabase RPC', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -103,5 +112,36 @@ describe('Zero-Worker Architecture Verification Suite', () => {
     expect(catContent).toContain('s-maxage=300');
     expect(chContent).toContain('s-maxage=3600');
     expect(workContent).toContain('s-maxage=300');
+  });
+
+  it('validates Mihon zero-worker benchmark report integrity and regulatory criteria', () => {
+    const reportPath = path.join(root, 'PROJECT_NOX_MIHON_ZERO_WORKERS_REPORT.json');
+    if (!fs.existsSync(reportPath)) return;
+
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    expect(report.coverage.distinctImagesTested).toBeGreaterThanOrEqual(300);
+    expect(report.coverage.sample300Tested).toBeGreaterThanOrEqual(300);
+    expect(report.coverage.totalRequestsExecuted).toBeGreaterThanOrEqual(1000);
+
+    const phases = report.phases;
+    expect(phases.initialProtocolRequests).toBeGreaterThanOrEqual(300);
+    expect(phases.sequentialChapterRequests).toBeGreaterThan(0);
+    expect(phases.warmRepeatRequests).toBeGreaterThan(0);
+    expect(phases.webReaderReuseRequests).toBeGreaterThan(0);
+    expect(phases.revalidation304Requests).toBeGreaterThan(0);
+    expect(phases.range206Requests).toBeGreaterThan(0);
+
+    const sumPhases =
+      phases.initialProtocolRequests +
+      phases.sequentialChapterRequests +
+      phases.warmRepeatRequests +
+      phases.webReaderReuseRequests +
+      phases.revalidation304Requests +
+      phases.range206Requests;
+    expect(sumPhases).toBe(report.coverage.totalRequestsExecuted);
+
+    expect(report.performance.warmCacheHitRatePercent).toBe('100.00');
+    expect(report.securityAudit.every((s: any) => s.passed)).toBe(true);
+    expect(report.verdict).toBe('CACHE_HIT_ZERO_EXECUTION_ONLY');
   });
 });

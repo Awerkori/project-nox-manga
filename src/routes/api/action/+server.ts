@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { member } from '$lib/server/db';
 import { dispatchMentions } from '$lib/server/mentions';
 import { stripSpoilers } from '$lib/comments';
-import { createNotification, processPendingEmailOutbox } from '$lib/server/notifications';
+import { createNotification } from '$lib/server/notifications';
 import { invalidateUserSession } from '$lib/server/session-cache';
 import { invalidateRankingCache } from '$lib/server/ranking-cache';
 import { invalidateObraAuxCache } from '$lib/server/obra-cache';
@@ -453,83 +453,107 @@ export const POST = async ({ request, locals, platform }: any) => {
     const page = Math.max(1, Number(body.data?.page) || 1);
     const totalPages = Math.max(1, Number(body.data?.total_pages) || 1);
     const isCompleted = Boolean(body.data?.completed || body.action === 'complete_reading');
+    const shouldMarkCompleted = Boolean(isCompleted && page >= totalPages);
 
-    // 1. Fetch current reading record from YugabyteDB
-    const existingReadRes = await executeYugabyteSql<{
-      page: number;
-      max_page: number;
-      completed_at: string | null;
-    }>(
-      `SELECT page, max_page, completed_at FROM reading WHERE user_id = $1 AND chapter_id = $2 LIMIT 1;`,
-      [locals.user.id, cid],
-      platform?.env
-    ).catch(() => ({ rows: [] }));
+    // Consolidated single atomic statement: Upsert reading progress with RETURNING
+    let readUpsertRes: any = null;
+    try {
+      readUpsertRes = await executeYugabyteSql<{
+        page: number;
+        max_page: number;
+        completed_at: string | null;
+      }>(
+        `INSERT INTO reading (user_id, chapter_id, page, max_page, started_at, updated_at, completed_at)
+         VALUES ($1, $2, $3, $3, NOW(), NOW(), CASE WHEN $4::boolean THEN NOW() ELSE NULL END)
+         ON CONFLICT (user_id, chapter_id) DO UPDATE SET
+           page = GREATEST(reading.page, EXCLUDED.page),
+           max_page = GREATEST(reading.max_page, EXCLUDED.max_page),
+           updated_at = NOW(),
+           completed_at = COALESCE(reading.completed_at, EXCLUDED.completed_at)
+         RETURNING page, max_page, completed_at;`,
+        [locals.user.id, cid, page, shouldMarkCompleted],
+        platform?.env
+      );
+    } catch (err: any) {
+      console.error('[ACTION_READING_UPSERT_ERROR]', err?.message);
+      error(500, 'Falha ao persistir registro de leitura');
+    }
 
-    const existingRead = existingReadRes.rows[0];
-    const maxPage = Math.max(page, existingRead?.max_page || existingRead?.page || 0);
-    const wasAlreadyCompleted = Boolean(existingRead?.completed_at);
-    const finalCompleted = wasAlreadyCompleted || (isCompleted && page >= totalPages);
+    const readRow = readUpsertRes?.rows?.[0];
+    if (!readRow) {
+      error(500, 'Falha ao persistir registro de leitura');
+    }
 
-    // 2. Upsert reading record into YugabyteDB
-    await executeYugabyteSql(
-      `INSERT INTO reading (user_id, chapter_id, page, max_page, started_at, updated_at, completed_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)
-       ON CONFLICT (user_id, chapter_id) DO UPDATE SET
-         page = GREATEST(reading.page, EXCLUDED.page),
-         max_page = GREATEST(reading.max_page, EXCLUDED.max_page),
-         updated_at = NOW(),
-         completed_at = COALESCE(reading.completed_at, EXCLUDED.completed_at);`,
-      [locals.user.id, cid, maxPage, maxPage, finalCompleted ? (existingRead?.completed_at || new Date().toISOString()) : null],
-      platform?.env
-    ).catch(() => {});
+    const finalMaxPage = readRow.max_page || page;
+    const finalCompleted = Boolean(readRow.completed_at);
 
-    // 3. Award XP if completed
+    // Award XP atomically if completed (Atomic CTE: INSERT xp_awards + UPDATE members in 1 statement)
     let xpAward: any = null;
     if (finalCompleted) {
-      const awardCheck = await executeYugabyteSql<{ id: string }>(
-        `SELECT id FROM xp_awards WHERE user_id = $1 AND chapter_id = $2 LIMIT 1;`,
-        [locals.user.id, cid],
-        platform?.env
-      ).catch(() => ({ rows: [] }));
-
-      if (awardCheck.rows.length > 0) {
-        const memRes = await executeYugabyteSql<{ xp: number }>(
-          `SELECT COALESCE(xp, 0) AS xp FROM members WHERE id = $1 LIMIT 1;`,
-          [locals.user.id],
+      let atomicXpRes: any = null;
+      let xpDatabaseError = false;
+      try {
+        atomicXpRes = await executeYugabyteSql<{ xp: number }>(
+          `WITH new_award AS (
+             INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
+             VALUES (gen_random_uuid(), $1, $2, COALESCE(NULLIF($3, '')::uuid, (SELECT work_id FROM public.chapters WHERE id = $2 LIMIT 1), '00000000-0000-0000-0000-000000000000'::uuid), $4, 'web', NOW())
+             ON CONFLICT (user_id, chapter_id) DO NOTHING
+             RETURNING user_id, amount
+           )
+           UPDATE members m
+           SET xp = COALESCE(m.xp, 0) + na.amount
+           FROM new_award na
+           WHERE m.id = na.user_id
+           RETURNING m.xp;`,
+          [locals.user.id, cid, wid || null, 150],
           platform?.env
-        ).catch(() => ({ rows: [{ xp: 0 }] }));
+        );
+      } catch (err: any) {
+        console.error('[ACTION_XP_AWARD_ERROR]', err?.message);
+        xpDatabaseError = true;
+      }
 
-        xpAward = {
-          ok: true,
-          awarded: false,
-          reason: 'already_awarded',
-          total_xp: memRes.rows[0]?.xp || 0
-        };
+      if (xpDatabaseError) {
+        return json(
+          {
+            ok: false,
+            error: 'database_error',
+            details: 'Falha no banco de dados ao processar recompensa atômica de XP'
+          },
+          { status: 500 }
+        );
       } else {
-        const awardAmount = 150;
-        await executeYugabyteSql(
-          `INSERT INTO xp_awards (id, user_id, chapter_id, work_id, amount, source, created_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, $4, 'read_chapter', NOW());`,
-          [locals.user.id, cid, wid || null, awardAmount],
-          platform?.env
-        ).catch(() => {});
+        const wasNewlyAwarded = (atomicXpRes?.rows?.length || 0) > 0;
+        if (wasNewlyAwarded) {
+          const newXp = atomicXpRes.rows[0]?.xp ?? 0;
+          xpAward = {
+            ok: true,
+            awarded: true,
+            amount: 150,
+            total_xp: newXp
+          };
 
-        const memUpdate = await executeYugabyteSql<{ xp: number }>(
-          `UPDATE members SET xp = COALESCE(xp, 0) + $1 WHERE id = $2 RETURNING xp;`,
-          [awardAmount, locals.user.id],
-          platform?.env
-        ).catch(() => ({ rows: [] }));
+          invalidateUserSession(locals.user.id);
+          invalidateRankingCache();
+        } else {
+          const currentXp = locals.sessionCache?.profile?.xp;
+          let totalXp = typeof currentXp === 'number' ? currentXp : 0;
+          if (typeof currentXp !== 'number') {
+            const memRes = await executeYugabyteSql<{ xp: number }>(
+              `SELECT COALESCE(xp, 0) AS xp FROM members WHERE id = $1 LIMIT 1;`,
+              [locals.user.id],
+              platform?.env
+            ).catch(() => ({ rows: [{ xp: 0 }] }));
+            totalXp = memRes.rows[0]?.xp || 0;
+          }
 
-        const newXp = memUpdate.rows[0]?.xp ?? 0;
-        xpAward = {
-          ok: true,
-          awarded: true,
-          amount: awardAmount,
-          total_xp: newXp
-        };
-
-        invalidateUserSession(locals.user.id);
-        invalidateRankingCache();
+          xpAward = {
+            ok: true,
+            awarded: false,
+            reason: 'already_awarded',
+            total_xp: totalXp
+          };
+        }
       }
     }
 
@@ -539,7 +563,7 @@ export const POST = async ({ request, locals, platform }: any) => {
 
     return json({
       ok: true,
-      page: maxPage,
+      page: finalMaxPage,
       completed: finalCompleted,
       xp_award: xpAward
     });
@@ -878,10 +902,6 @@ export const POST = async ({ request, locals, platform }: any) => {
       });
     } catch (err) {
       console.error('[ACTION] Error dispatching comment mentions:', err);
-    }
-
-    if (platform?.context?.waitUntil) {
-      platform.context.waitUntil(processPendingEmailOutbox(10).catch(() => {}));
     }
   }
 

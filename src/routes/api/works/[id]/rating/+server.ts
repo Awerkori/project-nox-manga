@@ -11,6 +11,11 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(key: string, limit = 10, windowMs = 30_000): boolean {
   const now = Date.now();
+  if (rateLimitMap.size > 200) {
+    for (const [k, v] of rateLimitMap.entries()) {
+      if (now > v.resetAt) rateLimitMap.delete(k);
+    }
+  }
   const entry = rateLimitMap.get(key);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
@@ -21,16 +26,6 @@ function checkRateLimit(key: string, limit = 10, windowMs = 30_000): boolean {
   }
   entry.count++;
   return true;
-}
-
-// Periodic cleanup of rate limiter to avoid memory growth
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [k, v] of rateLimitMap.entries()) {
-      if (now > v.resetAt) rateLimitMap.delete(k);
-    }
-  }, 60_000);
 }
 
 function resolveVisitorId(locals: App.Locals, cookies: any): string {
@@ -116,7 +111,7 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
           invalidateRankingCache();
           xpAward = { awarded: true, amount: 15 };
         }
-      } catch (e) {
+      } catch {
         // Non-blocking
       }
     }

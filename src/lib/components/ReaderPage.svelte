@@ -1,13 +1,16 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { purgeMediaFromClientCache } from '$lib/client/sw-purge';
   let {
     page,
     onSeen,
-    eager = false
+    eager = false,
+    mediaBaseUrl = ''
   }: {
     page: { position: number; media_id: string; width: number; height: number; blobUrl?: string };
     onSeen: (page: number, visible: boolean) => void;
     eager?: boolean;
+    mediaBaseUrl?: string;
   } = $props();
   let root: HTMLDivElement;
   let loaded = false,
@@ -50,7 +53,7 @@
     visibleObserver?.disconnect();
   });
 
-  function setupPageImg(node: HTMLImageElement) {
+  function setupPageImg(node: HTMLImageElement, _currentRetry?: number) {
     const handleLoad = () => {
       loaded = true;
       broken = false;
@@ -65,6 +68,7 @@
       } else {
         loaded = false;
         broken = true;
+        purgeMediaFromClientCache(page.media_id);
         onSeen(page.position, false);
       }
     };
@@ -74,6 +78,13 @@
     if (node.complete && node.naturalWidth > 0) handleLoad();
 
     return {
+      update(newRetry: number) {
+        if (!loaded && !broken && newRetry > 0) {
+          const canonical = page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`;
+          node.src = '';
+          node.src = canonical;
+        }
+      },
       destroy() {
         node.removeEventListener('load', handleLoad);
         node.removeEventListener('error', handleError);
@@ -89,8 +100,8 @@
   style="aspect-ratio:{page.width && page.height ? `${page.width}/${page.height}` : '2/3'}; min-height: 350px;"
 >
   {#if (eager || near) && !broken}<img
-      use:setupPageImg
-      src={page.blobUrl || `/media/${page.media_id}${retry ? '?retry=' + retry + '&_t=' + Date.now() : ''}`}
+      use:setupPageImg={retry}
+      src={page.blobUrl || `${mediaBaseUrl}/media/${page.media_id}`}
       alt="Página {page.position}"
       width={page.width || 800}
       height={page.height || 1200}
@@ -102,6 +113,7 @@
       <button
         class="button secondary"
         onclick={() => {
+          page.blobUrl = undefined;
           loaded = false;
           retry++;
           broken = false;

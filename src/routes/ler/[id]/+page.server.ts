@@ -4,6 +4,17 @@ import { readerChapter, readerContent, readerPreviewTarget, readerPreviewWork } 
 import { sanitizeComments } from '$lib/comments';
 import { executeYugabyteSql } from '$lib/server/yugabyte';
 
+function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>, mediaBaseUrl = ''): string | undefined {
+  const prefix = mediaBaseUrl ? mediaBaseUrl.replace(/\/+$/, '') : '';
+  const links = pages
+    .slice(0, 2)
+    .map((page) => page.media_id)
+    .filter((mediaId): mediaId is string => Boolean(mediaId && /^[0-9a-f-]{36}$/i.test(mediaId)))
+    .map((mediaId) => `<${prefix}/media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
+  return links.length ? links.join(', ') : undefined;
+}
+
+
 type ReaderCacheEntry = {
   timestamp: number;
   chapter: any;
@@ -15,15 +26,6 @@ type ReaderCacheEntry = {
 
 const readerCache = new Map<string, ReaderCacheEntry>();
 const READER_CACHE_TTL_MS = 60_000;
-
-function firstPagePreloadHeader(pages: Array<{ media_id?: string | null }>): string | undefined {
-  const links = pages
-    .slice(0, 2)
-    .map((page) => page.media_id)
-    .filter((mediaId): mediaId is string => Boolean(mediaId && /^[0-9a-f-]{36}$/i.test(mediaId)))
-    .map((mediaId) => `</media/${mediaId}>; rel=preload; as=image; fetchpriority=high`);
-  return links.length ? links.join(', ') : undefined;
-}
 
 export const load = async ({ locals, params, url, cookies, setHeaders, platform }) => {
   const isStaff = ['ADMIN', 'STAFF_SITE', 'EDITOR'].includes(locals.role || '');
@@ -37,7 +39,16 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   if (!isPreviewRequested && readerCache.has(params.id)) {
     const cached = readerCache.get(params.id)!;
     if (Date.now() - cached.timestamp < READER_CACHE_TTL_MS) {
-      if (cached.chapter.works?.content_rating === 'ADULT_18' && userAgeStatus === 'MINOR') {
+      let resolvedAgeStatus = userAgeStatus;
+      if (!resolvedAgeStatus && locals.user) {
+        try {
+          const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platform?.env);
+          if (mem.rows[0]?.age_status) resolvedAgeStatus = mem.rows[0].age_status;
+        } catch {
+          // Non-critical age status lookup fallback.
+        }
+      }
+      if (cached.chapter.works?.content_rating === 'ADULT_18' && resolvedAgeStatus === 'MINOR') {
         error(403, 'Conteúdo restrito: este capítulo é destinado exclusivamente a maiores de 18 anos.');
       }
       let userProgress = null;
@@ -55,13 +66,23 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
       }
       const cachedComments = cached.comments || [];
 
+      const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
+      const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
+      const isAdultAuthorized = (resolvedAgeStatus || userAgeStatus) === 'ADULT';
+      const link = !isAdultCached || isAdultAuthorized ? firstPagePreloadHeader(cached.pages, mediaBaseUrl) : undefined;
+
       if (!locals.user) {
-        const link = firstPagePreloadHeader(cached.pages);
-        const isAdultCached = cached.chapter.works?.content_rating === 'ADULT_18';
         setHeaders({
           'cache-control': isAdultCached
             ? 'private, no-cache, no-store, must-revalidate'
             : 'public, max-age=30, s-maxage=60, stale-while-revalidate=120',
+          ...(isAdultCached ? { 'vary': 'Cookie, Authorization' } : {}),
+          ...(link ? { link } : {})
+        });
+      } else {
+        setHeaders({
+          'cache-control': 'private, no-cache, no-store, must-revalidate',
+          'vary': 'Cookie, Authorization',
           ...(link ? { link } : {})
         });
       }
@@ -79,7 +100,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
         scans: cached.scans,
         preview: false,
         user: locals.user ? { id: locals.user.id } : null,
-        profile: locals.sessionCache?.profile || null
+        profile: locals.sessionCache?.profile || null,
+        mediaBaseUrl
       };
     }
   }
@@ -147,9 +169,8 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
   // Preview mode is active ONLY for unpublished chapters or when staff explicitly requests preview (?preview=1)
   const preview = !chapter.published_at || (isPreviewRequested && isStaff);
 
+  let ageStatus: string | null = rawAgeCookie;
   if ((chapter.works as any)?.content_rating === 'ADULT_18') {
-    const rawAgeCookie = cookies?.get?.('nox-age-status') ?? null;
-    let ageStatus = rawAgeCookie;
     if (locals.sessionCache?.profile?.age_status) {
       ageStatus = locals.sessionCache.profile.age_status;
     } else if (locals.user) {
@@ -284,17 +305,24 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     });
   }
 
-  const link = firstPagePreloadHeader(pagesData);
+  const mediaBaseUrl = (platform?.env?.MEDIA_CDN_URL || '').replace(/\/+$/, '');
   const isAdultChapter = (chapter.works as any)?.content_rating === 'ADULT_18';
+  const isAdultAuthorized = (ageStatus || userAgeStatus) === 'ADULT';
+  const link = !isAdultChapter || isAdultAuthorized ? firstPagePreloadHeader(pagesData, mediaBaseUrl) : undefined;
   if (!locals.user && !preview) {
     setHeaders({
       'cache-control': isAdultChapter
         ? 'private, no-cache, no-store, must-revalidate'
         : 'public, max-age=30, s-maxage=60, stale-while-revalidate=120',
+      ...(isAdultChapter ? { 'vary': 'Cookie, Authorization' } : {}),
       ...(link ? { link } : {})
     });
-  } else if (link) {
-    setHeaders({ link });
+  } else {
+    setHeaders({
+      'cache-control': 'private, no-cache, no-store, must-revalidate',
+      'vary': 'Cookie, Authorization',
+      ...(link ? { link } : {})
+    });
   }
 
   return {
@@ -308,6 +336,7 @@ export const load = async ({ locals, params, url, cookies, setHeaders, platform 
     scans,
     preview,
     user: locals.user ? { id: locals.user.id } : null,
-    profile: locals.sessionCache?.profile || null
+    profile: locals.sessionCache?.profile || null,
+    mediaBaseUrl
   };
 };

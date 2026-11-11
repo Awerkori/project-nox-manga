@@ -1,12 +1,10 @@
 import { error } from '@sveltejs/kit';
-import { withTimeout } from '$lib/server/resilience';
 import { loadYsqlImporterHeartbeat } from '$lib/server/importer-snapshot';
 import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 
 export type HealthSeverity = 'OTIMO' | 'BOM' | 'ATENCAO' | 'RUIM' | 'CRITICO' | 'SEM_DADOS';
 let cached: { at: number; payload: any } | null = null;
 let flight: Promise<any> | null = null;
-const HEALTH_FRESH_TTL_MS = 30_000;
 const HEALTH_STALE_TTL_MS = 120_000;
 const missing = 'Não medido';
 
@@ -60,17 +58,7 @@ export const load = async ({ locals, platform }: { locals: App.Locals; platform?
   const now = Date.now();
   if (cached) {
     const age = now - cached.at;
-    if (age < HEALTH_FRESH_TTL_MS) return cached.payload;
-    if (age < HEALTH_STALE_TTL_MS) {
-      if (!flight) {
-        const bg = buildHealthPayload(locals, platform).finally(() => {
-          flight = null;
-        });
-        flight = bg;
-        platform?.context?.waitUntil?.(bg.catch(() => {}));
-      }
-      return cached.payload;
-    }
+    if (age < HEALTH_STALE_TTL_MS) return cached.payload;
   }
   if (flight) return flight;
 
