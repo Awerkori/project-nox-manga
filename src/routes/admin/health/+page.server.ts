@@ -1,12 +1,10 @@
 import { error } from '@sveltejs/kit';
-import { withTimeout } from '$lib/server/resilience';
 import { loadYsqlImporterHeartbeat } from '$lib/server/importer-snapshot';
 import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyte';
 
 export type HealthSeverity = 'OTIMO' | 'BOM' | 'ATENCAO' | 'RUIM' | 'CRITICO' | 'SEM_DADOS';
 let cached: { at: number; payload: any } | null = null;
 let flight: Promise<any> | null = null;
-const HEALTH_FRESH_TTL_MS = 30_000;
 const HEALTH_STALE_TTL_MS = 120_000;
 const missing = 'Não medido';
 

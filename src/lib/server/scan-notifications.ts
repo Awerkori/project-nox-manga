@@ -54,7 +54,7 @@ async function resolveContact(userId: string, platformEnv?: any): Promise<Contac
     );
     email = authUser.rows[0]?.email || null;
   } catch {
-    email = null;
+    // Keep email as null
   }
   const value = { email, name };
   contactCache.set(userId, { value, expires: Date.now() + 15 * 60_000 });

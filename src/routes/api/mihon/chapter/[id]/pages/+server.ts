@@ -66,7 +66,7 @@ export const GET = async ({ params, request, url, platform }: any) => {
   const { id } = params;
 
   // Fast path: check in-memory cache
-  let payload: MihonPagesPayload | null = null;
+  let payload: MihonPagesPayload | null;
   const cached = mihonPagesCache.get(id);
   if (cached && Date.now() - cached.timestamp < MIHON_PAGES_CACHE_TTL_MS) {
     payload = cached.data;
@@ -93,7 +93,6 @@ export const GET = async ({ params, request, url, platform }: any) => {
   }
 
   const { chapter, pages, etag } = payload;
-  const ifNoneMatch = request.headers.get('if-none-match');
 
   // Zero-SQL fast path for public non-adult 304 revalidation
   if (chapter.content_rating !== 'ADULT_18' && matchesETag(request.headers.get('if-none-match'), etag)) {

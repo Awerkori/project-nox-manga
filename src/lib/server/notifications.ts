@@ -1,4 +1,4 @@
-import { sendBrevoEmail, queryBrevoEvents } from './brevo';
+import { sendBrevoEmail } from './brevo';
 import { generateEmailHtml } from './email-templates';
 import { executeYugabyteSql } from './yugabyte';
 
@@ -88,7 +88,7 @@ async function resolveUserContact(userId: string, platformEnv?: any): Promise<{ 
         return { email, name };
       }
     }
-  } catch (err) {
+  } catch {
     // Non-fatal Yugabyte lookup
   }
 
@@ -101,7 +101,9 @@ async function resolveUserContact(userId: string, platformEnv?: any): Promise<{ 
     if (memRes.rows[0]) {
       name = memRes.rows[0].display_name || memRes.rows[0].username || 'Membro';
     }
-  } catch {}
+  } catch {
+    // Non-fatal member lookup
+  }
 
   return { email, name };
 }
@@ -299,9 +301,6 @@ export async function createNotification(
 
   return { notificationId, emailQueued, outboxId };
 }
-
-let isDispatching = false;
-let hasQueuedRun = false;
 
 /**
  * Processa itens pendentes da outbox de e-mail enviando para o Brevo.

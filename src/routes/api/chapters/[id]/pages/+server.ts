@@ -30,7 +30,9 @@ export const GET = async ({ params, locals, cookies, platform, request }: any) =
         try {
           const mem = await executeYugabyteSql(`SELECT age_status FROM members WHERE id = $1 LIMIT 1;`, [locals.user.id], platformEnv);
           if (mem.rows[0]?.age_status) ageStatus = mem.rows[0].age_status;
-        } catch {}
+        } catch {
+          // Non-fatal age_status lookup
+        }
       }
       if (ageStatus === 'MINOR') {
         return json({ error: 'Conteúdo restrito (+18).' }, { status: 403 });

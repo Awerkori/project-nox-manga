@@ -42,9 +42,6 @@
   let chatLoading = $state(false);
   let chatError = $state('');
 
-  let myMemberInfo = $derived(team.find((m: any) => m.id === currentUserId || m.user_id === currentUserId));
-  let myDisplayName = $derived(myMemberInfo?.display_name || myMemberInfo?.username || 'Membro');
-
   // The server is the source of truth. This small local order is only kept
   // while an owner receives feedback from a channel-reorder request.
   let localChannelOrder = $state<string[] | null>(null);

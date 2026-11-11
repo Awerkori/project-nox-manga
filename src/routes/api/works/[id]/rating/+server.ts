@@ -111,7 +111,7 @@ export const POST: RequestHandler = async ({ params, request, locals, cookies, g
           invalidateRankingCache();
           xpAward = { awarded: true, amount: 15 };
         }
-      } catch (e) {
+      } catch {
         // Non-blocking
       }
     }

@@ -402,7 +402,7 @@ export async function loadSnapshot(
 }
 
 async function buildSnapshot(
-  { locals, platform }: any,
+  { locals: _locals, platform }: any,
   forceRefresh = false,
   isTestEnv = false,
 ) {

@@ -463,7 +463,7 @@ export async function uploadToStorageSupremo(options: MediaUploadOptions): Promi
       await executeYugabyteSql(`DELETE FROM public.media_locations WHERE media_id = $1;`, [mediaId]);
       await executeYugabyteSql(`DELETE FROM public.media_records WHERE id = $1;`, [mediaId]);
       await executeYugabyteSql(`DELETE FROM public.media WHERE id = $1;`, [mediaId]);
-      throw new Error('Falha ao registrar o arquivo no catálogo de mídia.');
+      throw new Error('Falha ao registrar o arquivo no catálogo de mídia.', { cause: commitErr });
     }
 
     return {

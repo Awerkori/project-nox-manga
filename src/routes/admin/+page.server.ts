@@ -4,7 +4,6 @@ import { executeYugabyteSql, withYugabyteReadSession } from '$lib/server/yugabyt
 
 const snapshots = new Map<string, { timestamp: number; payload: any }>();
 const inFlight = new Map<string, Promise<any>>();
-const ADMIN_CACHE_TTL_MS = 45_000;
 const ADMIN_STALE_TTL_MS = 180_000;
 
 

@@ -3163,7 +3163,7 @@ export const actions: Actions = {
 
     // Fallback to legacy rework_stages format if payload not provided
     if (parsedPayload.length === 0 && reworkStagesRaw) {
-      let stagesList: string[] = [];
+      let stagesList: string[];
       try {
         stagesList = JSON.parse(reworkStagesRaw);
       } catch {
