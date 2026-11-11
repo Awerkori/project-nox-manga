@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_URL = process.env.PUBLIC_SITE_URL || process.env.TEST_BASE_URL || 'https://projectnox.org';
 const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
 
 /**
@@ -19,7 +19,7 @@ async function gotoLiveReader(page: import('@playwright/test').Page) {
 
     if (response?.status() === 200 || response?.status() !== 503 || attempt === 3) break;
     console.warn(`Reader returned transient 503 (attempt ${attempt}/3); retrying.`);
-    await page.waitForTimeout(250 * attempt);
+    await page.waitForTimeout(1000 * attempt);
   }
 
   return response;

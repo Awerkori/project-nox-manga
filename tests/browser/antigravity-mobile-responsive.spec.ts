@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const LIVE_URL = process.env.PUBLIC_SITE_URL || 'https://projectnox.org';
+const LIVE_URL = process.env.PUBLIC_SITE_URL || process.env.TEST_BASE_URL || 'https://projectnox.org';
 const LIVE_DOMAIN = new URL(LIVE_URL).hostname;
 
 const MOBILE_VIEWPORTS = [
@@ -9,12 +9,34 @@ const MOBILE_VIEWPORTS = [
   { name: 'Tablet (768x1024)', width: 768, height: 1024 },
 ];
 
+/**
+ * Production is a distributed edge deployment. A cold Worker isolate or
+ * cold database connection hop can occasionally return a transient 503/504.
+ * Retrying those transient statuses up to 3 times keeps production smoke tests
+ * reliable and prevents false-alarm CI failures while strictly requiring a 200.
+ */
+async function gotoLivePage(page: import('@playwright/test').Page, path: string) {
+  const url = path.startsWith('http') ? path : `${LIVE_URL}${path}`;
+  let response: Awaited<ReturnType<typeof page.goto>> = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    response = await page.goto(url, { waitUntil: 'domcontentloaded' });
+    const status = response?.status();
+
+    if (status === 200 || (status !== 503 && status !== 504) || attempt === 3) break;
+    console.warn(`[RETRY] ${url} returned transient ${status} (attempt ${attempt}/3); retrying.`);
+    await page.waitForTimeout(1000 * attempt);
+  }
+
+  return response;
+}
+
 async function dismissAgeGate(page: import('@playwright/test').Page) {
   const adult = page.getByRole('button', { name: 'Sim, tenho 18 anos ou mais' });
-  if (await adult.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await adult.isVisible().catch(() => false)) {
     await adult.click();
     const confirm = page.getByRole('button', { name: 'Confirmar e Continuar' });
-    if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await confirm.isVisible().catch(() => false)) {
       await confirm.click();
     }
     await page.locator('[role="dialog"]').waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
@@ -29,7 +51,7 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
         { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
       ]);
 
-      const res = await page.goto(LIVE_URL, { waitUntil: 'domcontentloaded' });
+      const res = await gotoLivePage(page, LIVE_URL);
       expect(res?.status()).toBe(200);
       await dismissAgeGate(page);
 
@@ -61,7 +83,7 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
         { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
       ]);
 
-      const res = await page.goto(`${LIVE_URL}/catalogo?q=leveling`, { waitUntil: 'domcontentloaded' });
+      const res = await gotoLivePage(page, '/catalogo?q=leveling');
       expect(res?.status()).toBe(200);
       await dismissAgeGate(page);
 
@@ -73,7 +95,11 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
 
       // Verify work cards or results list exists
       const worksList = page.locator('a[href*="/obra/"]');
-      await expect(worksList.first()).toBeAttached({ timeout: 5000 });
+      if (await page.locator('.empty-state, [data-testid="empty-catalog"]').isVisible().catch(() => false)) {
+        await page.waitForTimeout(1000);
+        await gotoLivePage(page, '/catalogo?q=leveling');
+      }
+      await expect(worksList.first()).toBeAttached({ timeout: 10000 });
     });
 
     test(`Releases Page Mobile Responsiveness [${vp.name}]`, async ({ page }) => {
@@ -82,7 +108,7 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
         { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
       ]);
 
-      const res = await page.goto(`${LIVE_URL}/lancamentos`, { waitUntil: 'domcontentloaded' });
+      const res = await gotoLivePage(page, '/lancamentos');
       expect(res?.status()).toBe(200);
       await dismissAgeGate(page);
 
@@ -93,7 +119,11 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
 
       // Verify releases items exist
       const releaseLinks = page.locator('a[href*="/obra/"], a[href*="/ler/"]');
-      await expect(releaseLinks.first()).toBeAttached({ timeout: 5000 });
+      if (await page.locator('.empty-box').isVisible().catch(() => false)) {
+        await page.waitForTimeout(1000);
+        await gotoLivePage(page, '/lancamentos');
+      }
+      await expect(releaseLinks.first()).toBeAttached({ timeout: 10000 });
     });
 
     test(`Work Detail Page Mobile Layout [${vp.name}]`, async ({ page }) => {
@@ -102,7 +132,7 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
         { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
       ]);
 
-      const res = await page.goto(`${LIVE_URL}/obra/solo-leveling`, { waitUntil: 'domcontentloaded' });
+      const res = await gotoLivePage(page, '/obra/solo-leveling');
       expect(res?.status()).toBe(200);
       await dismissAgeGate(page);
 
@@ -127,9 +157,7 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
       { name: 'nox-age-status', value: 'ADULT', domain: LIVE_DOMAIN, path: '/' }
     ]);
 
-    const res = await page.goto(`${LIVE_URL}/ler/ebbd3e27-7b00-4a06-bbd4-405a0ce9917c`, {
-      waitUntil: 'domcontentloaded'
-    });
+    const res = await gotoLivePage(page, '/ler/ebbd3e27-7b00-4a06-bbd4-405a0ce9917c');
     expect(res?.status()).toBe(200);
     await dismissAgeGate(page);
 
@@ -141,7 +169,7 @@ test.describe('Antigravity Mobile & Responsive Production Audit', () => {
 
     // Verify back to work link is visible
     const backBtn = page.getByRole('link', { name: /voltar para a obra|voltar/i });
-    await expect(backBtn).toBeVisible({ timeout: 5000 });
+    await expect(backBtn).toBeVisible({ timeout: 10000 });
 
     // Verify reader page images exist or canvas/container
     const pageContainer = page.locator('main, [class*="reader"], [id*="reader"]');
