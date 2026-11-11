@@ -14,7 +14,7 @@ Este documento formaliza o procedimento de rollback seguro e imediato para a pro
 
 ## 2. Critérios de Disparo de Rollback
 
-O rollback para a versão `322d46b9-71ed-4e14-a03a-bbc48f356bac` (ou fallback seguro `fcd51c68-3fa5-4d63-b867-d7d557554652`) deve ser executado imediatamente se:
+O rollback para a versão `d262a573-65df-4e44-b246-f9ee95e47716` (ou fallback seguro `fcd51c68-3fa5-4d63-b867-d7d557554652`) deve ser executado imediatamente se:
 1. Sondas pós-deploy detectarem que `www.projectnox.org` ou `projectnox.org` retornam respostas com headers incorretos ou erro `ERR_TOO_MANY_REDIRECTS`.
 2. Taxa de erro HTTP 5xx em produção exceder 0.1% após deploy.
 3. Respostas de APIs privadas ou rotas administrativas retornarem `cf-cache-status: HIT`.
