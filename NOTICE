@@ -1,0 +1,56 @@
+Project Nox · Plataforma Web de Mangá
+Copyright (C) 2026 Project Nox Contributors & Awerkori
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, version 3 of the License (AGPL-3.0-only).
+
+SPDX-License-Identifier: AGPL-3.0-only
+
+================================================================================
+1. ESCLARECIMENTO SOBRE LICENCIAMENTO (GNU AGPLv3)
+================================================================================
+Este repositório está oficialmente licenciado sob a GNU Affero General Public
+License versão 3.0 (AGPL-3.0-only).
+
+Cláusula de Interação Remota de Rede (Seção 13):
+Em cumprimento aos termos da GNU Affero General Public License versão 3.0,
+qualquer operador ou desenvolvedor que execute esta plataforma web em servidores
+ou instâncias de rede e permita a interação remota de usuários fica obrigado a
+promover a entrega proeminente do Código-Fonte Correspondente (Corresponding Source)
+de sua versão modificada a todos os usuários que com ela interajam, sem cobrança,
+através de meio habitual de disponibilização de software em rede.
+
+================================================================================
+2. COMPONENTES E DEPENDÊNCIAS DE TERCEIROS
+================================================================================
+Este software faz uso de bibliotecas e ferramentas de código aberto permissivas
+totalmente compatíveis com a GNU AGPLv3:
+- SvelteKit / Svelte (@sveltejs/kit) — Licença MIT (Copyright (c) Svelte Contributors)
+- Lucide Icons (@lucide/svelte) — Licença ISC (Copyright (c) Lucide Contributors)
+- Node Postgres (pg, @types/pg) — Licença MIT (Copyright (c) Brian Carlson)
+- Zod (zod) — Licença MIT (Copyright (c) Colin McDonnell)
+- fflate — Licença MIT (Copyright (c) 101arrowz)
+- fast-png — Licença MIT (Copyright (c) Luc Patiny)
+- @jsquash/webp / jpeg-js — Licença Apache 2.0
+- TailwindCSS — Licença MIT (Copyright (c) Tailwind Labs, Inc.)
+
+================================================================================
+3. ARQUITETURA OPERACIONAL E SERVIÇOS EM PRODUÇÃO
+================================================================================
+- Runtime de Borda: Cloudflare Workers (SSR com renderização de baixa latência).
+- Banco Principal: YugabyteDB / YSQL (banco PostgreSQL distribuído para
+  histórico de leitura, sessões, catálogo e transações de banco).
+- Armazenamento de Mídia: Telegram Bot API para guarda e entrega otimizada de páginas.
+- Serviços Legados: Supabase mantido para suporte a transição de autenticação e
+  compatibilidade legada, sem alterar o funcionamento de produção.
+
+================================================================================
+4. PROTEÇÃO DE IDENTIDADE E MARCA (AGPLv3 Seção 7(e))
+================================================================================
+A concessão da licença de código aberto AGPLv3 aplica-se exclusivamente aos
+direitos autorais de software. Os nomes "Project Nox" e "Awerkori", bem como
+logotipos e identidade visual, identificam a procedência e origem do projeto.
+Em conformidade com a Seção 7(e) da GNU AGPLv3, esta licença NÃO confere
+autorização para o uso de tais elementos de identificação com o objetivo de insinuar
+homologação, endosso ou representação oficial sem autorização prévia por escrito.
